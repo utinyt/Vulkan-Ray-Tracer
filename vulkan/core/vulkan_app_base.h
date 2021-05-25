@@ -15,16 +15,26 @@ protected:
 	virtual void update() = 0;
 	void cleanup();
 
+	//application info
 	GLFWwindow* window;
 	int width, height;
 	std::string appName;
+
+	//extensions
+	std::vector<const char*> enabledInstanceExtensions;
+	std::vector<const char*> enabledDeviceExtensions;
+
+protected:
+	VkInstance instance;
+private:
+	void createInstance();
 };
 
 //entry point
 #define RUN_APPLICATION_MAIN(Application, WIDTH, HEIGHT, appName)	\
 int main(void) {													\
-	Application app(WIDTH, HEIGHT, appName);						\
 	try {															\
+		Application app(WIDTH, HEIGHT, appName);					\
 		app.initWindow();											\
 		app.initVulkan();											\
 		app.run();													\

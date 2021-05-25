@@ -21,12 +21,18 @@
     <ClCompile Include="example.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="core\vulkan_debug.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="core\utils.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="core\vulkan_app_base.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="core\vulkan_debug.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
