@@ -7,7 +7,7 @@ public:
 
 private:
 	virtual void update() override {
-		//std::cout << "Hello\n";
+		//std::cout << "Hello\n"; 
 	}
 };
 
