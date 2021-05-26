@@ -1,5 +1,5 @@
 #pragma once
-#include "utils.h"
+#include "vulkan_device.h"
 #include "GLFW/glfw3.h"
 
 class VulkanAppBase {
@@ -13,24 +13,31 @@ public:
 
 protected:
 	virtual void update() = 0;
-	void cleanup();
 
-	//application info
+	/** glfw window handle */
 	GLFWwindow* window;
+	/** window extent */
 	int width, height;
+	/** application title */
 	std::string appName;
-
-	//extensions
+	/** list of enalbed (required) instance extensions*/
 	std::vector<const char*> enabledInstanceExtensions;
+	/** list of enalbed (required) device extensions*/
 	std::vector<const char*> enabledDeviceExtensions;
-
-protected:
+	/** vulkan instance */
 	VkInstance instance;
+	/** abstracted handle to the native platform surface */
+	VkSurfaceKHR surface;
+	/** contains physical & logical device handles, device specific info */
+	VulkanDevice devices;
+
 private:
 	void createInstance();
 };
 
-//entry point
+/*
+* entry point macro
+*/
 #define RUN_APPLICATION_MAIN(Application, WIDTH, HEIGHT, appName)	\
 int main(void) {													\
 	try {															\

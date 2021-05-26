@@ -1,9 +1,17 @@
 #include "vulkan_debug.h"
 
 namespace {
+	/** global debug messenger */
 	VkDebugUtilsMessengerEXT debugMessenger;
 }
 
+/*
+* proxy for vkCreateDebugUtilsMessengerEXT
+* 
+* @param instance - vulkan instance to use
+* @param pCreateInfo - valid debug utils messenger create info struct
+* @param pAllocator - custom allocator
+*/
 VkResult createDebugUtilsMessengerEXT(VkInstance instance,
 	const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo,
 	const VkAllocationCallbacks* pAllocator) {
@@ -17,6 +25,12 @@ VkResult createDebugUtilsMessengerEXT(VkInstance instance,
 	}
 }
 
+/*
+* proxy for vkDestroyDebugUtilsMessengerEXT
+* 
+* @param instance - vulkan instance to use
+* @param pAllocator - custom allocator
+*/
 void destroyDebugUtilsMessengerEXT(VkInstance instance,
 	const VkAllocationCallbacks* pAllocator) {
 	auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance,
@@ -26,6 +40,14 @@ void destroyDebugUtilsMessengerEXT(VkInstance instance,
 	}
 }
 
+/*
+* custom debug utils messenger callback 
+* 
+* @param messageSeverity
+* @param messageType
+* @param pCallbackData - structure returned to the callback
+* @param pUserData - pointer that was specified during the debug messenger setup
+*/
 VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
 	VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
 	VkDebugUtilsMessageTypeFlagsEXT messageType,
@@ -49,6 +71,11 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
 	return VK_FALSE;
 }
 
+/*
+* fills debug utils messenger create info
+* 
+* @param createInfo - VkDebugUtilsMessengerCreateInfoEXT struct to fill
+*/
 void setupDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo) {
 	createInfo = {};
 	createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;

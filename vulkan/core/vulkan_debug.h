@@ -1,5 +1,5 @@
 #pragma once
-#include "utils.h"
+#include "vulkan_utils.h"
 
 VkResult createDebugUtilsMessengerEXT(VkInstance instance,
 	const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo,

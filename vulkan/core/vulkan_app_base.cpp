@@ -7,14 +7,32 @@ const bool enableValidationLayer = false;
 const bool enableValidationLayer = true;
 #endif
 
-VulkanAppBase::VulkanAppBase(int w, int h, const std::string& name)
-	: width(w), height(h), appName(name) {
-}
+/*
+* app constructor
+* 
+* @param width - window pixel width
+* @param height - window pixel height
+* @param appName - application title
+*/
+VulkanAppBase::VulkanAppBase(int width, int height, const std::string& appName)
+	: width(width), height(height), appName(appName) {}
 
+/*
+* app destructor
+*/
 VulkanAppBase::~VulkanAppBase() {
-	cleanup();
+	devices.cleanup();
+	vkDestroySurfaceKHR(instance, surface, nullptr);
+	destroyDebugUtilsMessengerEXT(instance, nullptr);
+	vkDestroyInstance(instance, nullptr);
+
+	glfwDestroyWindow(window);
+	glfwTerminate();
 }
 
+/*
+* glfw window initialization
+*/
 void VulkanAppBase::initWindow() {
 	if (glfwInit() == GLFW_FALSE) {
 		throw std::runtime_error("failed to init GLFW");
@@ -23,19 +41,36 @@ void VulkanAppBase::initWindow() {
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 	window = glfwCreateWindow(width, height, appName.c_str(), nullptr, nullptr);
+	LOG("initialized:\tGLFW");
 }
 
+/*
+* vulkan setup
+*/
 void VulkanAppBase::initVulkan() {
+	//instance
 	createInstance();
 
+	//debug messenger
 	if (enableValidationLayer) {
 		VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo{};
 		setupDebugMessengerCreateInfo(debugCreateInfo);
 		VK_CHECK_RESULT(createDebugUtilsMessengerEXT(instance, &debugCreateInfo, nullptr));
+		LOG("created:\tdebug utils messenger");
 	}
 
+	//surface
+	VK_CHECK_RESULT(glfwCreateWindowSurface(instance, window, nullptr, &surface));
+	LOG("created:\tsurface");
+
+	//physical & logical device
+	devices.pickPhysicalDevice(instance, surface, enabledDeviceExtensions);
+	devices.createLogicalDevice();
 }
 
+/*
+* called every frame - may contain update & draw functions
+*/
 void VulkanAppBase::run() {
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
@@ -43,13 +78,9 @@ void VulkanAppBase::run() {
 	}
 }
 
-void VulkanAppBase::cleanup() {
-	destroyDebugUtilsMessengerEXT(instance, nullptr);
-	vkDestroyInstance(instance, nullptr);
-	glfwDestroyWindow(window);
-	glfwTerminate();
-}
-
+/*
+* helper function - creates vulkan instance
+*/
 void VulkanAppBase::createInstance() {
 	VkApplicationInfo appInfo{};
 	appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -107,14 +138,14 @@ void VulkanAppBase::createInstance() {
 	vkEnumerateInstanceExtensionProperties(nullptr, &availableInstanceExtensionCount, availableInstanceExtensions.data());
 
 	// -- support check --
-	for (size_t i = 0; i < requiredInstanceExtensions.size(); ++i) {
+	for (auto& requiredEXT : requiredInstanceExtensions) {
 		auto extensionIt = std::find_if(availableInstanceExtensions.begin(), availableInstanceExtensions.end(),
-			[&i, &requiredInstanceExtensions](const VkExtensionProperties& properties) {
-				return strcmp(requiredInstanceExtensions[i], properties.extensionName) == 0;
+			[&requiredEXT](const VkExtensionProperties& properties) {
+				return strcmp(requiredEXT, properties.extensionName) == 0;
 			});
 
 		if (extensionIt == availableInstanceExtensions.end()) {
-			throw std::runtime_error(std::string(requiredInstanceExtensions[i])+" instance extension is not supported");
+			throw std::runtime_error(std::string(requiredEXT)+" instance extension is not supported");
 		}
 	}
 
@@ -122,4 +153,6 @@ void VulkanAppBase::createInstance() {
 	instanceInfo.ppEnabledExtensionNames = requiredInstanceExtensions.data();
 
 	VK_CHECK_RESULT(vkCreateInstance(&instanceInfo, nullptr, &instance));
+	LOG("created:\tvulkan instance");
 }
+
