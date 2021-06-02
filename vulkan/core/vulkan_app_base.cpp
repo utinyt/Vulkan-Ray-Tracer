@@ -10,17 +10,20 @@ const bool enableValidationLayer = true;
 /*
 * app constructor
 * 
-* @param width - window pixel width
-* @param height - window pixel height
+* @param width - window width
+* @param height - window height
 * @param appName - application title
 */
 VulkanAppBase::VulkanAppBase(int width, int height, const std::string& appName)
-	: width(width), height(height), appName(appName) {}
+	: width(width), height(height), appName(appName) {
+	enabledDeviceExtensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+}
 
 /*
 * app destructor
 */
 VulkanAppBase::~VulkanAppBase() {
+	swapchain.cleanup();
 	devices.cleanup();
 	vkDestroySurfaceKHR(instance, surface, nullptr);
 	destroyDebugUtilsMessengerEXT(instance, nullptr);
@@ -41,7 +44,7 @@ void VulkanAppBase::initWindow() {
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 	window = glfwCreateWindow(width, height, appName.c_str(), nullptr, nullptr);
-	LOG("initialized:\tGLFW");
+	LOG("initialized:\tglfw");
 }
 
 /*
@@ -66,6 +69,9 @@ void VulkanAppBase::initVulkan() {
 	//physical & logical device
 	devices.pickPhysicalDevice(instance, surface, enabledDeviceExtensions);
 	devices.createLogicalDevice();
+
+	swapchain.init(&devices, window);
+	swapchain.create();
 }
 
 /*

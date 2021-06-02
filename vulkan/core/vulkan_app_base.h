@@ -1,5 +1,6 @@
 #pragma once
 #include "vulkan_device.h"
+#include "vulkan_swapchain.h"
 #include "GLFW/glfw3.h"
 
 class VulkanAppBase {
@@ -20,9 +21,9 @@ protected:
 	int width, height;
 	/** application title */
 	std::string appName;
-	/** list of enalbed (required) instance extensions*/
+	/** list of enalbed (required) instance extensions */
 	std::vector<const char*> enabledInstanceExtensions;
-	/** list of enalbed (required) device extensions*/
+	/** list of enalbed (required) device extensions */
 	std::vector<const char*> enabledDeviceExtensions;
 	/** vulkan instance */
 	VkInstance instance;
@@ -30,6 +31,8 @@ protected:
 	VkSurfaceKHR surface;
 	/** contains physical & logical device handles, device specific info */
 	VulkanDevice devices;
+	/** abstracted swapchain object - contains swapchain image views */
+	VulkanSwapchain swapchain;
 
 private:
 	void createInstance();

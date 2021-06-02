@@ -15,8 +15,6 @@ struct VulkanDevice {
 	VkDevice device;
 	/** abstracted handle for native platform surface */
 	VkSurfaceKHR surface;
-	/** list of required device extensions */
-	std::vector<const char*> requiredExtensions;
 	/** collection of queue family indices */
 	struct QueueFamilyIndices {
 		std::optional<uint32_t> graphicsFamily;
@@ -45,4 +43,7 @@ private:
 		VkSurfaceKHR surface);
 	static SwapchainSupportDetails querySwapchainSupport(VkPhysicalDevice physicalDevice,
 		VkSurfaceKHR surface);
+
+	/** list of required device extensions */
+	std::vector<const char*> requiredExtensions;
 };

@@ -150,6 +150,7 @@ VulkanDevice::QueueFamilyIndices VulkanDevice::findQueueFamilyIndices(VkPhysical
 	std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
 	vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, queueFamilies.data());
 
+	//TODO: find one queue family supporting both (graphics / present)
 	int i = 0;
 	for (const auto& queueFamily : queueFamilies) {
 		//graphics family
