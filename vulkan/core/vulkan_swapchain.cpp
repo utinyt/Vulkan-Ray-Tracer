@@ -33,13 +33,13 @@ void VulkanSwapchain::create() {
 	for (const auto& availableFormat : details.formats) {
 		if (availableFormat.format == VK_FORMAT_B8G8R8_SRGB &&
 			availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
-			format = availableFormat;
+			surfaceFormat = availableFormat;
 			foundFormat = true;
 			break;
 		}
 	}
 	if (!foundFormat) {
-		format = details.formats[0];
+		surfaceFormat = details.formats[0];
 	}
 
 	//present mode
@@ -95,8 +95,8 @@ void VulkanSwapchain::create() {
 	swapchainInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
 	swapchainInfo.surface = devices->surface;
 	swapchainInfo.minImageCount = minimageCount;
-	swapchainInfo.imageFormat = format.format;
-	swapchainInfo.imageColorSpace = format.colorSpace;
+	swapchainInfo.imageFormat = surfaceFormat.format;
+	swapchainInfo.imageColorSpace = surfaceFormat.colorSpace;
 	swapchainInfo.imageExtent = extent;
 	swapchainInfo.imageArrayLayers = 1;
 	swapchainInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
@@ -151,7 +151,7 @@ void VulkanSwapchain::create() {
 		imageViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 		imageViewInfo.image = images[i];
 		imageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-		imageViewInfo.format = format.format;
+		imageViewInfo.format = surfaceFormat.format;
 		imageViewInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
 		imageViewInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
 		imageViewInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;

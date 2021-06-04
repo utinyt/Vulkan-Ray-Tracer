@@ -13,7 +13,7 @@ public:
 	/** swapchain handle */
 	VkSwapchainKHR swapchain = VK_NULL_HANDLE;
 	/** swapchain image format & color space */
-	VkSurfaceFormatKHR format;
+	VkSurfaceFormatKHR surfaceFormat;
 	/** swapchain extent */
 	VkExtent2D extent;
 	/** swapchain image count */

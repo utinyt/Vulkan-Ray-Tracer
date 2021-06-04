@@ -12,7 +12,8 @@ public:
 	void run();
 
 protected:
-	virtual void update() = 0;
+	virtual void draw() = 0;
+	virtual void initApp();
 
 	/** glfw window handle */
 	GLFWwindow* window;
@@ -44,11 +45,12 @@ protected:
 	std::vector<VkFence> inFlightFences;
 	/** pipeline cache */
 	VkPipelineCache pipelineCache;
+	/** render pass */
+	VkRenderPass renderPass;
 
 private:
 	void initWindow();
 	void initVulkan();
-	void initApp();
 
 	void createInstance();
 	void createCommandPool();
@@ -56,6 +58,8 @@ private:
 	void destroyCommandBuffers();
 	void createSyncObjects();
 	void createPipelineCache();
+
+	VkShaderModule createShaderModule(const std::vector<char>& code);
 
 	/*virtual void createRenderPass() = 0;
 	virtual void createFramebuffers() = 0;*/

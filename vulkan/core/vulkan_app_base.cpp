@@ -1,3 +1,4 @@
+#include <fstream>
 #include "vulkan_app_base.h"
 #include "vulkan_debug.h"
 
@@ -29,6 +30,8 @@ VulkanAppBase::~VulkanAppBase() {
 		vkDestroyFence(devices.device, inFlightFences[i], nullptr);
 	}
 
+	vkDestroyRenderPass(devices.device, renderPass, nullptr);
+
 	swapchain.cleanup();
 
 	vkDestroyPipelineCache(devices.device, pipelineCache, nullptr);
@@ -59,7 +62,7 @@ void VulkanAppBase::init() {
 void VulkanAppBase::run() {
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
-		update();
+		draw();
 	}
 }
 
@@ -265,4 +268,20 @@ void VulkanAppBase::createPipelineCache() {
 	pipelineCacheInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
 	VK_CHECK_RESULT(vkCreatePipelineCache(devices.device, &pipelineCacheInfo, nullptr, &pipelineCache));
 	LOG("created:\tpipeline cache");
+}
+
+/*
+* create shader module
+* 
+* @param code - compiled shader code (raw binary data, .spv)
+*/
+VkShaderModule VulkanAppBase::createShaderModule(const std::vector<char>& code) {
+	VkShaderModuleCreateInfo shaderModuleInfo{};
+	shaderModuleInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+	shaderModuleInfo.codeSize = code.size();
+	shaderModuleInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
+
+	VkShaderModule shaderModule;
+	VK_CHECK_RESULT(vkCreateShaderModule(devices.device, &shaderModuleInfo, nullptr, &shaderModule));
+	return shaderModule;
 }
