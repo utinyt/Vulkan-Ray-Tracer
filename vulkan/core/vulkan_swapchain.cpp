@@ -163,5 +163,6 @@ void VulkanSwapchain::create() {
 		imageViewInfo.subresourceRange.layerCount = 1;
 		VK_CHECK_RESULT(vkCreateImageView(devices->device, &imageViewInfo, nullptr, &imageViews[i]));
 	}
+
 	LOG("created:\timage views");
 }

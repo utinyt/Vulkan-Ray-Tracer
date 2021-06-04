@@ -23,7 +23,18 @@ VulkanAppBase::VulkanAppBase(int width, int height, const std::string& appName)
 * app destructor
 */
 VulkanAppBase::~VulkanAppBase() {
+	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+		vkDestroySemaphore(devices.device, presentCompleteSemaphores[i], nullptr);
+		vkDestroySemaphore(devices.device, renderCompleteSemaphores[i], nullptr);
+		vkDestroyFence(devices.device, inFlightFences[i], nullptr);
+	}
+
 	swapchain.cleanup();
+
+	vkDestroyPipelineCache(devices.device, pipelineCache, nullptr);
+	destroyCommandBuffers();
+	vkDestroyCommandPool(devices.device, commandPool, nullptr);
+
 	devices.cleanup();
 	vkDestroySurfaceKHR(instance, surface, nullptr);
 	destroyDebugUtilsMessengerEXT(instance, nullptr);
@@ -31,6 +42,25 @@ VulkanAppBase::~VulkanAppBase() {
 
 	glfwDestroyWindow(window);
 	glfwTerminate();
+}
+
+/*
+* init program - window & vulkan & application
+*/
+void VulkanAppBase::init() {
+	initWindow();
+	initVulkan();
+	initApp();
+}
+
+/*
+* called every frame - may contain update & draw functions
+*/
+void VulkanAppBase::run() {
+	while (!glfwWindowShouldClose(window)) {
+		glfwPollEvents();
+		update();
+	}
 }
 
 /*
@@ -75,13 +105,16 @@ void VulkanAppBase::initVulkan() {
 }
 
 /*
-* called every frame - may contain update & draw functions
+* basic application setup
 */
-void VulkanAppBase::run() {
-	while (!glfwWindowShouldClose(window)) {
-		glfwPollEvents();
-		update();
-	}
+void VulkanAppBase::initApp() {
+	createCommandPool();
+	createCommandBuffers();
+	createSyncObjects();
+	createPipelineCache();
+
+	/*createRenderPass();
+	createFramebuffers();*/
 }
 
 /*
@@ -162,3 +195,74 @@ void VulkanAppBase::createInstance() {
 	LOG("created:\tvulkan instance");
 }
 
+/*
+* create command pool - use no flags
+*/
+void VulkanAppBase::createCommandPool() {
+	const VulkanDevice::QueueFamilyIndices indices = devices.indices;
+
+	VkCommandPoolCreateInfo poolInfo{};
+	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	poolInfo.queueFamilyIndex = indices.graphicsFamily.value();
+	poolInfo.flags = 0;
+
+	VK_CHECK_RESULT(vkCreateCommandPool(devices.device, &poolInfo, nullptr, &commandPool));
+	LOG("created:\tcommand pool");
+}
+
+/*
+* allocate empty command buffers
+*/
+void VulkanAppBase::createCommandBuffers() {
+	commandBuffers.resize(swapchain.imageCount);
+
+	VkCommandBufferAllocateInfo commandBufferInfo{};
+	commandBufferInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	commandBufferInfo.commandPool = commandPool;
+	commandBufferInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	commandBufferInfo.commandBufferCount = static_cast<uint32_t>(commandBuffers.size());
+
+	VK_CHECK_RESULT(vkAllocateCommandBuffers(devices.device, &commandBufferInfo, commandBuffers.data()));
+	LOG("created:\tcommand buffers");
+}
+
+/*
+* helper function - free command buffers
+*/
+void VulkanAppBase::destroyCommandBuffers() {
+	vkFreeCommandBuffers(devices.device, commandPool,
+		static_cast<uint32_t>(commandBuffers.size()), commandBuffers.data());
+}
+
+/*
+* create semaphore & fence
+*/
+void VulkanAppBase::createSyncObjects() {
+	presentCompleteSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+	renderCompleteSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+	inFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
+
+	VkSemaphoreCreateInfo semaphoreInfo{};
+	semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+	VkFenceCreateInfo fenceInfo{};
+	fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+	fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+		VK_CHECK_RESULT(vkCreateSemaphore(devices.device, &semaphoreInfo, nullptr, &presentCompleteSemaphores[i]));
+		VK_CHECK_RESULT(vkCreateSemaphore(devices.device, &semaphoreInfo, nullptr, &renderCompleteSemaphores[i]));
+		VK_CHECK_RESULT(vkCreateFence(devices.device, &fenceInfo, nullptr, &inFlightFences[i]));
+	}
+	LOG("created:\tsync objects");
+}
+
+/*
+* create pipeline cache to optimize subsequent pipeline creation
+*/
+void VulkanAppBase::createPipelineCache() {
+	VkPipelineCacheCreateInfo pipelineCacheInfo{};
+	pipelineCacheInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
+	VK_CHECK_RESULT(vkCreatePipelineCache(devices.device, &pipelineCacheInfo, nullptr, &pipelineCache));
+	LOG("created:\tpipeline cache");
+}

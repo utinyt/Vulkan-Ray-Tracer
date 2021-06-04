@@ -8,8 +8,7 @@ public:
 	VulkanAppBase(int width, int height, const std::string& appName);
 	virtual ~VulkanAppBase();
 
-	void initWindow();
-	void initVulkan();
+	void init();
 	void run();
 
 protected:
@@ -33,20 +32,45 @@ protected:
 	VulkanDevice devices;
 	/** abstracted swapchain object - contains swapchain image views */
 	VulkanSwapchain swapchain;
+	/** command pool - graphics */
+	VkCommandPool commandPool;
+	/** command buffers - per swapchain */
+	std::vector<VkCommandBuffer> commandBuffers;
+	/** max number of frames processed in GPU */
+	int MAX_FRAMES_IN_FLIGHT = 2;
+	/** sync objects */
+	std::vector<VkSemaphore> presentCompleteSemaphores;
+	std::vector<VkSemaphore> renderCompleteSemaphores;
+	std::vector<VkFence> inFlightFences;
+	/** pipeline cache */
+	VkPipelineCache pipelineCache;
 
 private:
+	void initWindow();
+	void initVulkan();
+	void initApp();
+
 	void createInstance();
+	void createCommandPool();
+	void createCommandBuffers();
+	void destroyCommandBuffers();
+	void createSyncObjects();
+	void createPipelineCache();
+
+	/*virtual void createRenderPass() = 0;
+	virtual void createFramebuffers() = 0;*/
+	/*virtual void buildCommandBuffers() = 0;
+	virtual void createPipeline() = 0;*/
 };
 
 /*
-* entry point macro
+* entry point
 */
 #define RUN_APPLICATION_MAIN(Application, WIDTH, HEIGHT, appName)	\
 int main(void) {													\
 	try {															\
 		Application app(WIDTH, HEIGHT, appName);					\
-		app.initWindow();											\
-		app.initVulkan();											\
+		app.init();													\
 		app.run();													\
 	}										\
 	catch (const std::exception& e) {		\
