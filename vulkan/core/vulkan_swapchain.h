@@ -10,6 +10,9 @@ public:
 	void init(const VulkanDevice* devices, GLFWwindow* window);
 	void create();
 
+	VkResult acquireImage(VkSemaphore presentCompleteSamaphore, uint32_t& imageIndex);
+	VkResult queuePresent(uint32_t imageIndex, VkSemaphore renderCompleteSemaphore);
+
 	/** swapchain handle */
 	VkSwapchainKHR swapchain = VK_NULL_HANDLE;
 	/** swapchain image format & color space */

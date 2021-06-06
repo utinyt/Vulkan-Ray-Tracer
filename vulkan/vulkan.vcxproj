@@ -32,6 +32,10 @@
     <ClInclude Include="core\vulkan_device.h" />
     <ClInclude Include="core\vulkan_swapchain.h" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="shader\triangle\shader.frag" />
+    <None Include="shader\triangle\shader.vert" />
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>

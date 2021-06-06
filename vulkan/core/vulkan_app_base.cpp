@@ -30,8 +30,6 @@ VulkanAppBase::~VulkanAppBase() {
 		vkDestroyFence(devices.device, inFlightFences[i], nullptr);
 	}
 
-	vkDestroyRenderPass(devices.device, renderPass, nullptr);
-
 	swapchain.cleanup();
 
 	vkDestroyPipelineCache(devices.device, pipelineCache, nullptr);
@@ -64,6 +62,7 @@ void VulkanAppBase::run() {
 		glfwPollEvents();
 		draw();
 	}
+	vkDeviceWaitIdle(devices.device);
 }
 
 /*

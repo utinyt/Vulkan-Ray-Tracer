@@ -13,12 +13,15 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="Resource Files\shader">
+      <UniqueIdentifier>{0eb4a393-8539-4aef-bd32-dc56b52f45d7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resource Files\shader\triangle">
+      <UniqueIdentifier>{a65246f2-0829-4e99-b4a9-86f0c8882c13}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="core\vulkan_app_base.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="example.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="core\vulkan_debug.cpp">
@@ -28,6 +31,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="core\vulkan_swapchain.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="triangle.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -47,5 +53,13 @@
     <ClInclude Include="core\vulkan_utils.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="shader\triangle\shader.frag">
+      <Filter>Resource Files\shader\triangle</Filter>
+    </None>
+    <None Include="shader\triangle\shader.vert">
+      <Filter>Resource Files\shader\triangle</Filter>
+    </None>
   </ItemGroup>
 </Project>

@@ -12,8 +12,11 @@ public:
 	void run();
 
 protected:
-	virtual void draw() = 0;
 	virtual void initApp();
+	virtual void draw() = 0;
+
+
+	VkShaderModule createShaderModule(const std::vector<char>& code);
 
 	/** glfw window handle */
 	GLFWwindow* window;
@@ -37,8 +40,6 @@ protected:
 	VkCommandPool commandPool;
 	/** command buffers - per swapchain */
 	std::vector<VkCommandBuffer> commandBuffers;
-	/** max number of frames processed in GPU */
-	int MAX_FRAMES_IN_FLIGHT = 2;
 	/** sync objects */
 	std::vector<VkSemaphore> presentCompleteSemaphores;
 	std::vector<VkSemaphore> renderCompleteSemaphores;
@@ -47,6 +48,16 @@ protected:
 	VkPipelineCache pipelineCache;
 	/** render pass */
 	VkRenderPass renderPass;
+	/** graphics pipeline */
+	VkPipeline pipeline;
+	/** pipeline layout */
+	VkPipelineLayout pipelineLayout;
+	/** framebuffers */
+	std::vector<VkFramebuffer> framebuffers;
+	/** max number of frames processed in GPU */
+	int MAX_FRAMES_IN_FLIGHT = 2;
+	/** current frame - index for MAX_FRAMES_IN_FLIGHT */
+	size_t currentFrame = 0;
 
 private:
 	void initWindow();
@@ -58,8 +69,6 @@ private:
 	void destroyCommandBuffers();
 	void createSyncObjects();
 	void createPipelineCache();
-
-	VkShaderModule createShaderModule(const std::vector<char>& code);
 
 	/*virtual void createRenderPass() = 0;
 	virtual void createFramebuffers() = 0;*/

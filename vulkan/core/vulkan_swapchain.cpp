@@ -166,3 +166,35 @@ void VulkanSwapchain::create() {
 
 	LOG("created:\timage views");
 }
+
+/*
+* acquire available swapchain image
+* 
+* @param presentCompleteSemaphore - semaphore to wait
+* @param imageIndex - return index of available swapchain image
+* 
+* @return VkResult from image acquisition
+*/
+VkResult VulkanSwapchain::acquireImage(VkSemaphore presentCompleteSamaphore, uint32_t& imageIndex) {
+	return vkAcquireNextImageKHR(devices->device, swapchain, UINT64_MAX, presentCompleteSamaphore, VK_NULL_HANDLE, &imageIndex);
+}
+
+/*
+* send render finished image to the present queue
+* 
+* @param imageIndex - index of image finished rendering
+* @param renderCompleteSemaphore - semaphore to wait
+* 
+* @return VkResult from queue present
+*/
+VkResult VulkanSwapchain::queuePresent(uint32_t imageIndex, VkSemaphore renderCompleteSemaphore) {
+	VkPresentInfoKHR presentInfo{};
+	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+	presentInfo.waitSemaphoreCount = 1;
+	presentInfo.pWaitSemaphores = &renderCompleteSemaphore;
+	presentInfo.swapchainCount = 1;
+	presentInfo.pSwapchains = &swapchain;
+	presentInfo.pImageIndices = &imageIndex;
+	presentInfo.pResults = nullptr;
+	return vkQueuePresentKHR(devices->presentQueue, &presentInfo);
+}

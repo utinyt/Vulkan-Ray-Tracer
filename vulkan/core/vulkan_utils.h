@@ -31,6 +31,8 @@
 * read binary file
 * 
 * @param filename - name of the file
+* 
+* @return raw binary data stored in a vector
 */
 inline std::vector<char> readFile(const std::string& filename) {
 	std::ifstream file(filename, std::ios::ate | std::ios::binary);
