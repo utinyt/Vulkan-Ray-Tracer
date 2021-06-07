@@ -23,7 +23,16 @@ protected:
 	virtual void createFramebuffers() = 0;
 	virtual void recordCommandBuffer() = 0;
 
+	/** @brief compile & create shader module */
 	VkShaderModule createShaderModule(const std::vector<char>& code);
+	/** @brief create buffer & buffer memory */
+	void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties,
+		VkBuffer& buffer, VkDeviceMemory& bufferMemory);
+	/** @brief copy data to another buffer */
+	void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
+	/** @brief build buffer - used to create vertex / index buffer */
+	void buildBuffer(const void* bufferData, VkDeviceSize bufferSize, VkBufferUsageFlags usage,
+		VkBuffer& buffer, VkDeviceMemory& bufferMemory);
 
 	/** glfw window handle */
 	GLFWwindow* window;
@@ -57,20 +66,13 @@ protected:
 	std::vector<VkFence> inFlightImageFences;
 	/** pipeline cache */
 	VkPipelineCache pipelineCache;
-	/** render pass */
-	VkRenderPass renderPass;
-	/** graphics pipeline */
-	VkPipeline pipeline;
-	/** pipeline layout */
-	VkPipelineLayout pipelineLayout;
-	/** framebuffers */
-	std::vector<VkFramebuffer> framebuffers;
 	/** max number of frames processed in GPU */
 	int MAX_FRAMES_IN_FLIGHT = 2;
 	/** current frame - index for MAX_FRAMES_IN_FLIGHT */
 	size_t currentFrame = 0;
 	/** window resize check */
 	bool windowResized = false;
+
 private:
 	void initWindow();
 	void initVulkan();
@@ -81,11 +83,6 @@ private:
 	void destroyCommandBuffers();
 	void createSyncObjects();
 	void createPipelineCache();
-
-	/*virtual void createRenderPass() = 0;
-	virtual void createFramebuffers() = 0;*/
-	/*virtual void buildCommandBuffers() = 0;
-	virtual void createPipeline() = 0;*/
 };
 
 /*

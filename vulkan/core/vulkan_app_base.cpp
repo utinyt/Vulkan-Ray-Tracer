@@ -190,6 +190,137 @@ void VulkanAppBase::windowResizeCallbck(GLFWwindow* window, int width, int heigh
 }
 
 /*
+* create shader module
+*
+* @param code - compiled shader code (raw binary data, .spv)
+*
+* @return VkShaderModule - constructed shader module
+*/
+VkShaderModule VulkanAppBase::createShaderModule(const std::vector<char>& code) {
+	VkShaderModuleCreateInfo shaderModuleInfo{};
+	shaderModuleInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+	shaderModuleInfo.codeSize = code.size();
+	shaderModuleInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
+
+	VkShaderModule shaderModule;
+	VK_CHECK_RESULT(vkCreateShaderModule(devices.device, &shaderModuleInfo, nullptr, &shaderModule));
+	return shaderModule;
+}
+
+/*
+* compile & create shader module
+* 
+* @param size - required buffer size
+* @param usage - required buffer usage
+* @param properties - bit field specifying required memory properties
+* @param buffer - return buffer handle
+* @param bufferMemory - return buffer memory handle
+*/
+void VulkanAppBase::createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties,
+	VkBuffer& buffer, VkDeviceMemory& bufferMemory) {
+	//buffer creation
+	VkBufferCreateInfo bufferInfo{};
+	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	bufferInfo.size = size;
+	bufferInfo.usage = usage;
+	bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	VK_CHECK_RESULT(vkCreateBuffer(devices.device, &bufferInfo, nullptr, &buffer));
+
+	//buffer allocation
+	VkMemoryRequirements memRequirements;
+	vkGetBufferMemoryRequirements(devices.device, buffer, &memRequirements);
+
+	VkMemoryAllocateInfo memAllocInfo{};
+	memAllocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	memAllocInfo.allocationSize = memRequirements.size;
+	memAllocInfo.memoryTypeIndex = devices.findMemoryType(memRequirements.memoryTypeBits, properties);
+	VK_CHECK_RESULT(vkAllocateMemory(devices.device, &memAllocInfo, nullptr, &bufferMemory));
+	vkBindBufferMemory(devices.device, buffer, bufferMemory, 0);
+}
+
+/*
+* copy data to another buffer
+* 
+* @param srcBuffer - source buffer to be copied
+* @param dstBuffer - destination buffer
+* @param size - buffer size to copy
+*/
+void VulkanAppBase::copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size) {
+	//create command buffer
+	VkCommandBufferAllocateInfo commandBufferInfo{};
+	commandBufferInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	commandBufferInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	commandBufferInfo.commandPool = commandPool;
+	commandBufferInfo.commandBufferCount = 1;
+
+	VkCommandBuffer commandBuffer;
+	VK_CHECK_RESULT(vkAllocateCommandBuffers(devices.device, &commandBufferInfo, &commandBuffer));
+
+	//begin command buffer
+	VkCommandBufferBeginInfo cmdBufBeginInfo{};
+	cmdBufBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	cmdBufBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+	VK_CHECK_RESULT(vkBeginCommandBuffer(commandBuffer, &cmdBufBeginInfo));
+
+	//copy buffer
+	VkBufferCopy copyRegion{};
+	copyRegion.srcOffset = 0;
+	copyRegion.dstOffset = 0;
+	copyRegion.size = size;
+	vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
+
+	//end command buffer
+	vkEndCommandBuffer(commandBuffer);
+
+	//submit
+	VkSubmitInfo submitInfo{};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &commandBuffer;
+	vkQueueSubmit(devices.graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+	vkQueueWaitIdle(devices.graphicsQueue);
+	vkFreeCommandBuffers(devices.device, commandPool, 1, &commandBuffer);
+}
+
+/*
+* build buffer - used to create vertex / index buffer 
+* 
+* @param bufferData - data to transfer
+* @param bufferSize
+* @param usage - buffer usage (vertex / index bit)
+* @param buffer - buffer handle
+* @param bufferMemory - buffer memory handle
+*/
+void VulkanAppBase::buildBuffer(const void* bufferData, VkDeviceSize bufferSize, VkBufferUsageFlags usage,
+	VkBuffer& buffer, VkDeviceMemory& bufferMemory) {
+	VkBuffer stagingBuffer;
+	VkDeviceMemory stagingBufferMemory;
+	createBuffer(bufferSize,
+		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+		stagingBuffer,
+		stagingBufferMemory);
+
+	//data mapping
+	void* data;
+	vkMapMemory(devices.device, stagingBufferMemory, 0, bufferSize, 0, &data);
+	memcpy(data, bufferData, (size_t)bufferSize);
+	vkUnmapMemory(devices.device, stagingBufferMemory);
+
+	//vertex buffer creation
+	createBuffer(bufferSize,
+		VK_BUFFER_USAGE_TRANSFER_DST_BIT | usage,
+		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+		buffer,
+		bufferMemory);
+
+	copyBuffer(stagingBuffer, buffer, bufferSize);
+
+	vkDestroyBuffer(devices.device, stagingBuffer, nullptr);
+	vkFreeMemory(devices.device, stagingBufferMemory, nullptr);
+}
+
+/*
 * helper function - creates vulkan instance
 */
 void VulkanAppBase::createInstance() {
@@ -338,20 +469,4 @@ void VulkanAppBase::createPipelineCache() {
 	pipelineCacheInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
 	VK_CHECK_RESULT(vkCreatePipelineCache(devices.device, &pipelineCacheInfo, nullptr, &pipelineCache));
 	LOG("created:\tpipeline cache");
-}
-
-/*
-* create shader module
-* 
-* @param code - compiled shader code (raw binary data, .spv)
-*/
-VkShaderModule VulkanAppBase::createShaderModule(const std::vector<char>& code) {
-	VkShaderModuleCreateInfo shaderModuleInfo{};
-	shaderModuleInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-	shaderModuleInfo.codeSize = code.size();
-	shaderModuleInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
-
-	VkShaderModule shaderModule;
-	VK_CHECK_RESULT(vkCreateShaderModule(devices.device, &shaderModuleInfo, nullptr, &shaderModule));
-	return shaderModule;
 }

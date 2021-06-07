@@ -8,6 +8,7 @@ struct VulkanDevice {
 		const std::vector<const char*>& requiredExtensions);
 	void createLogicalDevice();
 	void cleanup();
+	uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) const;
 
 	/** GPU handle */
 	VkPhysicalDevice physicalDevice;
@@ -29,11 +30,13 @@ struct VulkanDevice {
 		VkSurfaceCapabilitiesKHR capabilities;
 		std::vector<VkSurfaceFormatKHR> formats;
 		std::vector<VkPresentModeKHR> presentModes;
-	} swapchainDetails;
+	};
 	/** handle to the graphics queue */
 	VkQueue graphicsQueue;
 	/** handle to the present queue (usually the same as graphics queue)*/
 	VkQueue presentQueue;
+	/** memory properties of the current physical device */
+	VkPhysicalDeviceMemoryProperties memProperties;
 
 	static SwapchainSupportDetails querySwapchainSupport(VkPhysicalDevice physicalDevice,
 		VkSurfaceKHR surface);

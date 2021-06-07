@@ -30,7 +30,6 @@ void VulkanDevice::pickPhysicalDevice(VkInstance instance, VkSurfaceKHR surface,
 		if (checkPhysicalDevice(device, surface, requiredExtensions, srcIndices, srcDetails)) {
 			physicalDevice = device;
 			indices = srcIndices;
-			swapchainDetails = srcDetails;
 			break;
 		}
 	}
@@ -39,6 +38,7 @@ void VulkanDevice::pickPhysicalDevice(VkInstance instance, VkSurfaceKHR surface,
 		throw std::runtime_error("failed to find suitable GPU");
 	}
 
+	vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memProperties);
 	LOG("initialized:\tphysical device");
 }
 
@@ -47,6 +47,24 @@ void VulkanDevice::pickPhysicalDevice(VkInstance instance, VkSurfaceKHR surface,
 */
 void VulkanDevice::cleanup() {
 	vkDestroyDevice(device, nullptr);
+}
+
+/*
+* find suitable memory type
+* 
+* @param typeFilter - compatible bit field corrensponding to memoryType
+* @param properties - required memory properties
+* 
+* @return uint32_t - index of suitable memory type
+*/
+uint32_t VulkanDevice::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) const {
+	for (uint32_t i = 0; i < memProperties.memoryTypeCount; ++i) {
+		if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
+			return i;
+		}
+	}
+
+	throw std::runtime_error("VulkanDevice::findMemoryType() - failed to find suitable memory type");
 }
 
 /*
@@ -139,7 +157,11 @@ bool VulkanDevice::checkPhysicalDevice(VkPhysicalDevice physicalDevice,
 
 /*
 * helper function for checkPhysicalDevice
-* returns QueueFamilyIndices struct with valid queue family indices (graphics / present)
+* 
+* @param physicalDevice - current physical device to check
+* @param surface - abstracted handle to the native surface
+* 
+* @return QueueFamilyIndices - struct with valid queue family indices (graphics / present)
 */
 VulkanDevice::QueueFamilyIndices VulkanDevice::findQueueFamilyIndices(VkPhysicalDevice physicalDevice,
 	VkSurfaceKHR surface) {
@@ -177,6 +199,11 @@ VulkanDevice::QueueFamilyIndices VulkanDevice::findQueueFamilyIndices(VkPhysical
 
 /*
 * helper function for checkPhysicalDevice, returns valid SwapchainSupportDetails struct
+* 
+* @param physicalDevice - current physical device to check
+* @param surface - abstracted handle to the native surface
+* 
+* @return SwapchainSupportDetails - struct with vaild queue family indices
 */
 VulkanDevice::SwapchainSupportDetails VulkanDevice::querySwapchainSupport(
 	VkPhysicalDevice physicalDevice, VkSurfaceKHR surface) {

@@ -1,7 +1,51 @@
+#include <array>
 #include "core/vulkan_app_base.h"
+#include "glm/glm.hpp"
 
 class VulkanApp : public VulkanAppBase {
 public:
+	/** vertex data - pos and color */
+	struct Vertex {
+		glm::vec2 pos{};
+		glm::vec3 col{};
+
+		static VkVertexInputBindingDescription getBindingDescription() {
+			VkVertexInputBindingDescription bindingDescription{};
+			bindingDescription.binding = 0;
+			bindingDescription.stride = sizeof(Vertex);
+			bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+			return bindingDescription;
+		}
+
+		static std::array<VkVertexInputAttributeDescription, 2> getAttributeDescriptions() {
+			std::array<VkVertexInputAttributeDescription, 2> attributeDescription;
+			attributeDescription[0].binding = 0;
+			attributeDescription[0].location = 0;
+			attributeDescription[0].format = VK_FORMAT_R32G32_SFLOAT;
+			attributeDescription[0].offset = offsetof(Vertex, pos);
+
+			attributeDescription[1].binding = 0;
+			attributeDescription[1].location = 1;
+			attributeDescription[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+			attributeDescription[1].offset = offsetof(Vertex, col);
+
+			return attributeDescription;
+		}
+	};
+
+	/** rect */
+	const std::vector<Vertex> vertices = {
+		{{-0.5f, -0.5f}, {1.f, 0.f, 0.f}},
+		{{0.5f, -0.5f}, {0.f, 1.f, 0.f}},
+		{{-0.5f, 0.5f}, {0.f, 0.f, 1.f}},
+		{{0.5f, 0.5f}, {1.f, 1.f, 1.f}}
+	};
+
+	/** indices */
+	const std::vector<uint16_t> indices = {
+		0, 1, 3, 3, 2, 0
+	};
+
 	/*
 	* constructor - get window size & title
 	*/
@@ -12,6 +56,11 @@ public:
 	* destructor - destroy vulkan objects created in this level
 	*/
 	~VulkanApp() {
+		vkDestroyBuffer(devices.device, indexBuffer, nullptr);
+		vkFreeMemory(devices.device, indexBufferMemory, nullptr);
+		vkDestroyBuffer(devices.device, vertexBuffer, nullptr);
+		vkFreeMemory(devices.device, vertexBufferMemory, nullptr);
+
 		for (auto& framebuffer : framebuffers) {
 			vkDestroyFramebuffer(devices.device, framebuffer, nullptr);
 		}
@@ -28,10 +77,38 @@ public:
 		createRenderPass();
 		createPipeline();
 		createFramebuffers();
+
+		//create vertex buffer
+		VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
+		buildBuffer(vertices.data(), bufferSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+			vertexBuffer, vertexBufferMemory);
+
+		//create index buffer
+		bufferSize = sizeof(indices[0]) * indices.size();
+		buildBuffer(indices.data(), bufferSize, VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+			indexBuffer, indexBufferMemory);
+		
 		recordCommandBuffer();
 	}
 
 private:
+	/** render pass */
+	VkRenderPass renderPass;
+	/** graphics pipeline */
+	VkPipeline pipeline;
+	/** pipeline layout */
+	VkPipelineLayout pipelineLayout;
+	/** framebuffers */
+	std::vector<VkFramebuffer> framebuffers;
+	/** vertex buffer handle */
+	VkBuffer vertexBuffer;
+	/** vertex buffer memory handle */
+	VkDeviceMemory vertexBufferMemory;
+	/** index buffer handle */
+	VkBuffer indexBuffer;
+	/** index buffer memory handle */
+	VkDeviceMemory indexBufferMemory;
+
 	/*
 	* called every frame - submit queues
 	*/
@@ -101,10 +178,14 @@ private:
 	*/
 	void createPipeline() {
 		//vertex input
+		auto bindingDescription = Vertex::getBindingDescription();
+		auto attributeDescription = Vertex::getAttributeDescriptions();
 		VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
 		vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-		vertexInputInfo.vertexAttributeDescriptionCount = 0;
-		vertexInputInfo.vertexBindingDescriptionCount = 0;
+		vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescription.size());
+		vertexInputInfo.vertexBindingDescriptionCount = 1;
+		vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
+		vertexInputInfo.pVertexAttributeDescriptions = attributeDescription.data();
 
 		//input assembly
 		VkPipelineInputAssemblyStateCreateInfo inputAssemblyInfo{};
@@ -133,7 +214,7 @@ private:
 		rasterizationInfo.polygonMode = VK_POLYGON_MODE_FILL;
 		rasterizationInfo.lineWidth = 1.f; //require gpu feature to set this above 1.f
 		rasterizationInfo.cullMode = VK_CULL_MODE_BACK_BIT;
-		rasterizationInfo.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+		rasterizationInfo.frontFace = VK_FRONT_FACE_CLOCKWISE;
 		rasterizationInfo.depthBiasEnable = VK_FALSE;
 
 		//multisampling
@@ -162,8 +243,8 @@ private:
 		VK_CHECK_RESULT(vkCreatePipelineLayout(devices.device, &pipelineLayoutInfo, nullptr, &pipelineLayout));
 
 		//shader
-		VkShaderModule vertexModule = createShaderModule(readFile("shader/triangle/vert.spv"));
-		VkShaderModule fragmentModule = createShaderModule(readFile("shader/triangle/frag.spv"));
+		VkShaderModule vertexModule = createShaderModule(vktools::readFile("shader/triangle/vert.spv"));
+		VkShaderModule fragmentModule = createShaderModule(vktools::readFile("shader/triangle/frag.spv"));
 
 		VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
 		vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -264,7 +345,11 @@ private:
 			vkCmdSetScissor(commandBuffers[i], 0, 1, &scissor);
 
 			vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-			vkCmdDraw(commandBuffers[i], 3, 1, 0, 0);
+			VkDeviceSize offsets[] = { 0 };
+			vkCmdBindVertexBuffers(commandBuffers[i], 0, 1, &vertexBuffer, offsets);
+			vkCmdBindIndexBuffer(commandBuffers[i], indexBuffer, 0, VK_INDEX_TYPE_UINT16);
+			vkCmdDrawIndexed(commandBuffers[i], static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
+			//vkCmdDraw(commandBuffers[i], static_cast<uint32_t>(vertices.size()), 1, 0, 0);
 			vkCmdEndRenderPass(commandBuffers[i]);
 			VK_CHECK_RESULT(vkEndCommandBuffer(commandBuffers[i]));
 		}

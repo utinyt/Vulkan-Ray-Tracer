@@ -23,6 +23,7 @@
     <ClCompile Include="core\vulkan_debug.cpp" />
     <ClCompile Include="core\vulkan_device.cpp" />
     <ClCompile Include="core\vulkan_swapchain.cpp" />
+    <ClCompile Include="core\vulkan_utils.cpp" />
     <ClCompile Include="triangle.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -107,7 +108,7 @@
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>$(SolutionDir)..\third_party\glfw-include;$(SolutionDir)..\third_party\glm-include;$(SolutionDir)..\third_party\vulkan-include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)..\third_party\glfw-include;$(SolutionDir)..\third_party\glm-include;$(SolutionDir)..\third_party\vulkan-include;$(SolutionDir)..\third_party\tinyobjloader-include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -125,7 +126,7 @@
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>$(SolutionDir)..\third_party\glfw-include;$(SolutionDir)..\third_party\glm-include;$(SolutionDir)..\third_party\vulkan-include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)..\third_party\glfw-include;$(SolutionDir)..\third_party\glm-include;$(SolutionDir)..\third_party\vulkan-include;$(SolutionDir)..\third_party\tinyobjloader-include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -143,7 +144,7 @@
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>$(SolutionDir)..\third_party\glfw-include;$(SolutionDir)..\third_party\glm-include;$(SolutionDir)..\third_party\vulkan-include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)..\third_party\glfw-include;$(SolutionDir)..\third_party\glm-include;$(SolutionDir)..\third_party\vulkan-include;$(SolutionDir)..\third_party\tinyobjloader-include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -161,7 +162,7 @@
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>$(SolutionDir)..\third_party\glfw-include;$(SolutionDir)..\third_party\glm-include;$(SolutionDir)..\third_party\vulkan-include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)..\third_party\glfw-include;$(SolutionDir)..\third_party\glm-include;$(SolutionDir)..\third_party\vulkan-include;$(SolutionDir)..\third_party\tinyobjloader-include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
