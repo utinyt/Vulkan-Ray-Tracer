@@ -36,9 +36,18 @@ private:
 	* called every frame - submit queues
 	*/
 	virtual void draw() override {
+		vkWaitForFences(devices.device, 1, &frameLimitFences[currentFrame], VK_TRUE, UINT64_MAX);
+
 		//prepare image
 		uint32_t imageIndex;
 		swapchain.acquireImage(presentCompleteSemaphores[currentFrame], imageIndex);
+
+		//check current image is already in-flight
+		if (inFlightImageFences[imageIndex] != VK_NULL_HANDLE) {
+			vkWaitForFences(devices.device, 1, &inFlightImageFences[imageIndex], VK_TRUE, UINT64_MAX);
+		}
+		//update image status
+		inFlightImageFences[imageIndex] = frameLimitFences[currentFrame];
 
 		//render
 		VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
@@ -52,7 +61,8 @@ private:
 		submitInfo.signalSemaphoreCount = 1;
 		submitInfo.pSignalSemaphores = &renderCompleteSemaphores[currentFrame];
 
-		VK_CHECK_RESULT(vkQueueSubmit(devices.graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE));
+		vkResetFences(devices.device, 1, &frameLimitFences[currentFrame]);
+		VK_CHECK_RESULT(vkQueueSubmit(devices.graphicsQueue, 1, &submitInfo, frameLimitFences[currentFrame]));
 
 		//present image
 		swapchain.queuePresent(imageIndex, renderCompleteSemaphores[currentFrame]);

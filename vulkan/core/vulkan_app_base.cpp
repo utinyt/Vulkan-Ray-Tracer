@@ -27,7 +27,7 @@ VulkanAppBase::~VulkanAppBase() {
 	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
 		vkDestroySemaphore(devices.device, presentCompleteSemaphores[i], nullptr);
 		vkDestroySemaphore(devices.device, renderCompleteSemaphores[i], nullptr);
-		vkDestroyFence(devices.device, inFlightFences[i], nullptr);
+		vkDestroyFence(devices.device, frameLimitFences[i], nullptr);
 	}
 
 	swapchain.cleanup();
@@ -242,7 +242,8 @@ void VulkanAppBase::destroyCommandBuffers() {
 void VulkanAppBase::createSyncObjects() {
 	presentCompleteSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
 	renderCompleteSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
-	inFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
+	frameLimitFences.resize(MAX_FRAMES_IN_FLIGHT);
+	inFlightImageFences.resize(swapchain.imageCount, VK_NULL_HANDLE);
 
 	VkSemaphoreCreateInfo semaphoreInfo{};
 	semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -254,7 +255,7 @@ void VulkanAppBase::createSyncObjects() {
 	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
 		VK_CHECK_RESULT(vkCreateSemaphore(devices.device, &semaphoreInfo, nullptr, &presentCompleteSemaphores[i]));
 		VK_CHECK_RESULT(vkCreateSemaphore(devices.device, &semaphoreInfo, nullptr, &renderCompleteSemaphores[i]));
-		VK_CHECK_RESULT(vkCreateFence(devices.device, &fenceInfo, nullptr, &inFlightFences[i]));
+		VK_CHECK_RESULT(vkCreateFence(devices.device, &fenceInfo, nullptr, &frameLimitFences[i]));
 	}
 	LOG("created:\tsync objects");
 }

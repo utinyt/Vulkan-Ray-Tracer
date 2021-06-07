@@ -40,10 +40,14 @@ protected:
 	VkCommandPool commandPool;
 	/** command buffers - per swapchain */
 	std::vector<VkCommandBuffer> commandBuffers;
-	/** sync objects */
+	/** sync image acquisition */
 	std::vector<VkSemaphore> presentCompleteSemaphores;
+	/** sync image presentation */
 	std::vector<VkSemaphore> renderCompleteSemaphores;
-	std::vector<VkFence> inFlightFences;
+	/** limits maximum frames in flight */
+	std::vector<VkFence> frameLimitFences;
+	/** tracks all swapchain images if they are begin used */
+	std::vector<VkFence> inFlightImageFences;
 	/** pipeline cache */
 	VkPipelineCache pipelineCache;
 	/** render pass */
