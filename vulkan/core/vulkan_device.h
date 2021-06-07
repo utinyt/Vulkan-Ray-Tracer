@@ -35,14 +35,16 @@ struct VulkanDevice {
 	/** handle to the present queue (usually the same as graphics queue)*/
 	VkQueue presentQueue;
 
+	static SwapchainSupportDetails querySwapchainSupport(VkPhysicalDevice physicalDevice,
+		VkSurfaceKHR surface);
+
 private:
 	static bool checkPhysicalDevice(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface,
 		const std::vector<const char*>& requiredExtensions,
 		QueueFamilyIndices& dstIndices, SwapchainSupportDetails& dstSwapchainDetails);
 	static QueueFamilyIndices findQueueFamilyIndices(VkPhysicalDevice physicalDevice,
 		VkSurfaceKHR surface);
-	static SwapchainSupportDetails querySwapchainSupport(VkPhysicalDevice physicalDevice,
-		VkSurfaceKHR surface);
+	
 
 	/** list of required device extensions */
 	std::vector<const char*> requiredExtensions;

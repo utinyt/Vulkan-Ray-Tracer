@@ -36,18 +36,7 @@ private:
 	* called every frame - submit queues
 	*/
 	virtual void draw() override {
-		vkWaitForFences(devices.device, 1, &frameLimitFences[currentFrame], VK_TRUE, UINT64_MAX);
-
-		//prepare image
-		uint32_t imageIndex;
-		swapchain.acquireImage(presentCompleteSemaphores[currentFrame], imageIndex);
-
-		//check current image is already in-flight
-		if (inFlightImageFences[imageIndex] != VK_NULL_HANDLE) {
-			vkWaitForFences(devices.device, 1, &inFlightImageFences[imageIndex], VK_TRUE, UINT64_MAX);
-		}
-		//update image status
-		inFlightImageFences[imageIndex] = frameLimitFences[currentFrame];
+		uint32_t imageIndex = prepareFrame();
 
 		//render
 		VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
@@ -60,13 +49,9 @@ private:
 		submitInfo.pCommandBuffers = &commandBuffers[imageIndex];
 		submitInfo.signalSemaphoreCount = 1;
 		submitInfo.pSignalSemaphores = &renderCompleteSemaphores[currentFrame];
-
-		vkResetFences(devices.device, 1, &frameLimitFences[currentFrame]);
 		VK_CHECK_RESULT(vkQueueSubmit(devices.graphicsQueue, 1, &submitInfo, frameLimitFences[currentFrame]));
 
-		//present image
-		swapchain.queuePresent(imageIndex, renderCompleteSemaphores[currentFrame]);
-		currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+		submitFrame(imageIndex);
 	}
 
 	/*
@@ -220,7 +205,10 @@ private:
 	/*
 	* create framebuffer - use swapchain images
 	*/
-	void createFramebuffers() {
+	virtual void createFramebuffers() override {
+		for (auto& framebuffer : framebuffers) {
+			vkDestroyFramebuffer(devices.device, framebuffer, nullptr);
+		}
 		framebuffers.resize(swapchain.imageCount);
 
 		for (size_t i = 0; i < swapchain.imageCount; ++i) {
@@ -240,7 +228,7 @@ private:
 	/*
 	* record drawing commands to command buffers
 	*/
-	void recordCommandBuffer() {
+	virtual void recordCommandBuffer() override {
 		VkCommandBufferBeginInfo cmdBufBeginInfo{};
 		cmdBufBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 

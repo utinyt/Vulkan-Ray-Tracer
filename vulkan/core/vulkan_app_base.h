@@ -15,6 +15,13 @@ protected:
 	virtual void initApp();
 	virtual void draw() = 0;
 
+	uint32_t prepareFrame();
+	void submitFrame(uint32_t imageIndex);
+	
+	void resizeWindow();
+	static void windowResizeCallbck(GLFWwindow* window, int width, int height);
+	virtual void createFramebuffers() = 0;
+	virtual void recordCommandBuffer() = 0;
 
 	VkShaderModule createShaderModule(const std::vector<char>& code);
 
@@ -62,7 +69,8 @@ protected:
 	int MAX_FRAMES_IN_FLIGHT = 2;
 	/** current frame - index for MAX_FRAMES_IN_FLIGHT */
 	size_t currentFrame = 0;
-
+	/** window resize check */
+	bool windowResized = false;
 private:
 	void initWindow();
 	void initVulkan();

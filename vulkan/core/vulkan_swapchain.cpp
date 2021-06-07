@@ -26,7 +26,8 @@ void VulkanSwapchain::init(const VulkanDevice* devices, GLFWwindow* window) {
 void VulkanSwapchain::create() {
 	VkSwapchainKHR oldSwapchain = swapchain;
 
-	const VulkanDevice::SwapchainSupportDetails& details = devices->swapchainDetails;
+	const VulkanDevice::SwapchainSupportDetails& details = 
+		devices->querySwapchainSupport(devices->physicalDevice, devices->surface);
 	
 	//format
 	bool foundFormat = false;

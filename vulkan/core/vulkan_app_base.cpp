@@ -74,8 +74,10 @@ void VulkanAppBase::initWindow() {
 	}
 
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+	glfwWindowHint(GLFW_RESIZABLE, GL_TRUE);
 	window = glfwCreateWindow(width, height, appName.c_str(), nullptr, nullptr);
+	glfwSetWindowUserPointer(window, this);
+	glfwSetFramebufferSizeCallback(window, windowResizeCallbck);
 	LOG("initialized:\tglfw");
 }
 
@@ -117,6 +119,74 @@ void VulkanAppBase::initApp() {
 
 	/*createRenderPass();
 	createFramebuffers();*/
+}
+
+/*
+* image acquisition & check swapchain compatible
+*/
+uint32_t VulkanAppBase::prepareFrame() {
+	vkWaitForFences(devices.device, 1, &frameLimitFences[currentFrame], VK_TRUE, UINT64_MAX);
+
+	//prepare image
+	uint32_t imageIndex;
+	VkResult result = swapchain.acquireImage(presentCompleteSemaphores[currentFrame], imageIndex);
+	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+		resizeWindow();
+	}
+	else {
+		VK_CHECK_RESULT(result);
+	}
+
+	//check current image is already in-flight
+	if (inFlightImageFences[imageIndex] != VK_NULL_HANDLE) {
+		vkWaitForFences(devices.device, 1, &inFlightImageFences[imageIndex], VK_TRUE, UINT64_MAX);
+	}
+	//update image status
+	inFlightImageFences[imageIndex] = frameLimitFences[currentFrame];
+	vkResetFences(devices.device, 1, &frameLimitFences[currentFrame]);
+
+	return imageIndex;
+}
+
+/*
+* image presentation & check swapchain compatible
+*/
+void VulkanAppBase::submitFrame(uint32_t imageIndex) {
+	//present image
+	VkResult result = swapchain.queuePresent(imageIndex, renderCompleteSemaphores[currentFrame]);
+	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || windowResized) {
+		windowResized = false;
+		resizeWindow();
+	}
+	else {
+		VK_CHECK_RESULT(result);
+	}
+	currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+}
+
+/*
+* handle window resize event - recreate swapchain and swaochain-dependent objects
+*/
+void VulkanAppBase::resizeWindow() {
+	int width = 0, height = 0;
+	glfwGetFramebufferSize(window, &width, &height);
+	while (width == 0 || height == 0) {
+		glfwGetFramebufferSize(window, &width, &height);
+		glfwWaitEvents();
+	}
+
+	vkDeviceWaitIdle(devices.device);
+
+	swapchain.create();
+	createFramebuffers();
+	destroyCommandBuffers();
+	createCommandBuffers();
+	recordCommandBuffer();
+}
+
+void VulkanAppBase::windowResizeCallbck(GLFWwindow* window, int width, int height) {
+	auto app = reinterpret_cast<VulkanAppBase*>(glfwGetWindowUserPointer(window));
+	app->windowResized = true;
 }
 
 /*
