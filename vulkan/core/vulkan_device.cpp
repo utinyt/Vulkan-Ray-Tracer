@@ -231,3 +231,78 @@ VulkanDevice::SwapchainSupportDetails VulkanDevice::querySwapchainSupport(
 
 	return details;
 }
+
+/*
+* compile & create shader module
+*
+* @param size - required buffer size
+* @param usage - required buffer usage
+* @param properties - bit field specifying required memory properties
+* @param buffer - return buffer handle
+* @param bufferMemory - return buffer memory handle
+*/
+void VulkanDevice::createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties,
+	VkBuffer& buffer, VkDeviceMemory& bufferMemory) {
+	//buffer creation
+	VkBufferCreateInfo bufferInfo{};
+	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	bufferInfo.size = size;
+	bufferInfo.usage = usage;
+	bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	VK_CHECK_RESULT(vkCreateBuffer(device, &bufferInfo, nullptr, &buffer));
+
+	//buffer allocation
+	VkMemoryRequirements memRequirements;
+	vkGetBufferMemoryRequirements(device, buffer, &memRequirements);
+
+	VkMemoryAllocateInfo memAllocInfo{};
+	memAllocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	memAllocInfo.allocationSize = memRequirements.size;
+	memAllocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, properties);
+	VK_CHECK_RESULT(vkAllocateMemory(device, &memAllocInfo, nullptr, &bufferMemory));
+	vkBindBufferMemory(device, buffer, bufferMemory, 0);
+}
+
+/*
+* copy data to another buffer
+*
+* @param srcBuffer - source buffer to be copied
+* @param dstBuffer - destination buffer
+* @param size - buffer size to copy
+*/
+void VulkanDevice::copyBuffer(VkCommandPool commandPool, VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size) {
+	//create command buffer
+	VkCommandBufferAllocateInfo commandBufferInfo{};
+	commandBufferInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	commandBufferInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	commandBufferInfo.commandPool = commandPool;
+	commandBufferInfo.commandBufferCount = 1;
+
+	VkCommandBuffer commandBuffer;
+	VK_CHECK_RESULT(vkAllocateCommandBuffers(device, &commandBufferInfo, &commandBuffer));
+
+	//begin command buffer
+	VkCommandBufferBeginInfo cmdBufBeginInfo{};
+	cmdBufBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	cmdBufBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+	VK_CHECK_RESULT(vkBeginCommandBuffer(commandBuffer, &cmdBufBeginInfo));
+
+	//copy buffer
+	VkBufferCopy copyRegion{};
+	copyRegion.srcOffset = 0;
+	copyRegion.dstOffset = 0;
+	copyRegion.size = size;
+	vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
+
+	//end command buffer
+	vkEndCommandBuffer(commandBuffer);
+
+	//submit
+	VkSubmitInfo submitInfo{};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &commandBuffer;
+	vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+	vkQueueWaitIdle(graphicsQueue);
+	vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
+}

@@ -1,6 +1,9 @@
 #include <array>
+#include <chrono>
 #include "core/vulkan_app_base.h"
+#define GLM_FORCE_RADIANS
 #include "glm/glm.hpp"
+#include "glm/gtc/matrix_transform.hpp"
 
 class VulkanApp : public VulkanAppBase {
 public:
@@ -46,6 +49,13 @@ public:
 		0, 1, 3, 3, 2, 0
 	};
 
+	/** uniform buffer object */
+	struct UBO {
+		glm::mat4 model;
+		glm::mat4 view;
+		glm::mat4 proj;
+	};
+
 	/*
 	* constructor - get window size & title
 	*/
@@ -56,6 +66,14 @@ public:
 	* destructor - destroy vulkan objects created in this level
 	*/
 	~VulkanApp() {
+		vkDestroyDescriptorPool(devices.device, descriptorPool, nullptr);
+
+		for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+			vkDestroyBuffer(devices.device, uniformBuffers[i], nullptr);
+			vkFreeMemory(devices.device, uniformBufferMemories[i], nullptr);
+		}
+
+		vkDestroyDescriptorSetLayout(devices.device, descriptorSetLayout, nullptr);
 		vkDestroyBuffer(devices.device, indexBuffer, nullptr);
 		vkFreeMemory(devices.device, indexBufferMemory, nullptr);
 		vkDestroyBuffer(devices.device, vertexBuffer, nullptr);
@@ -75,6 +93,7 @@ public:
 	virtual void initApp() override {
 		VulkanAppBase::initApp();
 		createRenderPass();
+		createDescriptorSetLayout();
 		createPipeline();
 		createFramebuffers();
 
@@ -88,6 +107,10 @@ public:
 		buildBuffer(indices.data(), bufferSize, VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
 			indexBuffer, indexBufferMemory);
 		
+		createUniformBuffers();
+		createDescriptorPool();
+		createDescriptorSets();
+
 		recordCommandBuffer();
 	}
 
@@ -100,6 +123,13 @@ private:
 	VkPipelineLayout pipelineLayout;
 	/** framebuffers */
 	std::vector<VkFramebuffer> framebuffers;
+	/** descriptor layout */
+	VkDescriptorSetLayout descriptorSetLayout;
+	/** descriptor pool */
+	VkDescriptorPool descriptorPool;
+	/** descriptor sets */
+	std::vector<VkDescriptorSet> descriptorSets;
+
 	/** vertex buffer handle */
 	VkBuffer vertexBuffer;
 	/** vertex buffer memory handle */
@@ -108,6 +138,10 @@ private:
 	VkBuffer indexBuffer;
 	/** index buffer memory handle */
 	VkDeviceMemory indexBufferMemory;
+	/** uniform buffer handle */
+	std::vector<VkBuffer> uniformBuffers;
+	/**  uniform buffer memory handle */
+	std::vector<VkDeviceMemory> uniformBufferMemories;
 
 	/*
 	* called every frame - submit queues
@@ -240,6 +274,8 @@ private:
 		//pipeline layout
 		VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
 		pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+		pipelineLayoutInfo.setLayoutCount = 1;
+		pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout;
 		VK_CHECK_RESULT(vkCreatePipelineLayout(devices.device, &pipelineLayoutInfo, nullptr, &pipelineLayout));
 
 		//shader
@@ -306,6 +342,45 @@ private:
 		LOG("created:\tframebuffers");
 	}
 
+	/** @brief build buffer - used to create vertex / index buffer */
+	/*
+	* build buffer - used to create vertex / index buffer
+	*
+	* @param bufferData - data to transfer
+	* @param bufferSize
+	* @param usage - buffer usage (vertex / index bit)
+	* @param buffer - buffer handle
+	* @param bufferMemory - buffer memory handle
+	*/
+	void buildBuffer(const void* bufferData, VkDeviceSize bufferSize, VkBufferUsageFlags usage,
+		VkBuffer& buffer, VkDeviceMemory& bufferMemory) {
+		VkBuffer stagingBuffer;
+		VkDeviceMemory stagingBufferMemory;
+		devices.createBuffer(bufferSize,
+			VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+			stagingBuffer,
+			stagingBufferMemory);
+
+		//data mapping
+		void* data;
+		vkMapMemory(devices.device, stagingBufferMemory, 0, bufferSize, 0, &data);
+		memcpy(data, bufferData, (size_t)bufferSize);
+		vkUnmapMemory(devices.device, stagingBufferMemory);
+
+		//vertex buffer creation
+		devices.createBuffer(bufferSize,
+			VK_BUFFER_USAGE_TRANSFER_DST_BIT | usage,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+			buffer,
+			bufferMemory);
+
+		devices.copyBuffer(commandPool, stagingBuffer, buffer, bufferSize);
+
+		vkDestroyBuffer(devices.device, stagingBuffer, nullptr);
+		vkFreeMemory(devices.device, stagingBufferMemory, nullptr);
+	}
+
 	/*
 	* record drawing commands to command buffers
 	*/
@@ -355,7 +430,127 @@ private:
 		}
 		LOG("built:\t\tcommand buffers");
 	}
+
+	/*
+	* create descriptor set layout - use uniform buffer
+	*/
+	void createDescriptorSetLayout() {
+		VkDescriptorSetLayoutBinding uboLayoutBinding{};
+		uboLayoutBinding.binding = 0;
+		uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		uboLayoutBinding.descriptorCount = 1;
+		uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+		
+		VkDescriptorSetLayoutCreateInfo layoutInfo{};
+		layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+		layoutInfo.bindingCount = 1;
+		layoutInfo.pBindings = &uboLayoutBinding;
+
+		VK_CHECK_RESULT(vkCreateDescriptorSetLayout(devices.device, &layoutInfo, nullptr, &descriptorSetLayout));
+		LOG("created:\tdescriptor set layout");
+	}
+
+	/*
+	* create MAX_FRAMES_IN_FLIGHT of ubos
+	*/
+	void createUniformBuffers() {
+		VkDeviceSize bufferSize = sizeof(UBO);
+		uniformBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+		uniformBufferMemories.resize(MAX_FRAMES_IN_FLIGHT);
+
+		for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+			devices.createBuffer(bufferSize,
+				VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+				uniformBuffers[i],
+				uniformBufferMemories[i]);
+		}
+	}
+
+	/*
+	* update matrices in ubo - rotates 90 degrees per second
+	* 
+	* @param currentFrame - index of uniform buffer vector
+	*/
+	void updateUniformBuffer(size_t currentFrame) {
+		static auto startTime = std::chrono::high_resolution_clock::now();
+		auto currentTime = std::chrono::high_resolution_clock::now();
+		float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+
+		UBO ubo{};
+		ubo.model = glm::rotate(glm::mat4(1.f), time * glm::radians(90.f), glm::vec3(0.f, 0.f, 1.f));
+		ubo.view = glm::lookAt(glm::vec3(0.f, 0.f, 2.f), glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.f, 0.f, 1.f));
+		ubo.proj = glm::perspective(glm::radians(45.f),
+			swapchain.extent.width / (float)swapchain.extent.height, 0.1f, 10.f);
+		ubo.proj[1][1] *= -1;
+
+		void* data;
+		vkMapMemory(devices.device, uniformBufferMemories[currentFrame], 0, sizeof(ubo), 0, &data);
+		memcpy(data, &ubo, sizeof(ubo));
+		vkUnmapMemory(devices.device, uniformBufferMemories[currentFrame]);
+	}
+
+	/*
+	* create descriptor pool
+	*/
+	void createDescriptorPool() {
+		VkDescriptorPoolSize poolSize{};
+		poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		poolSize.descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+
+		VkDescriptorPoolCreateInfo poolInfo{};
+		poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+		poolInfo.poolSizeCount = 1;
+		poolInfo.pPoolSizes = &poolSize;
+		poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+		
+		VK_CHECK_RESULT(vkCreateDescriptorPool(devices.device, &poolInfo, nullptr, &descriptorPool));
+		LOG("created:\tdescriptor pool");
+	}
+
+	/*
+	* create MAX_FRAMES_IN_FLIGHT of descriptor sets
+	*/
+	void createDescriptorSets() {
+		std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, descriptorSetLayout);
+		VkDescriptorSetAllocateInfo allocInfo{};
+		allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+		allocInfo.descriptorPool = descriptorPool;
+		allocInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+		allocInfo.pSetLayouts = layouts.data();
+
+		descriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
+		VK_CHECK_RESULT(vkAllocateDescriptorSets(devices.device, &allocInfo, descriptorSets.data()));
+		
+		for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+			VkDescriptorBufferInfo bufferInfo{};
+			bufferInfo.buffer = uniformBuffers[i];
+			bufferInfo.offset = 0;
+			bufferInfo.range = sizeof(UBO);
+
+			VkWriteDescriptorSet descriptorWrite{};
+			descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			descriptorWrite.dstSet = descriptorSets[i];
+			descriptorWrite.dstBinding = 0;
+			descriptorWrite.dstArrayElement = 0;
+			descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+			descriptorWrite.descriptorCount = 1;
+			descriptorWrite.pBufferInfo = &bufferInfo;
+
+			vkUpdateDescriptorSets(devices.device, 1, &descriptorWrite, 0, nullptr);
+		}
+	}
 };
 
 //entry point
 RUN_APPLICATION_MAIN(VulkanApp, 800, 600, "triangle");
+
+/*
+* constraint : 
+*	- avoid re-record command buffers per frame
+*	- need to support multiple frames in flight (mostly 2)
+*	- MAX_FRAMES_IN_FLIGHT uniform buffer & MAX_FRAMES_IN_FLIGHT descriptor sets
+* 
+* need : 
+*	- MAX_FRAMES_IN_FLIGHT * swapchainImageCount command buffers
+*/

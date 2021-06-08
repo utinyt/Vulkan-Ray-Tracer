@@ -25,14 +25,6 @@ protected:
 
 	/** @brief compile & create shader module */
 	VkShaderModule createShaderModule(const std::vector<char>& code);
-	/** @brief create buffer & buffer memory */
-	void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties,
-		VkBuffer& buffer, VkDeviceMemory& bufferMemory);
-	/** @brief copy data to another buffer */
-	void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
-	/** @brief build buffer - used to create vertex / index buffer */
-	void buildBuffer(const void* bufferData, VkDeviceSize bufferSize, VkBufferUsageFlags usage,
-		VkBuffer& buffer, VkDeviceMemory& bufferMemory);
 
 	/** glfw window handle */
 	GLFWwindow* window;
