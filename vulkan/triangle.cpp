@@ -40,13 +40,13 @@ public:
 	const std::vector<Vertex> vertices = {
 		{{-0.5f, -0.5f}, {1.f, 0.f, 0.f}},
 		{{0.5f, -0.5f}, {0.f, 1.f, 0.f}},
-		{{-0.5f, 0.5f}, {0.f, 0.f, 1.f}},
-		{{0.5f, 0.5f}, {1.f, 1.f, 1.f}}
+		{{0.5f, 0.5f}, {1.f, 1.f, 1.f}},
+		{{-0.5f, 0.5f}, {0.f, 0.f, 1.f}}
 	};
 
 	/** indices */
 	const std::vector<uint16_t> indices = {
-		0, 1, 3, 3, 2, 0
+		0, 1, 2, 2, 3, 0
 	};
 
 	/** uniform buffer object */
@@ -149,6 +149,8 @@ private:
 	virtual void draw() override {
 		uint32_t imageIndex = prepareFrame();
 
+		updateUniformBuffer(currentFrame);
+
 		//render
 		VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
 		VkSubmitInfo submitInfo{};
@@ -157,7 +159,8 @@ private:
 		submitInfo.pWaitSemaphores = &presentCompleteSemaphores[currentFrame];
 		submitInfo.pWaitDstStageMask = waitStages;
 		submitInfo.commandBufferCount = 1;
-		submitInfo.pCommandBuffers = &commandBuffers[imageIndex];
+		size_t commandBufferIndex = currentFrame * framebuffers.size() + imageIndex;
+		submitInfo.pCommandBuffers = &commandBuffers[commandBufferIndex];
 		submitInfo.signalSemaphoreCount = 1;
 		submitInfo.pSignalSemaphores = &renderCompleteSemaphores[currentFrame];
 		VK_CHECK_RESULT(vkQueueSubmit(devices.graphicsQueue, 1, &submitInfo, frameLimitFences[currentFrame]));
@@ -248,7 +251,7 @@ private:
 		rasterizationInfo.polygonMode = VK_POLYGON_MODE_FILL;
 		rasterizationInfo.lineWidth = 1.f; //require gpu feature to set this above 1.f
 		rasterizationInfo.cullMode = VK_CULL_MODE_BACK_BIT;
-		rasterizationInfo.frontFace = VK_FRONT_FACE_CLOCKWISE;
+		rasterizationInfo.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 		rasterizationInfo.depthBiasEnable = VK_FALSE;
 
 		//multisampling
@@ -398,8 +401,9 @@ private:
 		renderPassBeginInfo.clearValueCount = 1;
 		renderPassBeginInfo.pClearValues = &clearColor;
 		
-		for (size_t i = 0; i < framebuffers.size(); ++i) {
-			renderPassBeginInfo.framebuffer = framebuffers[i];
+		for (size_t i = 0; i < framebuffers.size() * MAX_FRAMES_IN_FLIGHT; ++i) {
+			size_t framebufferIndex = i % framebuffers.size();
+			renderPassBeginInfo.framebuffer = framebuffers[framebufferIndex];
 
 			VK_CHECK_RESULT(vkBeginCommandBuffer(commandBuffers[i], &cmdBufBeginInfo));
 			vkCmdBeginRenderPass(commandBuffers[i], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
@@ -423,6 +427,11 @@ private:
 			VkDeviceSize offsets[] = { 0 };
 			vkCmdBindVertexBuffers(commandBuffers[i], 0, 1, &vertexBuffer, offsets);
 			vkCmdBindIndexBuffer(commandBuffers[i], indexBuffer, 0, VK_INDEX_TYPE_UINT16);
+
+			size_t descriptorSetIndex = i / framebuffers.size();
+			vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1,
+				&descriptorSets[descriptorSetIndex], 0, nullptr);
+
 			vkCmdDrawIndexed(commandBuffers[i], static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
 			//vkCmdDraw(commandBuffers[i], static_cast<uint32_t>(vertices.size()), 1, 0, 0);
 			vkCmdEndRenderPass(commandBuffers[i]);
@@ -479,7 +488,7 @@ private:
 
 		UBO ubo{};
 		ubo.model = glm::rotate(glm::mat4(1.f), time * glm::radians(90.f), glm::vec3(0.f, 0.f, 1.f));
-		ubo.view = glm::lookAt(glm::vec3(0.f, 0.f, 2.f), glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.f, 0.f, 1.f));
+		ubo.view = glm::lookAt(glm::vec3(2.f, 2.f, 2.f), glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.f, 0.f, 1.f));
 		ubo.proj = glm::perspective(glm::radians(45.f),
 			swapchain.extent.width / (float)swapchain.extent.height, 0.1f, 10.f);
 		ubo.proj[1][1] *= -1;

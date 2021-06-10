@@ -307,7 +307,7 @@ void VulkanAppBase::createCommandPool() {
 * allocate empty command buffers
 */
 void VulkanAppBase::createCommandBuffers() {
-	commandBuffers.resize(swapchain.imageCount);
+	commandBuffers.resize(swapchain.imageCount * MAX_FRAMES_IN_FLIGHT);
 
 	VkCommandBufferAllocateInfo commandBufferInfo{};
 	commandBufferInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
