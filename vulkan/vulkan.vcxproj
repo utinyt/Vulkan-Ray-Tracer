@@ -11,6 +11,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="core\mesh.cpp" />
     <ClCompile Include="core\vulkan_app_base.cpp" />
     <ClCompile Include="core\vulkan_debug.cpp" />
     <ClCompile Include="core\vulkan_device.cpp" />
@@ -18,6 +19,7 @@
     <ClCompile Include="core\vulkan_utils.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="core\mesh.h" />
     <ClInclude Include="core\vulkan_utils.h" />
     <ClInclude Include="core\vulkan_app_base.h" />
     <ClInclude Include="core\vulkan_debug.h" />
@@ -74,7 +76,7 @@
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>$(SolutionDir)..\third_party\glfw-include;$(SolutionDir)..\third_party\glm-include;$(SolutionDir)..\third_party\vulkan-include;$(SolutionDir)..\third_party\tinyobjloader-include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)..\third_party\include\glfw;$(SolutionDir)..\third_party\include\glm;$(SolutionDir)..\third_party\include\vulkan;$(SolutionDir)..\third_party\include\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -92,7 +94,7 @@
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>$(SolutionDir)..\third_party\glfw-include;$(SolutionDir)..\third_party\glm-include;$(SolutionDir)..\third_party\vulkan-include;$(SolutionDir)..\third_party\tinyobjloader-include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)..\third_party\include\glfw;$(SolutionDir)..\third_party\include\glm;$(SolutionDir)..\third_party\include\vulkan;$(SolutionDir)..\third_party\include\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
