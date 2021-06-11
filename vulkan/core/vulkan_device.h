@@ -11,9 +11,10 @@ struct VulkanDevice {
 	uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) const;
 	/** @brief create buffer & buffer memory */
 	void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties,
-		VkBuffer& buffer, VkDeviceMemory& bufferMemory);
+		VkBuffer& buffer, VkDeviceMemory& bufferMemory) const;
 	/** @brief copy data to another buffer */
-	void copyBuffer(VkCommandPool commandPool, VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
+	void copyBuffer(VkCommandPool commandPool, VkBuffer srcBuffer, VkBuffer dstBuffer,
+		VkDeviceSize size) const;
 
 	/** GPU handle */
 	VkPhysicalDevice physicalDevice;

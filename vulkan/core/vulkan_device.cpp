@@ -242,7 +242,7 @@ VulkanDevice::SwapchainSupportDetails VulkanDevice::querySwapchainSupport(
 * @param bufferMemory - return buffer memory handle
 */
 void VulkanDevice::createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties,
-	VkBuffer& buffer, VkDeviceMemory& bufferMemory) {
+	VkBuffer& buffer, VkDeviceMemory& bufferMemory) const {
 	//buffer creation
 	VkBufferCreateInfo bufferInfo{};
 	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -270,7 +270,8 @@ void VulkanDevice::createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkM
 * @param dstBuffer - destination buffer
 * @param size - buffer size to copy
 */
-void VulkanDevice::copyBuffer(VkCommandPool commandPool, VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size) {
+void VulkanDevice::copyBuffer(VkCommandPool commandPool, VkBuffer srcBuffer, VkBuffer dstBuffer,
+	VkDeviceSize size) const {
 	//create command buffer
 	VkCommandBufferAllocateInfo commandBufferInfo{};
 	commandBufferInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
