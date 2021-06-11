@@ -36,17 +36,16 @@ public:
 		}
 	};
 
-	/** rect */
+	/** triangle */
 	const std::vector<Vertex> vertices = {
-		{{-0.5f, -0.5f}, {1.f, 0.f, 0.f}},
-		{{0.5f, -0.5f}, {0.f, 1.f, 0.f}},
-		{{0.5f, 0.5f}, {1.f, 1.f, 1.f}},
-		{{-0.5f, 0.5f}, {0.f, 0.f, 1.f}}
+		{{0.f, -0.577f}, {1.f, 0.f, 0.f}},
+		{{0.5f, 0.289f}, {0.f, 1.f, 0.f}},
+		{{-0.5f, 0.289f}, {0.f, 0.f, 1.f}}
 	};
 
 	/** indices */
 	const std::vector<uint16_t> indices = {
-		0, 1, 2, 2, 3, 0
+		0, 1, 2
 	};
 
 	/** uniform buffer object */
@@ -68,7 +67,7 @@ public:
 	~VulkanApp() {
 		vkDestroyDescriptorPool(devices.device, descriptorPool, nullptr);
 
-		for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+		for (size_t i = 0; i < uniformBuffers.size(); ++i) {
 			vkDestroyBuffer(devices.device, uniformBuffers[i], nullptr);
 			vkFreeMemory(devices.device, uniformBufferMemories[i], nullptr);
 		}
@@ -282,8 +281,8 @@ private:
 		VK_CHECK_RESULT(vkCreatePipelineLayout(devices.device, &pipelineLayoutInfo, nullptr, &pipelineLayout));
 
 		//shader
-		VkShaderModule vertexModule = createShaderModule(vktools::readFile("shader/triangle/vert.spv"));
-		VkShaderModule fragmentModule = createShaderModule(vktools::readFile("shader/triangle/frag.spv"));
+		VkShaderModule vertexModule = createShaderModule(vktools::readFile("shaders/vert.spv"));
+		VkShaderModule fragmentModule = createShaderModule(vktools::readFile("shaders/frag.spv"));
 
 		VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
 		vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -488,7 +487,7 @@ private:
 
 		UBO ubo{};
 		ubo.model = glm::rotate(glm::mat4(1.f), time * glm::radians(90.f), glm::vec3(0.f, 0.f, 1.f));
-		ubo.view = glm::lookAt(glm::vec3(2.f, 2.f, 2.f), glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.f, 0.f, 1.f));
+		ubo.view = glm::lookAt(glm::vec3(0.f, 0.f, 2.f), glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.f, 1.f, 0.f));
 		ubo.proj = glm::perspective(glm::radians(45.f),
 			swapchain.extent.width / (float)swapchain.extent.height, 0.1f, 10.f);
 		ubo.proj[1][1] *= -1;

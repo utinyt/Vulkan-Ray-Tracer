@@ -5,6 +5,11 @@ VisualStudioVersion = 16.0.31005.135
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "vulkan", "vulkan.vcxproj", "{83C8C429-9DB3-4D21-B3DE-6EEDD8428BBD}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "demo1_triangle", "demos\demo1_triangle\demo1_triangle.vcxproj", "{6F20F32F-0032-4817-AD67-2FB583078C38}"
+	ProjectSection(ProjectDependencies) = postProject
+		{83C8C429-9DB3-4D21-B3DE-6EEDD8428BBD} = {83C8C429-9DB3-4D21-B3DE-6EEDD8428BBD}
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -15,6 +20,10 @@ Global
 		{83C8C429-9DB3-4D21-B3DE-6EEDD8428BBD}.Debug|x64.Build.0 = Debug|x64
 		{83C8C429-9DB3-4D21-B3DE-6EEDD8428BBD}.Release|x64.ActiveCfg = Release|x64
 		{83C8C429-9DB3-4D21-B3DE-6EEDD8428BBD}.Release|x64.Build.0 = Release|x64
+		{6F20F32F-0032-4817-AD67-2FB583078C38}.Debug|x64.ActiveCfg = Debug|x64
+		{6F20F32F-0032-4817-AD67-2FB583078C38}.Debug|x64.Build.0 = Debug|x64
+		{6F20F32F-0032-4817-AD67-2FB583078C38}.Release|x64.ActiveCfg = Release|x64
+		{6F20F32F-0032-4817-AD67-2FB583078C38}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

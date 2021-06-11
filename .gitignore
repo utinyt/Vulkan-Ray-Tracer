@@ -338,3 +338,5 @@ ASALocalRun/
 
 # BeatPulse healthcheck temp database
 healthchecksdb
+/vulkan/core/vulkan_Release.lib
+/vulkan/core/vulkan_Debug.lib
