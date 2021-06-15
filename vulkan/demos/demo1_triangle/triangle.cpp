@@ -377,7 +377,7 @@ private:
 			buffer,
 			bufferMemory);
 
-		devices.copyBuffer(commandPool, stagingBuffer, buffer, bufferSize);
+		devices.copyBuffer(devices.commandPool, stagingBuffer, buffer, bufferSize);
 
 		vkDestroyBuffer(devices.device, stagingBuffer, nullptr);
 		vkFreeMemory(devices.device, stagingBufferMemory, nullptr);

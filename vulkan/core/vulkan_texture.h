@@ -8,7 +8,16 @@ public:
 
 	/** abstracted vulkan device handle */
 	const VulkanDevice* devices = nullptr;
+	/** texture buffer handle */
+	VkImage texture;
+	/** texture buffer memory handle */
+	VkDeviceMemory textureMemory;
 
+	static void setImageLayout(VkCommandBuffer commandBuffer, VkImage image,
+		VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
+
+protected:
+	void transitionImageLayout(VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
 };
 
 class VulkanTexture2D : public VulkanTextureBase {

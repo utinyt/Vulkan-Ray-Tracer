@@ -44,8 +44,6 @@ protected:
 	VulkanDevice devices;
 	/** abstracted swapchain object - contains swapchain image views */
 	VulkanSwapchain swapchain;
-	/** command pool - graphics */
-	VkCommandPool commandPool;
 	/** command buffers - per swapchain */
 	std::vector<VkCommandBuffer> commandBuffers;
 	/** sync image acquisition */
@@ -70,7 +68,6 @@ private:
 	void initVulkan();
 
 	void createInstance();
-	void createCommandPool();
 	void createCommandBuffers();
 	void destroyCommandBuffers();
 	void createSyncObjects();

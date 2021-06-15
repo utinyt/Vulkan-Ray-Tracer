@@ -34,7 +34,6 @@ VulkanAppBase::~VulkanAppBase() {
 
 	vkDestroyPipelineCache(devices.device, pipelineCache, nullptr);
 	destroyCommandBuffers();
-	vkDestroyCommandPool(devices.device, commandPool, nullptr);
 
 	devices.cleanup();
 	vkDestroySurfaceKHR(instance, surface, nullptr);
@@ -106,6 +105,7 @@ void VulkanAppBase::initVulkan() {
 	//physical & logical device
 	devices.pickPhysicalDevice(instance, surface, enabledDeviceExtensions);
 	devices.createLogicalDevice();
+	devices.createCommandPool();
 
 	swapchain.init(&devices, window);
 	swapchain.create();
@@ -115,7 +115,6 @@ void VulkanAppBase::initVulkan() {
 * basic application setup
 */
 void VulkanAppBase::initApp() {
-	createCommandPool();
 	createCommandBuffers();
 	createSyncObjects();
 	createPipelineCache();
@@ -289,21 +288,6 @@ void VulkanAppBase::createInstance() {
 }
 
 /*
-* create command pool - use no flags
-*/
-void VulkanAppBase::createCommandPool() {
-	const VulkanDevice::QueueFamilyIndices indices = devices.indices;
-
-	VkCommandPoolCreateInfo poolInfo{};
-	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-	poolInfo.queueFamilyIndex = indices.graphicsFamily.value();
-	poolInfo.flags = 0;
-
-	VK_CHECK_RESULT(vkCreateCommandPool(devices.device, &poolInfo, nullptr, &commandPool));
-	LOG("created:\tcommand pool");
-}
-
-/*
 * allocate empty command buffers
 */
 void VulkanAppBase::createCommandBuffers() {
@@ -311,7 +295,7 @@ void VulkanAppBase::createCommandBuffers() {
 
 	VkCommandBufferAllocateInfo commandBufferInfo{};
 	commandBufferInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-	commandBufferInfo.commandPool = commandPool;
+	commandBufferInfo.commandPool = devices.commandPool;
 	commandBufferInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 	commandBufferInfo.commandBufferCount = static_cast<uint32_t>(commandBuffers.size());
 
@@ -323,7 +307,7 @@ void VulkanAppBase::createCommandBuffers() {
 * helper function - free command buffers
 */
 void VulkanAppBase::destroyCommandBuffers() {
-	vkFreeCommandBuffers(devices.device, commandPool,
+	vkFreeCommandBuffers(devices.device, devices.commandPool,
 		static_cast<uint32_t>(commandBuffers.size()), commandBuffers.data());
 }
 
