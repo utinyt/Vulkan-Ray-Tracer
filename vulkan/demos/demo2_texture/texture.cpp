@@ -4,6 +4,7 @@
 #define GLM_FORCE_RADIANS
 #include "glm/glm.hpp"
 #include "glm/gtc/matrix_transform.hpp"
+#include "core/vulkan_texture.h"
 
 class VulkanApp : public VulkanAppBase {
 public:
@@ -11,6 +12,7 @@ public:
 	struct Vertex {
 		glm::vec2 pos{};
 		glm::vec3 col{};
+		glm::vec2 texCoord{};
 
 		static VkVertexInputBindingDescription getBindingDescription() {
 			VkVertexInputBindingDescription bindingDescription{};
@@ -20,8 +22,8 @@ public:
 			return bindingDescription;
 		}
 
-		static std::array<VkVertexInputAttributeDescription, 2> getAttributeDescriptions() {
-			std::array<VkVertexInputAttributeDescription, 2> attributeDescription;
+		static std::array<VkVertexInputAttributeDescription, 3> getAttributeDescriptions() {
+			std::array<VkVertexInputAttributeDescription, 3> attributeDescription;
 			attributeDescription[0].binding = 0;
 			attributeDescription[0].location = 0;
 			attributeDescription[0].format = VK_FORMAT_R32G32_SFLOAT;
@@ -32,20 +34,26 @@ public:
 			attributeDescription[1].format = VK_FORMAT_R32G32B32_SFLOAT;
 			attributeDescription[1].offset = offsetof(Vertex, col);
 
+			attributeDescription[2].binding = 0;
+			attributeDescription[2].location = 2;
+			attributeDescription[2].format = VK_FORMAT_R32G32_SFLOAT;
+			attributeDescription[2].offset = offsetof(Vertex, texCoord	);
+
 			return attributeDescription;
 		}
 	};
 
-	/** triangle */
+	/** rect */
 	const std::vector<Vertex> vertices = {
-		{{0.f, -0.577f}, {1.f, 0.f, 0.f}},
-		{{0.5f, 0.289f}, {0.f, 1.f, 0.f}},
-		{{-0.5f, 0.289f}, {0.f, 0.f, 1.f}}
+		{{-0.5f, -0.5f}, {1.f, 1.f, 1.f}, {0.f, 1.f}},
+		{{0.5f, -0.5f}, {1.f, 1.f, 1.f}, {1.f, 1.f}},
+		{{0.5f, 0.5f}, {1.f, 1.f, 1.f}, {1.f, 0.f}},
+		{{-0.5f, 0.5f}, {1.f, 1.f, 1.f}, {0.f, 0.f}}
 	};
 
 	/** indices */
 	const std::vector<uint16_t> indices = {
-		0, 1, 2
+		0, 1, 2, 0, 2, 3
 	};
 
 	/** uniform buffer object */
@@ -65,6 +73,7 @@ public:
 	* destructor - destroy vulkan objects created in this level
 	*/
 	~VulkanApp() {
+		texture.cleanup();
 		vkDestroyDescriptorPool(devices.device, descriptorPool, nullptr);
 
 		for (size_t i = 0; i < uniformBuffers.size(); ++i) {
@@ -107,6 +116,8 @@ public:
 			indexBuffer, indexBufferMemory);
 		
 		createUniformBuffers();
+
+		texture.load(&devices, "../../textures/thinking_face.png");
 		createDescriptorPool();
 		createDescriptorSets();
 
@@ -141,6 +152,8 @@ private:
 	std::vector<VkBuffer> uniformBuffers;
 	/**  uniform buffer memory handle */
 	std::vector<VkDeviceMemory> uniformBufferMemories;
+	/** abstracted vulkan 2d texture */
+	VulkanTexture2D texture;
 
 	/*
 	* called every frame - submit queues
@@ -390,7 +403,7 @@ private:
 		VkCommandBufferBeginInfo cmdBufBeginInfo{};
 		cmdBufBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
-		VkClearValue clearColor = { 0.f, 0.f, 0.f, 1.f };
+		VkClearValue clearColor = { 0.2f, 0.2f, 0.2f, 1.f };
 
 		VkRenderPassBeginInfo renderPassBeginInfo{};
 		renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -449,10 +462,18 @@ private:
 		uboLayoutBinding.descriptorCount = 1;
 		uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 		
+		VkDescriptorSetLayoutBinding samplerLayoutBinding{};
+		samplerLayoutBinding.binding = 1;
+		samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		samplerLayoutBinding.descriptorCount = 1;
+		samplerLayoutBinding.pImmutableSamplers = nullptr;
+		samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+		std::array<VkDescriptorSetLayoutBinding, 2> bindings = { uboLayoutBinding, samplerLayoutBinding };
 		VkDescriptorSetLayoutCreateInfo layoutInfo{};
 		layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-		layoutInfo.bindingCount = 1;
-		layoutInfo.pBindings = &uboLayoutBinding;
+		layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
+		layoutInfo.pBindings = bindings.data();
 
 		VK_CHECK_RESULT(vkCreateDescriptorSetLayout(devices.device, &layoutInfo, nullptr, &descriptorSetLayout));
 		LOG("created:\tdescriptor set layout");
@@ -486,7 +507,7 @@ private:
 		float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
 		UBO ubo{};
-		ubo.model = glm::rotate(glm::mat4(1.f), time * glm::radians(90.f), glm::vec3(0.f, 0.f, 1.f));
+		ubo.model = glm::mat4(1.f);
 		ubo.view = glm::lookAt(glm::vec3(0.f, 0.f, 2.f), glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.f, 1.f, 0.f));
 		ubo.proj = glm::perspective(glm::radians(45.f),
 			swapchain.extent.width / (float)swapchain.extent.height, 0.1f, 10.f);
@@ -502,14 +523,16 @@ private:
 	* create descriptor pool
 	*/
 	void createDescriptorPool() {
-		VkDescriptorPoolSize poolSize{};
-		poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		poolSize.descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+		std::array<VkDescriptorPoolSize, 2> poolSizes{};
+		poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+		poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
 
 		VkDescriptorPoolCreateInfo poolInfo{};
 		poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-		poolInfo.poolSizeCount = 1;
-		poolInfo.pPoolSizes = &poolSize;
+		poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
+		poolInfo.pPoolSizes = poolSizes.data();
 		poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
 		
 		VK_CHECK_RESULT(vkCreateDescriptorPool(devices.device, &poolInfo, nullptr, &descriptorPool));
@@ -520,6 +543,7 @@ private:
 	* create MAX_FRAMES_IN_FLIGHT of descriptor sets
 	*/
 	void createDescriptorSets() {
+		//descriptor set creation
 		std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, descriptorSetLayout);
 		VkDescriptorSetAllocateInfo allocInfo{};
 		allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
@@ -530,22 +554,39 @@ private:
 		descriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
 		VK_CHECK_RESULT(vkAllocateDescriptorSets(devices.device, &allocInfo, descriptorSets.data()));
 		
+		//update descriptor set
 		for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+			//matrices
 			VkDescriptorBufferInfo bufferInfo{};
 			bufferInfo.buffer = uniformBuffers[i];
 			bufferInfo.offset = 0;
 			bufferInfo.range = sizeof(UBO);
 
-			VkWriteDescriptorSet descriptorWrite{};
-			descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			descriptorWrite.dstSet = descriptorSets[i];
-			descriptorWrite.dstBinding = 0;
-			descriptorWrite.dstArrayElement = 0;
-			descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-			descriptorWrite.descriptorCount = 1;
-			descriptorWrite.pBufferInfo = &bufferInfo;
+			//combined image sampler
+			VkDescriptorImageInfo imageInfo{};
+			imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			imageInfo.imageView = texture.imageView;
+			imageInfo.sampler = texture.sampler;
 
-			vkUpdateDescriptorSets(devices.device, 1, &descriptorWrite, 0, nullptr);
+			std::array<VkWriteDescriptorSet, 2> descriptorWrites{};
+			descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			descriptorWrites[0].dstSet = descriptorSets[i];
+			descriptorWrites[0].dstBinding = 0;
+			descriptorWrites[0].dstArrayElement = 0;
+			descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+			descriptorWrites[0].descriptorCount = 1;
+			descriptorWrites[0].pBufferInfo = &bufferInfo;
+
+			descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			descriptorWrites[1].dstSet = descriptorSets[i];
+			descriptorWrites[1].dstBinding = 1;
+			descriptorWrites[1].dstArrayElement = 0;
+			descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			descriptorWrites[1].descriptorCount = 1;
+			descriptorWrites[1].pImageInfo = &imageInfo;
+
+			vkUpdateDescriptorSets(devices.device, static_cast<uint32_t>(descriptorWrites.size()),
+				descriptorWrites.data(), 0, nullptr);
 		}
 	}
 };
