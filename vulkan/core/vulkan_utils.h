@@ -30,4 +30,11 @@
 namespace vktools {
 	/** @brief read binary file and store to a char vector */
 	std::vector<char> readFile(const std::string& filename);
+	/** @brief compile & create shader module */
+	VkShaderModule createShaderModule(VkDevice device, const std::vector<char>& code);
+	/** @brief transit image layout */
+	void setImageLayout(VkCommandBuffer commandBuffer, VkImage image,
+		VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
+	/** @brief create & return image view */
+	VkImageView createImageView(VkDevice device, VkImage image, VkImageViewType viewType, VkFormat format);
 }

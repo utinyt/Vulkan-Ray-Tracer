@@ -39,6 +39,9 @@ void VulkanDevice::pickPhysicalDevice(VkInstance instance, VkSurfaceKHR surface,
 	}
 
 	vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memProperties);
+	vkGetPhysicalDeviceProperties(physicalDevice, &properties);
+	vkGetPhysicalDeviceFeatures(physicalDevice, &availableFeatures);
+
 	LOG("initialized:\tphysical device");
 }
 
@@ -114,6 +117,9 @@ void VulkanDevice::createLogicalDevice() {
 	deviceInfo.pQueueCreateInfos = queueInfos.data();
 	deviceInfo.queueCreateInfoCount = static_cast<uint32_t>(queueInfos.size());
 	VkPhysicalDeviceFeatures deviceFeatures{};
+	if (availableFeatures.samplerAnisotropy == VK_TRUE) {
+		deviceFeatures.samplerAnisotropy = VK_TRUE;
+	}
 	deviceInfo.pEnabledFeatures = &deviceFeatures;
 	deviceInfo.enabledExtensionCount = static_cast<uint32_t>(requiredExtensions.size());
 	deviceInfo.ppEnabledExtensionNames = requiredExtensions.data();

@@ -23,9 +23,6 @@ protected:
 	virtual void createFramebuffers() = 0;
 	virtual void recordCommandBuffer() = 0;
 
-	/** @brief compile & create shader module */
-	VkShaderModule createShaderModule(const std::vector<char>& code);
-
 	/** glfw window handle */
 	GLFWwindow* window;
 	/** window extent */

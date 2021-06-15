@@ -12,9 +12,10 @@ public:
 	VkImage texture;
 	/** texture buffer memory handle */
 	VkDeviceMemory textureMemory;
-
-	static void setImageLayout(VkCommandBuffer commandBuffer, VkImage image,
-		VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
+	/** image view handle */
+	VkImageView imageView;
+	/** image sampler handle */
+	VkSampler sampler;
 
 protected:
 	void transitionImageLayout(VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);

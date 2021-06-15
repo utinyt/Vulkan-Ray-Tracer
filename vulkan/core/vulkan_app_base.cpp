@@ -186,27 +186,16 @@ void VulkanAppBase::resizeWindow() {
 	recordCommandBuffer();
 }
 
+/*
+* glfw window resize callback function
+* 
+* @param window - glfw window handle
+* @param width
+* @param height
+*/
 void VulkanAppBase::windowResizeCallbck(GLFWwindow* window, int width, int height) {
 	auto app = reinterpret_cast<VulkanAppBase*>(glfwGetWindowUserPointer(window));
 	app->windowResized = true;
-}
-
-/*
-* create shader module
-*
-* @param code - compiled shader code (raw binary data, .spv)
-*
-* @return VkShaderModule - constructed shader module
-*/
-VkShaderModule VulkanAppBase::createShaderModule(const std::vector<char>& code) {
-	VkShaderModuleCreateInfo shaderModuleInfo{};
-	shaderModuleInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-	shaderModuleInfo.codeSize = code.size();
-	shaderModuleInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
-
-	VkShaderModule shaderModule;
-	VK_CHECK_RESULT(vkCreateShaderModule(devices.device, &shaderModuleInfo, nullptr, &shaderModule));
-	return shaderModule;
 }
 
 /*

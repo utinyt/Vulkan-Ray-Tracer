@@ -1,6 +1,17 @@
-#define STB_IMAGE_IMPLEMENTAION
+#define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 #include "vulkan_texture.h"
+
+/*
+* clean image & image memory
+* must be called if texture is not null
+*/
+void VulkanTextureBase::cleanup() {
+	vkDestroySampler(devices->device, sampler, nullptr);
+	vkDestroyImageView(devices->device, imageView, nullptr);
+	vkDestroyImage(devices->device, texture, nullptr);
+	vkFreeMemory(devices->device, textureMemory, nullptr);
+}
 
 /*
 * load 2d texture from a file
@@ -52,41 +63,37 @@ void VulkanTexture2D::load(const VulkanDevice* devices, const std::string& path)
 	transitionImageLayout(VK_FORMAT_R8G8B8A8_SRGB,
 		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	
-}
+	vkDestroyBuffer(devices->device, stagingBuffer, nullptr);
+	vkFreeMemory(devices->device, stagingBufferMemory, nullptr);
 
-/*
-* set pipeline barrier for image layout transition
-* record command to the command buffer
-* 
-* @param commandBuffer - command buffer to record
-* @param image - image to transit layout
-* @param format
-* @param oldLayout
-* @param newLayout
-*/
-void VulkanTextureBase::setImageLayout(VkCommandBuffer commandBuffer, VkImage image,
-	VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout) {
-	VkImageMemoryBarrier imageBarrier{};
-	imageBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-	imageBarrier.oldLayout = oldLayout;
-	imageBarrier.newLayout = newLayout;
-	imageBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	imageBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	imageBarrier.image = image;
-	imageBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	imageBarrier.subresourceRange.baseMipLevel = 0;
-	imageBarrier.subresourceRange.levelCount = 1;
-	imageBarrier.subresourceRange.baseArrayLayer = 0;
-	imageBarrier.subresourceRange.layerCount = 1;
-	imageBarrier.srcAccessMask = 0;
-	imageBarrier.dstAccessMask = 0;
+	//image view creation
+	imageView = vktools::createImageView(devices->device, texture, VK_IMAGE_VIEW_TYPE_2D, VK_FORMAT_R8G8B8A8_SRGB);
 
-	vkCmdPipelineBarrier(commandBuffer,
-		0, 0,
-		0,
-		0, nullptr,
-		0, nullptr,
-		1, &imageBarrier);
+	VkSamplerCreateInfo samplerInfo{};
+	samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+	samplerInfo.minFilter = VK_FILTER_LINEAR;
+	samplerInfo.magFilter = VK_FILTER_LINEAR;
+	samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+	samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+	samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+	if (devices->availableFeatures.samplerAnisotropy == VK_TRUE) {
+		samplerInfo.anisotropyEnable = VK_TRUE;
+		samplerInfo.maxAnisotropy = devices->properties.limits.maxSamplerAnisotropy;
+	}
+	else {
+		samplerInfo.anisotropyEnable = VK_FALSE;
+		samplerInfo.maxAnisotropy = 1.f;
+	}
+	samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+	samplerInfo.unnormalizedCoordinates = VK_FALSE;
+	samplerInfo.compareEnable = VK_FALSE;
+	samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+	samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+	samplerInfo.mipLodBias = 0.f;
+	samplerInfo.minLod = 0.f;
+	samplerInfo.maxLod = 0.f;
+	VK_CHECK_RESULT(vkCreateSampler(devices->device, &samplerInfo, nullptr, &sampler));
+	
 }
 
 /*
@@ -99,6 +106,6 @@ void VulkanTextureBase::setImageLayout(VkCommandBuffer commandBuffer, VkImage im
 void VulkanTextureBase::transitionImageLayout(VkFormat format,
 	VkImageLayout oldLayout, VkImageLayout newLayout) {
 	VkCommandBuffer commandBuffer = devices->beginOneTimeSubmitCommandBuffer();
-	setImageLayout(commandBuffer, texture, format, oldLayout, newLayout);
+	vktools::setImageLayout(commandBuffer, texture, format, oldLayout, newLayout);
 	devices->endOneTimeSubmitCommandBuffer(commandBuffer);
 }

@@ -49,6 +49,10 @@ struct VulkanDevice {
 	VkQueue presentQueue;
 	/** memory properties of the current physical device */
 	VkPhysicalDeviceMemoryProperties memProperties;
+	/** current physical device properties */
+	VkPhysicalDeviceProperties properties;
+	/** available device features */
+	VkPhysicalDeviceFeatures availableFeatures;
 	/** command pool - graphics */
 	VkCommandPool commandPool = VK_NULL_HANDLE;
 

@@ -148,21 +148,8 @@ void VulkanSwapchain::create() {
 	//image views
 	imageViews.resize(imageCount);
 	for (uint32_t i = 0; i < imageCount; ++i) {
-		VkImageViewCreateInfo imageViewInfo{};
-		imageViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-		imageViewInfo.image = images[i];
-		imageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-		imageViewInfo.format = surfaceFormat.format;
-		imageViewInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-		imageViewInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-		imageViewInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-		imageViewInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-		imageViewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		imageViewInfo.subresourceRange.baseMipLevel = 0;
-		imageViewInfo.subresourceRange.levelCount = 1;
-		imageViewInfo.subresourceRange.baseArrayLayer = 0;
-		imageViewInfo.subresourceRange.layerCount = 1;
-		VK_CHECK_RESULT(vkCreateImageView(devices->device, &imageViewInfo, nullptr, &imageViews[i]));
+		imageViews[i] = vktools::createImageView(devices->device, images[i],
+			VK_IMAGE_VIEW_TYPE_2D, surfaceFormat.format);
 	}
 
 	LOG("created:\timage views");

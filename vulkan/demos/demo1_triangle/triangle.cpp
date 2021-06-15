@@ -4,6 +4,7 @@
 #define GLM_FORCE_RADIANS
 #include "glm/glm.hpp"
 #include "glm/gtc/matrix_transform.hpp"
+#include "core/vulkan_texture.h"
 
 class VulkanApp : public VulkanAppBase {
 public:
@@ -65,6 +66,7 @@ public:
 	* destructor - destroy vulkan objects created in this level
 	*/
 	~VulkanApp() {
+		tex.cleanup();
 		vkDestroyDescriptorPool(devices.device, descriptorPool, nullptr);
 
 		for (size_t i = 0; i < uniformBuffers.size(); ++i) {
@@ -107,11 +109,14 @@ public:
 			indexBuffer, indexBufferMemory);
 		
 		createUniformBuffers();
+		tex.load(&devices, "../../textures/brick.jpg");
 		createDescriptorPool();
 		createDescriptorSets();
 
 		recordCommandBuffer();
 	}
+
+	VulkanTexture2D tex;
 
 private:
 	/** render pass */
@@ -281,8 +286,8 @@ private:
 		VK_CHECK_RESULT(vkCreatePipelineLayout(devices.device, &pipelineLayoutInfo, nullptr, &pipelineLayout));
 
 		//shader
-		VkShaderModule vertexModule = createShaderModule(vktools::readFile("shaders/vert.spv"));
-		VkShaderModule fragmentModule = createShaderModule(vktools::readFile("shaders/frag.spv"));
+		VkShaderModule vertexModule = vktools::createShaderModule(devices.device, vktools::readFile("shaders/vert.spv"));
+		VkShaderModule fragmentModule = vktools::createShaderModule(devices.device, vktools::readFile("shaders/frag.spv"));
 
 		VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
 		vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
