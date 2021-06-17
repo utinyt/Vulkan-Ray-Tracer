@@ -2,6 +2,8 @@
 #include "vulkan_app_base.h"
 #include "vulkan_debug.h"
 
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
+
 #ifdef NDEBUG
 const bool enableValidationLayer = false;
 #else
@@ -30,6 +32,7 @@ VulkanAppBase::~VulkanAppBase() {
 		vkDestroyFence(devices.device, frameLimitFences[i], nullptr);
 	}
 
+	destroyDepthStencilImage();
 	swapchain.cleanup();
 
 	vkDestroyPipelineCache(devices.device, pipelineCache, nullptr);
@@ -118,9 +121,7 @@ void VulkanAppBase::initApp() {
 	createCommandBuffers();
 	createSyncObjects();
 	createPipelineCache();
-
-	/*createRenderPass();
-	createFramebuffers();*/
+	createDepthStencilImage();
 }
 
 /*
@@ -180,7 +181,11 @@ void VulkanAppBase::resizeWindow() {
 	vkDeviceWaitIdle(devices.device);
 
 	swapchain.create();
+
+	destroyDepthStencilImage();
+	createDepthStencilImage();
 	createFramebuffers();
+
 	destroyCommandBuffers();
 	createCommandBuffers();
 	recordCommandBuffer();
@@ -332,4 +337,36 @@ void VulkanAppBase::createPipelineCache() {
 	pipelineCacheInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
 	VK_CHECK_RESULT(vkCreatePipelineCache(devices.device, &pipelineCacheInfo, nullptr, &pipelineCache));
 	LOG("created:\tpipeline cache");
+}
+
+/*
+* setup depth & stencil buffers
+*/
+void VulkanAppBase::createDepthStencilImage() {
+	depthFormat = vktools::findSupportedFormat(devices.physicalDevice,
+		{VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT},
+		VK_IMAGE_TILING_OPTIMAL,
+		VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT
+	);
+
+	devices.createImage({ swapchain.extent.width,swapchain.extent.height, 1 },
+		depthFormat,
+		VK_IMAGE_TILING_OPTIMAL,
+		VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+		depthImage, 
+		depthImageMemory);
+
+	depthImageView = vktools::createImageView(devices.device, depthImage,
+		VK_IMAGE_VIEW_TYPE_2D, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT);
+	LOG("created:\tdepth stencil image");
+}
+
+/*
+* destroy depth & stencil related resources
+*/
+void VulkanAppBase::destroyDepthStencilImage() {
+	vkDestroyImageView(devices.device, depthImageView, nullptr);
+	vkDestroyImage(devices.device, depthImage, nullptr);
+	vkFreeMemory(devices.device, depthImageMemory, nullptr);
 }

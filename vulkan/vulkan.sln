@@ -15,6 +15,11 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "demo2_texture", "demos\demo
 		{83C8C429-9DB3-4D21-B3DE-6EEDD8428BBD} = {83C8C429-9DB3-4D21-B3DE-6EEDD8428BBD}
 	EndProjectSection
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "demo3_phong_reflection", "demos\demo3_phong_reflection\demo3_phong_reflection.vcxproj", "{85A5B4A7-CF05-44AC-AAD7-9EC52D50F201}"
+	ProjectSection(ProjectDependencies) = postProject
+		{83C8C429-9DB3-4D21-B3DE-6EEDD8428BBD} = {83C8C429-9DB3-4D21-B3DE-6EEDD8428BBD}
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -41,6 +46,12 @@ Global
 		{94F962CD-733D-4F10-9804-1E4CE61DFB43}.Release|x64.ActiveCfg = Release|x64
 		{94F962CD-733D-4F10-9804-1E4CE61DFB43}.Release|x64.Build.0 = Release|x64
 		{94F962CD-733D-4F10-9804-1E4CE61DFB43}.Release|x86.ActiveCfg = Release|x64
+		{85A5B4A7-CF05-44AC-AAD7-9EC52D50F201}.Debug|x64.ActiveCfg = Debug|x64
+		{85A5B4A7-CF05-44AC-AAD7-9EC52D50F201}.Debug|x64.Build.0 = Debug|x64
+		{85A5B4A7-CF05-44AC-AAD7-9EC52D50F201}.Debug|x86.ActiveCfg = Debug|x64
+		{85A5B4A7-CF05-44AC-AAD7-9EC52D50F201}.Release|x64.ActiveCfg = Release|x64
+		{85A5B4A7-CF05-44AC-AAD7-9EC52D50F201}.Release|x64.Build.0 = Release|x64
+		{85A5B4A7-CF05-44AC-AAD7-9EC52D50F201}.Release|x86.ActiveCfg = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

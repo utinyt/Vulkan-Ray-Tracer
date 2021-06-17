@@ -49,7 +49,7 @@ protected:
 	std::vector<VkSemaphore> renderCompleteSemaphores;
 	/** limits maximum frames in flight */
 	std::vector<VkFence> frameLimitFences;
-	/** tracks all swapchain images if they are begin used */
+	/** tracks all swapchain images if they are being used */
 	std::vector<VkFence> inFlightImageFences;
 	/** pipeline cache */
 	VkPipelineCache pipelineCache;
@@ -59,6 +59,14 @@ protected:
 	size_t currentFrame = 0;
 	/** window resize check */
 	bool windowResized = false;
+	/** depth format */
+	VkFormat depthFormat;
+	/** depth image handle */
+	VkImage depthImage;
+	/** depth image memory handle */
+	VkDeviceMemory depthImageMemory;
+	/** depth image view handle */
+	VkImageView depthImageView;
 
 private:
 	void initWindow();
@@ -69,6 +77,8 @@ private:
 	void destroyCommandBuffers();
 	void createSyncObjects();
 	void createPipelineCache();
+	void createDepthStencilImage();
+	void destroyDepthStencilImage();
 };
 
 /*

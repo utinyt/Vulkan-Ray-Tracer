@@ -1,7 +1,7 @@
 #pragma once
 #include "vulkan_device.h"
 
-class VulkanTextureBase {
+class TextureBase {
 public:
 	void cleanup();
 	virtual void load(const VulkanDevice* devices, const std::string& path) = 0;
@@ -21,7 +21,7 @@ protected:
 	void transitionImageLayout(VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
 };
 
-class VulkanTexture2D : public VulkanTextureBase {
+class Texture2D : public TextureBase {
 public:
 	virtual void load(const VulkanDevice* devices, const std::string& path) override;
 };

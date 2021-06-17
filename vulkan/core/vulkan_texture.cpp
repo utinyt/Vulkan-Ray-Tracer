@@ -6,7 +6,7 @@
 * clean image & image memory
 * must be called if texture is not null
 */
-void VulkanTextureBase::cleanup() {
+void TextureBase::cleanup() {
 	vkDestroySampler(devices->device, sampler, nullptr);
 	vkDestroyImageView(devices->device, imageView, nullptr);
 	vkDestroyImage(devices->device, texture, nullptr);
@@ -19,7 +19,7 @@ void VulkanTextureBase::cleanup() {
 * @param devices - abstracted vulkan device handle
 * @param path - texture file path
 */
-void VulkanTexture2D::load(const VulkanDevice* devices, const std::string& path) {
+void Texture2D::load(const VulkanDevice* devices, const std::string& path) {
 	this->devices = devices;
 	
 	//image load
@@ -67,7 +67,8 @@ void VulkanTexture2D::load(const VulkanDevice* devices, const std::string& path)
 	vkFreeMemory(devices->device, stagingBufferMemory, nullptr);
 
 	//image view creation
-	imageView = vktools::createImageView(devices->device, texture, VK_IMAGE_VIEW_TYPE_2D, VK_FORMAT_R8G8B8A8_SRGB);
+	imageView = vktools::createImageView(devices->device, texture,
+		VK_IMAGE_VIEW_TYPE_2D, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT);
 
 	VkSamplerCreateInfo samplerInfo{};
 	samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
@@ -103,7 +104,7 @@ void VulkanTexture2D::load(const VulkanDevice* devices, const std::string& path)
 * @param oldLayout
 * @param newLayout
 */
-void VulkanTextureBase::transitionImageLayout(VkFormat format,
+void TextureBase::transitionImageLayout(VkFormat format,
 	VkImageLayout oldLayout, VkImageLayout newLayout) {
 	VkCommandBuffer commandBuffer = devices->beginOneTimeSubmitCommandBuffer();
 	vktools::setImageLayout(commandBuffer, texture, format, oldLayout, newLayout);

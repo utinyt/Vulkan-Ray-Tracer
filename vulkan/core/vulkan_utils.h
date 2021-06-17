@@ -36,5 +36,11 @@ namespace vktools {
 	void setImageLayout(VkCommandBuffer commandBuffer, VkImage image,
 		VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
 	/** @brief create & return image view */
-	VkImageView createImageView(VkDevice device, VkImage image, VkImageViewType viewType, VkFormat format);
+	VkImageView createImageView(VkDevice device, VkImage image, VkImageViewType viewType,
+		VkFormat format, VkImageAspectFlags aspectFlags);
+	/** @brief return suitable image format */
+	VkFormat findSupportedFormat(VkPhysicalDevice physicalDevice, const std::vector<VkFormat>& candidates,
+		VkImageTiling tiling, VkFormatFeatureFlags features);
+	/** @brief check if the format has stencil component */
+	bool hasStencilComponent(VkFormat format);
 }
