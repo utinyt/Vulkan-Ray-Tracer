@@ -172,17 +172,22 @@ private:
 		VkSubpassDependency dependency{};
 		dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
 		dependency.dstSubpass = 0;
-		dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT; // match pWaitDstStageMask in VkSubmitInfo
+		//srcStageMask == pWaitDstStageMask -> forms dependency chain
+		//there don't have to be any commands / pipeline stages
+		dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
 		dependency.srcAccessMask = 0;
-		dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-		dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+		dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+		dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 
+		std::array<VkAttachmentDescription, 2> attachments{ colorAttachment, depthAttachment };
 		VkRenderPassCreateInfo renderPassInfo{};
 		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-		renderPassInfo.attachmentCount = 1;
-		renderPassInfo.pAttachments = &colorAttachment;
+		renderPassInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+		renderPassInfo.pAttachments = attachments.data();
 		renderPassInfo.subpassCount = 1;
 		renderPassInfo.pSubpasses = &subpass;
+		renderPassInfo.dependencyCount = 1;
+		renderPassInfo.pDependencies = &dependency;
 
 		VK_CHECK_RESULT(vkCreateRenderPass(devices.device, &renderPassInfo, nullptr, &renderPass));
 		LOG("created:\trender pass");
@@ -238,6 +243,14 @@ private:
 		multisamplingInfo.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 		multisamplingInfo.sampleShadingEnable = VK_FALSE;
 
+		VkPipelineDepthStencilStateCreateInfo depthStencilInfo{};
+		depthStencilInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+		depthStencilInfo.depthTestEnable = VK_TRUE;
+		depthStencilInfo.depthWriteEnable = VK_TRUE;
+		depthStencilInfo.depthCompareOp = VK_COMPARE_OP_LESS;
+		depthStencilInfo.depthBoundsTestEnable = VK_FALSE;
+		depthStencilInfo.stencilTestEnable = VK_FALSE;
+
 		//color blending
 		VkPipelineColorBlendAttachmentState blendAttachmentState{};
 		blendAttachmentState.blendEnable = VK_FALSE;
@@ -287,7 +300,7 @@ private:
 		pipelineInfo.pViewportState = &viewportStateInfo;
 		pipelineInfo.pRasterizationState = &rasterizationInfo;
 		pipelineInfo.pMultisampleState = &multisamplingInfo;
-		pipelineInfo.pDepthStencilState = nullptr;
+		pipelineInfo.pDepthStencilState = &depthStencilInfo;
 		pipelineInfo.pColorBlendState = &colorBlendStateInfo;
 		pipelineInfo.pDynamicState = &dynamicStatesInfo;
 		pipelineInfo.layout = pipelineLayout;
@@ -310,11 +323,16 @@ private:
 		framebuffers.resize(swapchain.imageCount);
 
 		for (size_t i = 0; i < swapchain.imageCount; ++i) {
+			std::array<VkImageView, 2> attachments = {
+				swapchain.imageViews[i],
+				depthImageView
+			};
+
 			VkFramebufferCreateInfo framebufferInfo{};
 			framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
 			framebufferInfo.renderPass = renderPass;
-			framebufferInfo.attachmentCount = 1;
-			framebufferInfo.pAttachments = &swapchain.imageViews[i];
+			framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+			framebufferInfo.pAttachments = attachments.data();
 			framebufferInfo.width = swapchain.extent.width;
 			framebufferInfo.height = swapchain.extent.height;
 			framebufferInfo.layers = 1;
@@ -369,15 +387,17 @@ private:
 		VkCommandBufferBeginInfo cmdBufBeginInfo{};
 		cmdBufBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
-		VkClearValue clearColor = { 0.f, 0.2f, 0.f, 1.f };
+		std::array<VkClearValue, 2> clearValues{};
+		clearValues[0].color = { 0.f, 0.2f, 0.f, 1.f };
+		clearValues[1].depthStencil = { 1.f, 0 };
 
 		VkRenderPassBeginInfo renderPassBeginInfo{};
 		renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
 		renderPassBeginInfo.renderPass = renderPass;
 		renderPassBeginInfo.renderArea.offset = { 0, 0 };
 		renderPassBeginInfo.renderArea.extent = swapchain.extent;
-		renderPassBeginInfo.clearValueCount = 1;
-		renderPassBeginInfo.pClearValues = &clearColor;
+		renderPassBeginInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
+		renderPassBeginInfo.pClearValues = clearValues.data();
 		
 		for (size_t i = 0; i < framebuffers.size() * MAX_FRAMES_IN_FLIGHT; ++i) {
 			size_t framebufferIndex = i % framebuffers.size();
