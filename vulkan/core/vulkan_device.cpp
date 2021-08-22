@@ -71,17 +71,18 @@ void VulkanDevice::createCommandPool() {
 }
 
 /*
-* find suitable memory type
+* find a memory in 'memoryTypeBitsRequirements' that includes all of 'requiredProperties'
 * 
-* @param typeFilter - compatible bit field corrensponding to memoryType
-* @param properties - required memory properties
+* @param memoryTypeBitsRequirements- bitfield that sets a bit for every memory type that is supported for the resource
+* @param requiredProperties - required memory properties
 * 
 * @return uint32_t - index of suitable memory type
 */
-uint32_t VulkanDevice::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) const {
-	for (uint32_t i = 0; i < memProperties.memoryTypeCount; ++i) {
-		if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
-			return i;
+uint32_t VulkanDevice::findMemoryType(uint32_t memoryTypeBitsRequirements, VkMemoryPropertyFlags requiredProperties) const {
+	for (uint32_t memoryTypeIndex = 0; memoryTypeIndex < memProperties.memoryTypeCount; ++memoryTypeIndex) {
+		bool isRequiredMemoryType = memoryTypeBitsRequirements & (1 << memoryTypeIndex);
+		if (isRequiredMemoryType && (memProperties.memoryTypes[memoryTypeIndex].propertyFlags & requiredProperties) == requiredProperties) {
+			return memoryTypeIndex;
 		}
 	}
 
@@ -133,6 +134,9 @@ void VulkanDevice::createLogicalDevice() {
 	vkGetDeviceQueue(device, indices.presentFamily.value(), 0, &presentQueue);
 
 	LOG("created:\tlogical device");
+
+	//custom memory allocator
+	memoryAllocator.init(device, properties.limits.bufferImageGranularity, memProperties);
 }
 
 /*

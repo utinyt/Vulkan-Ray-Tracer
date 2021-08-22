@@ -1,3 +1,4 @@
+#include <algorithm>
 #include "vulkan_utils.h"
 
 namespace vktools {
@@ -155,5 +156,119 @@ namespace vktools {
 	bool hasStencilComponent(VkFormat format) {
 		return format == VK_FORMAT_D32_SFLOAT_S8_UINT ||
 			format == VK_FORMAT_D24_UNORM_S8_UINT;
+	}
+
+	/*
+	* get device & chunk size info
+	* 
+	* @param device - logical device handle
+	* @param bufferImageGranularity
+	*/
+	void MemoryAllocator::init(VkDevice device, VkDeviceSize bufferImageGranularity,
+		const VkPhysicalDeviceMemoryProperties& memProperties, uint32_t defaultChunkSize) {
+		this->device = device;
+		this->bufferImageGranularity = bufferImageGranularity;
+		memoryPools.resize(memProperties.memoryTypeCount);
+
+		//assign memory type index & chunk size to individual memory pool
+		for (uint32_t i = 0; i < memProperties.memoryTypeCount; ++i) {
+			uint32_t heapIndex = memProperties.memoryTypes[i].heapIndex;
+			VkDeviceSize heapSize = memProperties.memoryHeaps[heapIndex].size;
+
+			//chunk size
+			if (heapSize < 1000000000) { //1GB
+				memoryPools[i].defaultChunkSize = heapSize / 8;
+			}
+			else {
+				memoryPools[i].defaultChunkSize = defaultChunkSize;
+			}
+
+			//memory type index
+			memoryPools[i].memoryTypeIndex = i;
+		}
+	}
+
+	/*
+	* (sub)allocate to pre-allocated memory
+	* 
+	* @param memRequirements
+	* 
+	* @return VkResult 
+	*/
+	VkResult MemoryAllocator::allocate(VkBuffer buffer) {
+		VkMemoryRequirements memRequirements;
+		vkGetBufferMemoryRequirements(device, buffer, &memRequirements);
+
+		MemoryPool& pool = memoryPools[memRequirements.memoryTypeBits];
+
+		//find suitable memory chunk
+		for (size_t i = 0; i < pool.memoryChunks.size(); ++i) {
+			if (pool.memoryChunks[i].currentSize > memRequirements.size) {
+				if (uint32_t location = pool.memoryChunks[i].findSuitableMemoryLocation(memRequirements); location != -1) {
+					vkBindBufferMemory(device, buffer, pool.memoryChunks[i].memoryHandle, location);
+					return VK_SUCCESS;
+				}
+			}
+		}
+
+		return VK_ERROR_OUT_OF_POOL_MEMORY;
+	}
+
+	/*
+	* pre-allocate big chunk of memory 
+	* 
+	* @param device - logical device handle needed for vkAllocateMemory
+	*/
+	void MemoryAllocator::MemoryPool::allocateChunk(VkDevice device) {
+		VkMemoryAllocateInfo allocInfo{};
+		allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+		allocInfo.allocationSize = defaultChunkSize;
+		allocInfo.memoryTypeIndex = memoryTypeIndex;
+		MemoryChunk newChunk{VK_NULL_HANDLE, defaultChunkSize};
+		VK_CHECK_RESULT(vkAllocateMemory(device, &allocInfo, nullptr, &newChunk.memoryHandle));
+
+		memoryChunks.push_back(newChunk);
+	}
+
+	/*
+	* clean up all pre-allocated chunk of memory
+	*
+	* @param device - logical device handle needed for vkAllocateMemory
+	*/
+	void MemoryAllocator::MemoryPool::cleanup(VkDevice device) {
+		for (auto& memoryChunk : memoryChunks) {
+			vkFreeMemory(device, memoryChunk.memoryHandle, nullptr);
+		}
+	}
+
+	/*
+	* return suitable memory location (offset) in current memory chunk
+	* 
+	* @param memRequirements
+	* 
+	* @return uint32_t - memory location in bytes
+	*/
+	uint32_t MemoryAllocator::MemoryChunk::findSuitableMemoryLocation(
+		const VkMemoryRequirements& memRequirements) {
+		VkDeviceSize currentByteLocation = 0;
+		for (size_t i = 0; i < memoryBlocks.size(); ++i) {
+			//last block check
+			if (i + 1 == memoryBlocks.size()) {
+				//chunkmemoryBlocks[i].blockEndLocation
+			}
+		}
+
+		sort();
+		return uint32_t();
+	}
+
+	/*
+	* sort memory block vector in real memory location order
+	*/
+	void MemoryAllocator::MemoryChunk::sort() {
+		std::sort(memoryBlocks.begin(), memoryBlocks.end(),
+			[](const MemoryBlock& l, const MemoryBlock& r) {
+			return l.offset < r.offset;
+			});
 	}
 }
