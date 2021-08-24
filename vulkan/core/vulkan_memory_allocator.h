@@ -7,15 +7,24 @@
 */
 class MemoryAllocator {
 public:
+	/** contain all info needed for data mapping */
+	struct HostVisibleMemory {
+	public:
+		/** @brief memcpy bufferData to device memory */
+		void MapData(VkDevice device, const void* bufferData);
+		VkDeviceMemory memory = VK_NULL_HANDLE;
+		VkDeviceSize size = 0;
+		VkDeviceSize offset = 0;
+	};
+
 	void init(VkDevice device, VkDeviceSize bufferImageGranularity,
 		const VkPhysicalDeviceMemoryProperties& memProperties, uint32_t defaultChunkSize = 268435000); //256 MiB
 	/** @brief free all allocated memory */
 	void cleanup();
 	/** @brief suballocation - add new memory block */
-	VkResult allocateMemory(VkBuffer buffer, VkMemoryPropertyFlags properties);
+	HostVisibleMemory allocateMemory(VkBuffer buffer, VkMemoryPropertyFlags properties);
 	/** @brief free memory block */
 	void freeMemory(VkBuffer buffer, VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_FLAG_BITS_MAX_ENUM);
-
 	/** @brief return suitable memory type */
 	static uint32_t findMemoryType(uint32_t memoryTypeBitsRequirements,
 		VkMemoryPropertyFlags requiredProperties, const VkPhysicalDeviceMemoryProperties& memProperties);

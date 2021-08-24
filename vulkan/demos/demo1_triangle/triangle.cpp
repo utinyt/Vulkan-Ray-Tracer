@@ -69,14 +69,14 @@ public:
 
 		for (size_t i = 0; i < uniformBuffers.size(); ++i) {
 			vkDestroyBuffer(devices.device, uniformBuffers[i], nullptr);
-			vkFreeMemory(devices.device, uniformBufferMemories[i], nullptr);
+			//svkFreeMemory(devices.device, uniformBufferMemories[i], nullptr);
 		}
 
 		vkDestroyDescriptorSetLayout(devices.device, descriptorSetLayout, nullptr);
 		vkDestroyBuffer(devices.device, indexBuffer, nullptr);
-		vkFreeMemory(devices.device, indexBufferMemory, nullptr);
+		//vkFreeMemory(devices.device, indexBufferMemory, nullptr);
 		vkDestroyBuffer(devices.device, vertexBuffer, nullptr);
-		vkFreeMemory(devices.device, vertexBufferMemory, nullptr);
+		//vkFreeMemory(devices.device, vertexBufferMemory, nullptr);
 
 		for (auto& framebuffer : framebuffers) {
 			vkDestroyFramebuffer(devices.device, framebuffer, nullptr);
@@ -140,7 +140,7 @@ private:
 	/** uniform buffer handle */
 	std::vector<VkBuffer> uniformBuffers;
 	/**  uniform buffer memory handle */
-	std::vector<VkDeviceMemory> uniformBufferMemories;
+	std::vector<MemoryAllocator::HostVisibleMemory> uniformBufferMemories;
 
 	/*
 	* called every frame - submit queues
@@ -357,32 +357,31 @@ private:
 	* @param bufferMemory - buffer memory handle
 	*/
 	void buildBuffer(const void* bufferData, VkDeviceSize bufferSize, VkBufferUsageFlags usage,
-		VkBuffer& buffer, VkDeviceMemory& bufferMemory) {
+		VkBuffer& buffer, VkDeviceMemory& /*bufferMemory*/) {
+		//staging buffer creation
 		VkBuffer stagingBuffer;
-		VkDeviceMemory stagingBufferMemory;
-		devices.createBuffer(bufferSize,
-			VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-			stagingBuffer,
-			stagingBufferMemory);
+		VkBufferCreateInfo stagingBufferCreateInfo = vktools::initializers::bufferCreateInfo(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+		VK_CHECK_RESULT(vkCreateBuffer(devices.device, &stagingBufferCreateInfo, nullptr, &stagingBuffer));
 
-		//data mapping
-		void* data;
-		vkMapMemory(devices.device, stagingBufferMemory, 0, bufferSize, 0, &data);
-		memcpy(data, bufferData, (size_t)bufferSize);
-		vkUnmapMemory(devices.device, stagingBufferMemory);
+		//suballocate
+		VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+		MemoryAllocator::HostVisibleMemory hostVisibleMemory = devices.memoryAllocator.allocateMemory(
+			stagingBuffer, properties);
 
-		//vertex buffer creation
-		devices.createBuffer(bufferSize,
-			VK_BUFFER_USAGE_TRANSFER_DST_BIT | usage,
-			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-			buffer,
-			bufferMemory);
+		hostVisibleMemory.MapData(devices.device, bufferData);
 
+		//vertex/index buffer creation
+		VkBufferCreateInfo vertexBufferCreateInfo = vktools::initializers::bufferCreateInfo(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | usage);
+		VK_CHECK_RESULT(vkCreateBuffer(devices.device, &vertexBufferCreateInfo, nullptr, &buffer));
+
+		//suballocation
+		devices.memoryAllocator.allocateMemory(buffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+		//host visible -> device local
 		devices.copyBuffer(devices.commandPool, stagingBuffer, buffer, bufferSize);
 
+		devices.memoryAllocator.freeMemory(stagingBuffer, properties);
 		vkDestroyBuffer(devices.device, stagingBuffer, nullptr);
-		vkFreeMemory(devices.device, stagingBufferMemory, nullptr);
 	}
 
 	/*
@@ -468,12 +467,13 @@ private:
 		uniformBuffers.resize(MAX_FRAMES_IN_FLIGHT);
 		uniformBufferMemories.resize(MAX_FRAMES_IN_FLIGHT);
 
-		for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
-			devices.createBuffer(bufferSize,
-				VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-				uniformBuffers[i],
-				uniformBufferMemories[i]);
+		VkBufferCreateInfo uniformBufferCreateInfo = vktools::initializers::bufferCreateInfo(
+			bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+
+		for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {	
+			VK_CHECK_RESULT(vkCreateBuffer(devices.device, &uniformBufferCreateInfo, nullptr, &uniformBuffers[i]));
+			uniformBufferMemories[i] = devices.memoryAllocator.allocateMemory(
+					uniformBuffers[i], VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 		}
 	}
 
@@ -494,10 +494,7 @@ private:
 			swapchain.extent.width / (float)swapchain.extent.height, 0.1f, 10.f);
 		ubo.proj[1][1] *= -1;
 
-		void* data;
-		vkMapMemory(devices.device, uniformBufferMemories[currentFrame], 0, sizeof(ubo), 0, &data);
-		memcpy(data, &ubo, sizeof(ubo));
-		vkUnmapMemory(devices.device, uniformBufferMemories[currentFrame]);
+		uniformBufferMemories[currentFrame].MapData(devices.device, &ubo);
 	}
 
 	/*

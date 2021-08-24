@@ -43,4 +43,16 @@ namespace vktools {
 		VkImageTiling tiling, VkFormatFeatureFlags features);
 	/** @brief check if the format has stencil component */
 	bool hasStencilComponent(VkFormat format);
+
+	namespace initializers {
+		inline VkBufferCreateInfo bufferCreateInfo(VkDeviceSize size,
+			VkBufferUsageFlags usage, VkSharingMode sharingMode = VK_SHARING_MODE_EXCLUSIVE) {
+			VkBufferCreateInfo info{};
+			info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+			info.size = size;
+			info.usage = usage;
+			info.sharingMode = sharingMode;
+			return info;
+		}
+	}
 }

@@ -26,6 +26,8 @@ VulkanAppBase::VulkanAppBase(int width, int height, const std::string& appName)
 * app destructor
 */
 VulkanAppBase::~VulkanAppBase() {
+	devices.memoryAllocator.cleanup();
+
 	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
 		vkDestroySemaphore(devices.device, presentCompleteSemaphores[i], nullptr);
 		vkDestroySemaphore(devices.device, renderCompleteSemaphores[i], nullptr);

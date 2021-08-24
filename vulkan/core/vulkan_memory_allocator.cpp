@@ -40,7 +40,7 @@ void MemoryAllocator::init(VkDevice device, VkDeviceSize bufferImageGranularity,
 * 
 * @return VkResult
 */
-VkResult MemoryAllocator::allocateMemory(VkBuffer buffer, VkMemoryPropertyFlags properties) {
+MemoryAllocator::HostVisibleMemory MemoryAllocator::allocateMemory(VkBuffer buffer, VkMemoryPropertyFlags properties) {
 	VkMemoryRequirements memRequirements;
 	vkGetBufferMemoryRequirements(device, buffer, &memRequirements);
 	uint32_t memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, properties, memProperties);
@@ -52,7 +52,11 @@ VkResult MemoryAllocator::allocateMemory(VkBuffer buffer, VkMemoryPropertyFlags 
 			MemoryBlock memoryBlock{};
 			if (pool.memoryChunks[i].findSuitableMemoryLocation(memRequirements, bufferImageGranularity, memoryBlock)) {
 				pool.memoryChunks[i].addMemoryBlock(device, buffer, memoryBlock);
-				return VK_SUCCESS;
+				if(properties & (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT))
+					return { pool.memoryChunks[i].memoryHandle, memoryBlock.size, memoryBlock.offset };
+				else {
+					return{};
+				}
 			}
 		}
 	}
@@ -62,10 +66,14 @@ VkResult MemoryAllocator::allocateMemory(VkBuffer buffer, VkMemoryPropertyFlags 
 	MemoryBlock memoryBlock{};
 	if (pool.memoryChunks.back().findSuitableMemoryLocation(memRequirements, bufferImageGranularity, memoryBlock)) {
 		pool.memoryChunks.back().addMemoryBlock(device, buffer, memoryBlock);
-		return VK_SUCCESS;
+		if (properties & (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT))
+			return { pool.memoryChunks.back().memoryHandle, memoryBlock.size, memoryBlock.offset };
+		else {
+			return{};
+		}
 	}
 
-	return VK_ERROR_OUT_OF_POOL_MEMORY;
+	return {};
 }
 
 /*
@@ -141,6 +149,7 @@ bool MemoryAllocator::findAndEraseMemoryBlock(VkBuffer buffer, uint32_t memoryTy
 			});
 
 		if (it != memoryChunk.memoryBlocks.end()) {
+			memoryChunk.currentSize -= (it->blockEndLocation - it->offset);
 			memoryChunk.memoryBlocks.erase(it);
 			return true;
 		}
@@ -259,4 +268,17 @@ void MemoryAllocator::MemoryChunk::addMemoryBlock(VkDevice device, VkBuffer buff
 	sort();
 	currentSize += (memoryBlock.blockEndLocation - memoryBlock.offset);
 	vkBindBufferMemory(device, buffer, memoryHandle, memoryBlock.offset);
+}
+
+/*
+* memcpy bufferData to device memory
+* 
+* @param device - logical device  handle needed for vkMapMemory
+* @param bufferData - data to be copied
+*/
+void MemoryAllocator::HostVisibleMemory::MapData(VkDevice device, const void* bufferData) {
+	void* data;
+	vkMapMemory(device, memory, offset, size, 0, &data);
+	memcpy(data, bufferData, (size_t)size);
+	vkUnmapMemory(device, memory);
 }
