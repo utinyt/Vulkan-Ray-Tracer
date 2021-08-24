@@ -71,25 +71,6 @@ void VulkanDevice::createCommandPool() {
 }
 
 /*
-* find a memory in 'memoryTypeBitsRequirements' that includes all of 'requiredProperties'
-* 
-* @param memoryTypeBitsRequirements- bitfield that sets a bit for every memory type that is supported for the resource
-* @param requiredProperties - required memory properties
-* 
-* @return uint32_t - index of suitable memory type
-*/
-uint32_t VulkanDevice::findMemoryType(uint32_t memoryTypeBitsRequirements, VkMemoryPropertyFlags requiredProperties) const {
-	for (uint32_t memoryTypeIndex = 0; memoryTypeIndex < memProperties.memoryTypeCount; ++memoryTypeIndex) {
-		bool isRequiredMemoryType = memoryTypeBitsRequirements & (1 << memoryTypeIndex);
-		if (isRequiredMemoryType && (memProperties.memoryTypes[memoryTypeIndex].propertyFlags & requiredProperties) == requiredProperties) {
-			return memoryTypeIndex;
-		}
-	}
-
-	throw std::runtime_error("VulkanDevice::findMemoryType() - failed to find suitable memory type");
-}
-
-/*
 * creates logical device using given extensions in pickPhysicalDevice
 */
 void VulkanDevice::createLogicalDevice() {
@@ -290,7 +271,7 @@ void VulkanDevice::createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkM
 	VkMemoryAllocateInfo memAllocInfo{};
 	memAllocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 	memAllocInfo.allocationSize = memRequirements.size;
-	memAllocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, properties);
+	memAllocInfo.memoryTypeIndex = MemoryAllocator::findMemoryType(memRequirements.memoryTypeBits, properties, memProperties);
 	VK_CHECK_RESULT(vkAllocateMemory(device, &memAllocInfo, nullptr, &bufferMemory));
 	vkBindBufferMemory(device, buffer, bufferMemory, 0);
 }
@@ -359,7 +340,7 @@ void VulkanDevice::createImage(VkExtent3D extent, VkFormat format, VkImageTiling
 	VkMemoryAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 	allocInfo.allocationSize = memRequirements.size;
-	allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, properties);
+	allocInfo.memoryTypeIndex = MemoryAllocator::findMemoryType(memRequirements.memoryTypeBits, properties, memProperties);
 	VK_CHECK_RESULT(vkAllocateMemory(device, &allocInfo, nullptr, &imageMemory));
 
 	vkBindImageMemory(device, image, imageMemory, 0);

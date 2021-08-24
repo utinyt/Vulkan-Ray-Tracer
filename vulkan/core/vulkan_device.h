@@ -1,6 +1,7 @@
 #pragma once
 #include <optional>
 #include "vulkan_utils.h"
+#include "vulkan_memory_allocator.h"
 
 struct VulkanDevice {
 	VulkanDevice() {}
@@ -10,8 +11,6 @@ struct VulkanDevice {
 	void cleanup();
 	void createCommandPool();
 	
-	/** @brief return suitable memory type */
-	uint32_t findMemoryType(uint32_t memoryTypeBitsRequirements, VkMemoryPropertyFlags requiredProperties) const;
 	/** @brief create buffer & buffer memory */
 	void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties,
 		VkBuffer& buffer, VkDeviceMemory& bufferMemory) const;
@@ -56,7 +55,7 @@ struct VulkanDevice {
 	/** command pool - graphics */
 	VkCommandPool commandPool = VK_NULL_HANDLE;
 	/** custom memory allocator */
-	vktools::MemoryAllocator memoryAllocator;
+	MemoryAllocator memoryAllocator;
 
 	/** swapchain support details - used for swapchain creation*/
 	struct SwapchainSupportDetails {
