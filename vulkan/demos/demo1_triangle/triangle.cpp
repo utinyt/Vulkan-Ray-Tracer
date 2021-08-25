@@ -68,15 +68,16 @@ public:
 		vkDestroyDescriptorPool(devices.device, descriptorPool, nullptr);
 
 		for (size_t i = 0; i < uniformBuffers.size(); ++i) {
+			devices.memoryAllocator.freeMemory(uniformBuffers[i],
+				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 			vkDestroyBuffer(devices.device, uniformBuffers[i], nullptr);
-			//svkFreeMemory(devices.device, uniformBufferMemories[i], nullptr);
 		}
 
 		vkDestroyDescriptorSetLayout(devices.device, descriptorSetLayout, nullptr);
+		devices.memoryAllocator.freeMemory(indexBuffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 		vkDestroyBuffer(devices.device, indexBuffer, nullptr);
-		//vkFreeMemory(devices.device, indexBufferMemory, nullptr);
+		devices.memoryAllocator.freeMemory(vertexBuffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 		vkDestroyBuffer(devices.device, vertexBuffer, nullptr);
-		//vkFreeMemory(devices.device, vertexBufferMemory, nullptr);
 
 		for (auto& framebuffer : framebuffers) {
 			vkDestroyFramebuffer(devices.device, framebuffer, nullptr);
@@ -98,13 +99,11 @@ public:
 
 		//create vertex buffer
 		VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
-		buildBuffer(vertices.data(), bufferSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-			vertexBuffer, vertexBufferMemory);
+		buildBuffer(vertices.data(), bufferSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, vertexBuffer);
 
 		//create index buffer
 		bufferSize = sizeof(indices[0]) * indices.size();
-		buildBuffer(indices.data(), bufferSize, VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-			indexBuffer, indexBufferMemory);
+		buildBuffer(indices.data(), bufferSize, VK_BUFFER_USAGE_INDEX_BUFFER_BIT, indexBuffer);
 		
 		createUniformBuffers();
 		createDescriptorPool();
@@ -129,14 +128,8 @@ private:
 	/** descriptor sets */
 	std::vector<VkDescriptorSet> descriptorSets;
 
-	/** vertex buffer handle */
-	VkBuffer vertexBuffer;
-	/** vertex buffer memory handle */
-	VkDeviceMemory vertexBufferMemory;
-	/** index buffer handle */
-	VkBuffer indexBuffer;
-	/** index buffer memory handle */
-	VkDeviceMemory indexBufferMemory;
+	/** vertex / index buffer handle */
+	VkBuffer vertexBuffer, indexBuffer;
 	/** uniform buffer handle */
 	std::vector<VkBuffer> uniformBuffers;
 	/**  uniform buffer memory handle */
@@ -356,11 +349,11 @@ private:
 	* @param buffer - buffer handle
 	* @param bufferMemory - buffer memory handle
 	*/
-	void buildBuffer(const void* bufferData, VkDeviceSize bufferSize, VkBufferUsageFlags usage,
-		VkBuffer& buffer, VkDeviceMemory& /*bufferMemory*/) {
+	void buildBuffer(const void* bufferData, VkDeviceSize bufferSize, VkBufferUsageFlags usage, VkBuffer& buffer) {
 		//staging buffer creation
 		VkBuffer stagingBuffer;
-		VkBufferCreateInfo stagingBufferCreateInfo = vktools::initializers::bufferCreateInfo(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+		VkBufferCreateInfo stagingBufferCreateInfo = vktools::initializers::bufferCreateInfo(
+			bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
 		VK_CHECK_RESULT(vkCreateBuffer(devices.device, &stagingBufferCreateInfo, nullptr, &stagingBuffer));
 
 		//suballocate
@@ -371,7 +364,8 @@ private:
 		hostVisibleMemory.MapData(devices.device, bufferData);
 
 		//vertex/index buffer creation
-		VkBufferCreateInfo vertexBufferCreateInfo = vktools::initializers::bufferCreateInfo(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | usage);
+		VkBufferCreateInfo vertexBufferCreateInfo = vktools::initializers::bufferCreateInfo(
+			bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | usage);
 		VK_CHECK_RESULT(vkCreateBuffer(devices.device, &vertexBufferCreateInfo, nullptr, &buffer));
 
 		//suballocation

@@ -95,7 +95,7 @@ void MemoryAllocator::freeMemory(VkBuffer buffer, VkMemoryPropertyFlags properti
 	else {
 		//identify memory type
 		VkMemoryRequirements memRequirements;
-		vkGetBufferMemoryRequirements(device, buffer, &memRequirements);
+		vkGetBufferMemoryRequirements(device, buffer, &memRequirements); //make sure to free memory before you free VkBuffer
 		uint32_t memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, properties, memProperties);
 
 		if (findAndEraseMemoryBlock(buffer, memoryTypeIndex)) {
@@ -149,7 +149,7 @@ bool MemoryAllocator::findAndEraseMemoryBlock(VkBuffer buffer, uint32_t memoryTy
 			});
 
 		if (it != memoryChunk.memoryBlocks.end()) {
-			memoryChunk.currentSize -= (it->blockEndLocation - it->offset);
+			memoryChunk.currentSize += (it->blockEndLocation - it->offset);
 			memoryChunk.memoryBlocks.erase(it);
 			return true;
 		}
@@ -167,7 +167,7 @@ void MemoryAllocator::MemoryPool::allocateChunk(VkDevice device) {
 	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 	allocInfo.allocationSize = defaultChunkSize;
 	allocInfo.memoryTypeIndex = memoryTypeIndex;
-	MemoryChunk newChunk{ VK_NULL_HANDLE, defaultChunkSize };
+	MemoryChunk newChunk{ VK_NULL_HANDLE, defaultChunkSize, defaultChunkSize };
 	VK_CHECK_RESULT(vkAllocateMemory(device, &allocInfo, nullptr, &newChunk.memoryHandle));
 	memoryChunks.push_back(newChunk);
 }
@@ -204,7 +204,7 @@ bool MemoryAllocator::MemoryChunk::findSuitableMemoryLocation(
 				blockEndLocation += padding;
 			}
 		}
-		memoryBlock = { 0, memRequirements.size, memRequirements.alignment, blockEndLocation };
+		memoryBlock = { VK_NULL_HANDLE, 0, memRequirements.size, memRequirements.alignment, blockEndLocation };
 		return true;
 	}
 
@@ -266,7 +266,7 @@ void MemoryAllocator::MemoryChunk::addMemoryBlock(VkDevice device, VkBuffer buff
 	memoryBlock.bufferHandle = buffer;
 	memoryBlocks.push_back(memoryBlock);
 	sort();
-	currentSize += (memoryBlock.blockEndLocation - memoryBlock.offset);
+	currentSize -= (memoryBlock.blockEndLocation - memoryBlock.offset);
 	vkBindBufferMemory(device, buffer, memoryHandle, memoryBlock.offset);
 }
 
