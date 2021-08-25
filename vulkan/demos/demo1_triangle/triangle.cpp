@@ -69,15 +69,13 @@ public:
 		vkDestroyDescriptorPool(devices.device, descriptorPool, nullptr);
 
 		for (size_t i = 0; i < uniformBuffers.size(); ++i) {
-			devices.memoryAllocator.freeMemory(uniformBuffers[i],
+			devices.memoryAllocator.freeBufferMemory(uniformBuffers[i],
 				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 			vkDestroyBuffer(devices.device, uniformBuffers[i], nullptr);
 		}
 
 		vkDestroyDescriptorSetLayout(devices.device, descriptorSetLayout, nullptr);
-		/*devices.memoryAllocator.freeMemory(indexBuffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-		vkDestroyBuffer(devices.device, indexBuffer, nullptr);*/
-		devices.memoryAllocator.freeMemory(vertexIndexBuffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		devices.memoryAllocator.freeBufferMemory(vertexIndexBuffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 		vkDestroyBuffer(devices.device, vertexIndexBuffer, nullptr);
 
 		for (auto& framebuffer : framebuffers) {
@@ -98,20 +96,16 @@ public:
 		createPipeline();
 		createFramebuffers();
 
-		
-		//create vertex buffer
+		//merge vertex & index data
 		VkDeviceSize vertexBufferSize = sizeof(vertices[0]) * vertices.size();
 		VkDeviceSize indexBufferSize = sizeof(indices[0]) * indices.size();
 		Mesh::Buffer buffer;
 		buffer.allocate(vertexBufferSize + indexBufferSize);
 		buffer.push(vertices.data(), vertexBufferSize);
 		buffer.push(indices.data(), indexBufferSize);
-		buildBuffer(buffer.data(), vertexBufferSize + indexBufferSize,
-			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, vertexIndexBuffer);
 
-		//create index buffer
-		//bufferSize = 
-		//buildBuffer(indices.data(), bufferSize, VK_BUFFER_USAGE_INDEX_BUFFER_BIT, indexBuffer);
+		createBuffer(buffer.data(), vertexBufferSize + indexBufferSize,
+			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, vertexIndexBuffer);
 		
 		createUniformBuffers();
 		createDescriptorPool();
@@ -357,8 +351,8 @@ private:
 	* @param buffer - buffer handle
 	* @param bufferMemory - buffer memory handle
 	*/
-	void buildBuffer(const void* bufferData, VkDeviceSize bufferSize, VkBufferUsageFlags usage, VkBuffer& buffer) {
-		//staging buffer creation
+	void createBuffer(const void* bufferData, VkDeviceSize bufferSize, VkBufferUsageFlags usage, VkBuffer& buffer) {
+		//create staging buffer
 		VkBuffer stagingBuffer;
 		VkBufferCreateInfo stagingBufferCreateInfo = vktools::initializers::bufferCreateInfo(
 			bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
@@ -366,23 +360,23 @@ private:
 
 		//suballocate
 		VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-		MemoryAllocator::HostVisibleMemory hostVisibleMemory = devices.memoryAllocator.allocateMemory(
+		MemoryAllocator::HostVisibleMemory hostVisibleMemory = devices.memoryAllocator.allocateBufferMemory(
 			stagingBuffer, properties);
 
 		hostVisibleMemory.MapData(devices.device, bufferData);
 
-		//vertex/index buffer creation
-		VkBufferCreateInfo vertexBufferCreateInfo = vktools::initializers::bufferCreateInfo(
+		//create vertex & index buffer
+		VkBufferCreateInfo bufferCreateInfo = vktools::initializers::bufferCreateInfo(
 			bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | usage);
-		VK_CHECK_RESULT(vkCreateBuffer(devices.device, &vertexBufferCreateInfo, nullptr, &buffer));
+		VK_CHECK_RESULT(vkCreateBuffer(devices.device, &bufferCreateInfo, nullptr, &buffer));
 
 		//suballocation
-		devices.memoryAllocator.allocateMemory(buffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		devices.memoryAllocator.allocateBufferMemory(buffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
 		//host visible -> device local
 		devices.copyBuffer(devices.commandPool, stagingBuffer, buffer, bufferSize);
 
-		devices.memoryAllocator.freeMemory(stagingBuffer, properties);
+		devices.memoryAllocator.freeBufferMemory(stagingBuffer, properties);
 		vkDestroyBuffer(devices.device, stagingBuffer, nullptr);
 	}
 
@@ -475,7 +469,7 @@ private:
 
 		for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {	
 			VK_CHECK_RESULT(vkCreateBuffer(devices.device, &uniformBufferCreateInfo, nullptr, &uniformBuffers[i]));
-			uniformBufferMemories[i] = devices.memoryAllocator.allocateMemory(
+			uniformBufferMemories[i] = devices.memoryAllocator.allocateBufferMemory(
 					uniformBuffers[i], VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 		}
 	}

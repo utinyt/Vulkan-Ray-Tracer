@@ -2,6 +2,7 @@
 #include <stb_image.h>
 #include "vulkan_texture.h"
 
+
 /*
 * clean image & image memory
 * must be called if texture is not null
@@ -9,8 +10,8 @@
 void TextureBase::cleanup() {
 	vkDestroySampler(devices->device, sampler, nullptr);
 	vkDestroyImageView(devices->device, imageView, nullptr);
+	devices->memoryAllocator.freeImageMemory(texture, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 	vkDestroyImage(devices->device, texture, nullptr);
-	vkFreeMemory(devices->device, textureMemory, nullptr);
 }
 
 /*
@@ -19,7 +20,7 @@ void TextureBase::cleanup() {
 * @param devices - abstracted vulkan device handle
 * @param path - texture file path
 */
-void Texture2D::load(const VulkanDevice* devices, const std::string& path) {
+void Texture2D::load(VulkanDevice* devices, const std::string& path) {
 	this->devices = devices;
 	
 	//image load
@@ -33,27 +34,27 @@ void Texture2D::load(const VulkanDevice* devices, const std::string& path) {
 
 	//staging
 	VkBuffer stagingBuffer;
-	VkDeviceMemory stagingBufferMemory;
-	devices->createBuffer(imageSize,
-		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-		stagingBuffer,
-		stagingBufferMemory);
+	VkBufferCreateInfo stagingBufferCreateInfo = vktools::initializers::bufferCreateInfo(
+		imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+	VK_CHECK_RESULT(vkCreateBuffer(devices->device, &stagingBufferCreateInfo, nullptr, &stagingBuffer));
 
-	void* data;
-	vkMapMemory(devices->device, stagingBufferMemory, 0, imageSize, 0, &data);
-	memcpy(data, pixels, static_cast<size_t>(imageSize));
-	vkUnmapMemory(devices->device, stagingBufferMemory);
+	//suballocation
+	VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+	MemoryAllocator::HostVisibleMemory hostVisibleMemory = devices->memoryAllocator.allocateBufferMemory(
+		stagingBuffer, properties);
+	hostVisibleMemory.MapData(devices->device, pixels);
 	stbi_image_free(pixels);
 
 	//image creation
-	devices->createImage({ static_cast<uint32_t>(width), static_cast<uint32_t>(height), 1 },
+	VkImageCreateInfo imageCreateInfo = vktools::initializers::imageCreateInfo(
+		{ static_cast<uint32_t>(width), static_cast<uint32_t>(height), 1 },
 		VK_FORMAT_R8G8B8A8_SRGB,
 		VK_IMAGE_TILING_OPTIMAL,
-		VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-		texture,
-		textureMemory);
+		VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+	VK_CHECK_RESULT(vkCreateImage(devices->device, &imageCreateInfo, nullptr, &texture));
+
+	//image memory (sub)llocation
+	devices->memoryAllocator.allocateImageMemory(texture, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
 	//layout trasition & data transfer
 	transitionImageLayout(VK_FORMAT_R8G8B8A8_SRGB,
@@ -63,8 +64,8 @@ void Texture2D::load(const VulkanDevice* devices, const std::string& path) {
 	transitionImageLayout(VK_FORMAT_R8G8B8A8_SRGB,
 		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	
+	devices->memoryAllocator.freeBufferMemory(stagingBuffer, properties);
 	vkDestroyBuffer(devices->device, stagingBuffer, nullptr);
-	vkFreeMemory(devices->device, stagingBufferMemory, nullptr);
 
 	//image view creation
 	imageView = vktools::createImageView(devices->device, texture,
