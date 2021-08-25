@@ -43,6 +43,8 @@ namespace vktools {
 		VkImageTiling tiling, VkFormatFeatureFlags features);
 	/** @brief check if the format has stencil component */
 	bool hasStencilComponent(VkFormat format);
+	/** @brief get buffer address */
+	VkDeviceAddress getBufferDeviceAddress(VkDevice device, VkBuffer buffer);
 
 	namespace initializers {
 		inline VkBufferCreateInfo bufferCreateInfo(VkDeviceSize size,

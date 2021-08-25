@@ -156,4 +156,19 @@ namespace vktools {
 		return format == VK_FORMAT_D32_SFLOAT_S8_UINT ||
 			format == VK_FORMAT_D24_UNORM_S8_UINT;
 	}
+
+	/*
+	* get buffer address
+	* 
+	* @param device - logical device handle
+	* @param buffer - buffer handle
+	* 
+	* @return VkDeviceAddress - buffer address
+	*/
+	VkDeviceAddress getBufferDeviceAddress(VkDevice device, VkBuffer buffer) {
+		VkBufferDeviceAddressInfo bufferInfo{};
+		bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+		bufferInfo.buffer = buffer;
+		return vkGetBufferDeviceAddress(device, &bufferInfo);
+	}
 }

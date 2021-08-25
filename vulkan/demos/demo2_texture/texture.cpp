@@ -588,7 +588,7 @@ private:
 };
 
 //entry point
-RUN_APPLICATION_MAIN(VulkanApp, 800, 600, "triangle");
+RUN_APPLICATION_MAIN(VulkanApp, 800, 600, "texture");
 
 /*
 * constraint : 

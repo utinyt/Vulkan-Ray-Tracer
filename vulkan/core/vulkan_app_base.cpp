@@ -28,10 +28,12 @@ VulkanAppBase::VulkanAppBase(int width, int height, const std::string& appName)
 VulkanAppBase::~VulkanAppBase() {
 	devices.memoryAllocator.cleanup();
 
-	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
-		vkDestroySemaphore(devices.device, presentCompleteSemaphores[i], nullptr);
-		vkDestroySemaphore(devices.device, renderCompleteSemaphores[i], nullptr);
-		vkDestroyFence(devices.device, frameLimitFences[i], nullptr);
+	if (!presentCompleteSemaphores.empty()) {
+		for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+			vkDestroySemaphore(devices.device, presentCompleteSemaphores[i], nullptr);
+			vkDestroySemaphore(devices.device, renderCompleteSemaphores[i], nullptr);
+			vkDestroyFence(devices.device, frameLimitFences[i], nullptr);
+		}
 	}
 
 	destroyDepthStencilImage();
@@ -303,8 +305,10 @@ void VulkanAppBase::createCommandBuffers() {
 * helper function - free command buffers
 */
 void VulkanAppBase::destroyCommandBuffers() {
-	vkFreeCommandBuffers(devices.device, devices.commandPool,
-		static_cast<uint32_t>(commandBuffers.size()), commandBuffers.data());
+	if (!commandBuffers.empty()) {
+		vkFreeCommandBuffers(devices.device, devices.commandPool,
+			static_cast<uint32_t>(commandBuffers.size()), commandBuffers.data());
+	}
 }
 
 /*

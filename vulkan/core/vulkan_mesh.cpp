@@ -33,7 +33,7 @@ void Mesh::load(const std::string& path) {
 	//vertex size
 	hasNormalAttribute = !attrib.normals.empty();
 	hasTexcoordAttribute = !attrib.texcoords.empty();
-	size_t vertexSize = sizeof(glm::vec3);
+	vertexSize = sizeof(glm::vec3);
 	if (hasNormalAttribute) {
 		vertexSize += sizeof(glm::vec3);
 	}
@@ -42,7 +42,7 @@ void Mesh::load(const std::string& path) {
 	}
 
 	//vertex count
-	size_t vertexCount = 0;
+	vertexCount = 0;
 	for (const auto& shape : shapes) {
 		vertexCount += shape.mesh.indices.size();
 	}
@@ -79,6 +79,52 @@ void Mesh::load(const std::string& path) {
 			indices.push_back(static_cast<uint32_t>(indices.size()));
 		}
 	}
+}
+
+/*
+* convert mesh to ray tracing geometry used to build the BLAS 
+* 
+* @param device - logical device handle
+* @param vertexBuffer
+* @param indexBuffer
+* 
+* @return BlasInput
+*/
+Mesh::BlasInput Mesh::getVkGeometryKHR(VkDevice device, VkBuffer vertexBuffer, VkBuffer indexBuffer) const {
+	//get addresses
+	VkDeviceAddress vertexAddress = vktools::getBufferDeviceAddress(device, vertexBuffer);
+	VkDeviceAddress indexAddress = vktools::getBufferDeviceAddress(device, indexBuffer);
+
+	uint32_t maxPrimitiveCount = static_cast<uint32_t>(indices.size() / 3);
+
+	VkAccelerationStructureGeometryTrianglesDataKHR triangles{};
+	triangles.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
+	//describe vertex info
+	triangles.vertexFormat = VK_FORMAT_R32G32B32A32_SFLOAT; //vec3?
+	triangles.vertexData.deviceAddress = vertexAddress;
+	triangles.vertexStride = vertexSize;
+	//describe index info
+	triangles.indexType = VK_INDEX_TYPE_UINT32;
+	triangles.indexData.deviceAddress = indexAddress;
+	triangles.maxVertex = static_cast<uint32_t>(vertexCount);
+
+	//identify above data as containing opaque triangles
+	VkAccelerationStructureGeometryKHR asGeo{};
+	asGeo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
+	asGeo.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
+	asGeo.geometry.triangles = triangles;
+
+	//BLAS
+	VkAccelerationStructureBuildRangeInfoKHR offset{};
+	offset.firstVertex = 0;
+	offset.primitiveCount = maxPrimitiveCount;
+	offset.primitiveOffset = 0;
+	offset.transformOffset = 0;
+
+	BlasInput input{};
+	input.asGeometry.push_back(asGeo);
+	input.asBuildOffsetInfo.push_back(offset);
+	return input;
 }
 
 VkVertexInputBindingDescription Mesh::getBindingDescription() const{
