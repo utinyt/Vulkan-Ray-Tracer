@@ -156,7 +156,7 @@ void Mesh::Buffer::allocate(size_t bufferSize) {
 * @param data
 * @param dataSize
 */
-void Mesh::Buffer::push(void* data, size_t dataSize) {
+void Mesh::Buffer::push(const void* data, size_t dataSize) {
 	if (currentOffset + dataSize > bufferSize) {
 		throw std::overflow_error("Mesh::Buffer::push(): buffer overrun");
 	}

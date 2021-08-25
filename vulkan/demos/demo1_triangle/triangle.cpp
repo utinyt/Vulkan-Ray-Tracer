@@ -4,6 +4,7 @@
 #define GLM_FORCE_RADIANS
 #include "glm/glm.hpp"
 #include "glm/gtc/matrix_transform.hpp"
+#include "core/vulkan_mesh.h"
 
 class VulkanApp : public VulkanAppBase {
 public:
@@ -74,10 +75,10 @@ public:
 		}
 
 		vkDestroyDescriptorSetLayout(devices.device, descriptorSetLayout, nullptr);
-		devices.memoryAllocator.freeMemory(indexBuffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-		vkDestroyBuffer(devices.device, indexBuffer, nullptr);
-		devices.memoryAllocator.freeMemory(vertexBuffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-		vkDestroyBuffer(devices.device, vertexBuffer, nullptr);
+		/*devices.memoryAllocator.freeMemory(indexBuffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		vkDestroyBuffer(devices.device, indexBuffer, nullptr);*/
+		devices.memoryAllocator.freeMemory(vertexIndexBuffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		vkDestroyBuffer(devices.device, vertexIndexBuffer, nullptr);
 
 		for (auto& framebuffer : framebuffers) {
 			vkDestroyFramebuffer(devices.device, framebuffer, nullptr);
@@ -97,13 +98,20 @@ public:
 		createPipeline();
 		createFramebuffers();
 
+		
 		//create vertex buffer
-		VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
-		buildBuffer(vertices.data(), bufferSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, vertexBuffer);
+		VkDeviceSize vertexBufferSize = sizeof(vertices[0]) * vertices.size();
+		VkDeviceSize indexBufferSize = sizeof(indices[0]) * indices.size();
+		Mesh::Buffer buffer;
+		buffer.allocate(vertexBufferSize + indexBufferSize);
+		buffer.push(vertices.data(), vertexBufferSize);
+		buffer.push(indices.data(), indexBufferSize);
+		buildBuffer(buffer.data(), vertexBufferSize + indexBufferSize,
+			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, vertexIndexBuffer);
 
 		//create index buffer
-		bufferSize = sizeof(indices[0]) * indices.size();
-		buildBuffer(indices.data(), bufferSize, VK_BUFFER_USAGE_INDEX_BUFFER_BIT, indexBuffer);
+		//bufferSize = 
+		//buildBuffer(indices.data(), bufferSize, VK_BUFFER_USAGE_INDEX_BUFFER_BIT, indexBuffer);
 		
 		createUniformBuffers();
 		createDescriptorPool();
@@ -129,7 +137,7 @@ private:
 	std::vector<VkDescriptorSet> descriptorSets;
 
 	/** vertex / index buffer handle */
-	VkBuffer vertexBuffer, indexBuffer;
+	VkBuffer vertexIndexBuffer;// , indexBuffer;
 	/** uniform buffer handle */
 	std::vector<VkBuffer> uniformBuffers;
 	/**  uniform buffer memory handle */
@@ -419,8 +427,9 @@ private:
 
 			vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 			VkDeviceSize offsets[] = { 0 };
-			vkCmdBindVertexBuffers(commandBuffers[i], 0, 1, &vertexBuffer, offsets);
-			vkCmdBindIndexBuffer(commandBuffers[i], indexBuffer, 0, VK_INDEX_TYPE_UINT16);
+			vkCmdBindVertexBuffers(commandBuffers[i], 0, 1, &vertexIndexBuffer, offsets);
+			VkDeviceSize indexBufferOffset = sizeof(vertices[0]) * vertices.size(); // sizeof vertex buffer
+			vkCmdBindIndexBuffer(commandBuffers[i], vertexIndexBuffer, indexBufferOffset, VK_INDEX_TYPE_UINT16);
 
 			size_t descriptorSetIndex = i / framebuffers.size();
 			vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1,

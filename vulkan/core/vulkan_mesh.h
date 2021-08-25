@@ -17,7 +17,7 @@ struct Mesh {
 			cleanup();
 		}
 		void allocate(size_t bufferSize);
-		void push(void* data, size_t dataSize);
+		void push(const void* data, size_t dataSize);
 		void cleanup();
 		void* data() const;
 
