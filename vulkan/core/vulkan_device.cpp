@@ -41,6 +41,7 @@ void VulkanDevice::pickPhysicalDevice(VkInstance instance, VkSurfaceKHR surface,
 
 	vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memProperties);
 	vkGetPhysicalDeviceProperties(physicalDevice, &properties);
+	rtFeatures.pNext = &asFeatures;
 	vk12Features.pNext = &rtFeatures;
 	availableFeatures.pNext = &vk12Features;
 	vkGetPhysicalDeviceFeatures2(physicalDevice, &availableFeatures);
@@ -109,14 +110,17 @@ void VulkanDevice::createLogicalDevice() {
 
 	//add device features
 	VkPhysicalDeviceVulkan12Features device12Features{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES };
+	VkPhysicalDeviceAccelerationStructureFeaturesKHR deviceAsFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR };
 	VkMemoryAllocateFlags memflags = 0;
 
 	//add buffer device address feature
 	if (std::find(requiredExtensions.begin(), requiredExtensions.end(),
 		VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME) != requiredExtensions.end()) {
-		if (vk12Features.bufferDeviceAddress == VK_TRUE) {
+		if (vk12Features.bufferDeviceAddress == VK_TRUE && asFeatures.accelerationStructure == VK_TRUE) {
 			device12Features.bufferDeviceAddress = VK_TRUE;
+			deviceAsFeatures.accelerationStructure = VK_TRUE;
 			deviceFeatures.pNext = &device12Features;
+			device12Features.pNext = &deviceAsFeatures;
 			memflags |= VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT;
 		}
 	}
@@ -127,8 +131,8 @@ void VulkanDevice::createLogicalDevice() {
 		VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME) != requiredExtensions.end()) {
 		if (rtFeatures.rayTracingPipeline == VK_TRUE) {
 			deviceRtFeatures.rayTracingPipeline = VK_TRUE;
-			if (deviceFeatures.pNext == &device12Features) {
-				device12Features.pNext = &deviceRtFeatures;
+			if (device12Features.pNext == &deviceAsFeatures) {
+				deviceAsFeatures.pNext = &deviceRtFeatures;
 			}
 			else {
 				deviceFeatures.pNext = &rtFeatures;

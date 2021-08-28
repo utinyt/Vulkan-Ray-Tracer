@@ -20,6 +20,12 @@ public:
 	* destructor - destroy vulkan objects created in this level
 	*/
 	~VulkanApp() {
+		for (auto& as : blas) {
+			vkfp::vkDestroyAccelerationStructureKHR(devices.device, as.accel, nullptr);
+			devices.memoryAllocator.freeBufferMemory(as.buffer);
+			vkDestroyBuffer(devices.device, as.buffer, nullptr);
+		}
+
 		devices.memoryAllocator.freeBufferMemory(vertexBuffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 		vkDestroyBuffer(devices.device, vertexBuffer, nullptr);
 		devices.memoryAllocator.freeBufferMemory(indexBuffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
