@@ -12,8 +12,8 @@ struct VulkanDevice {
 	void createCommandPool();
 	
 	/** @brief create buffer & buffer memory */
-	void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties,
-		VkBuffer& buffer, VkDeviceMemory& bufferMemory) const;
+	VkBuffer createBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
+		VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 	/** @brief copy data to another buffer */
 	void copyBuffer(VkCommandPool commandPool, VkBuffer srcBuffer, VkBuffer dstBuffer,
 		VkDeviceSize size) const;
@@ -51,11 +51,16 @@ struct VulkanDevice {
 	/** current physical device properties */
 	VkPhysicalDeviceProperties properties;
 	/** available device features */
-	VkPhysicalDeviceFeatures availableFeatures;
+	VkPhysicalDeviceFeatures2 availableFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
 	/** command pool - graphics */
 	VkCommandPool commandPool = VK_NULL_HANDLE;
 	/** custom memory allocator */
 	MemoryAllocator memoryAllocator;
+
+	/** vulkan 1.2 features */
+	VkPhysicalDeviceVulkan12Features vk12Features{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES };
+	/** ray tracing features */
+	VkPhysicalDeviceRayTracingPipelineFeaturesKHR rtFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR };
 
 	/** swapchain support details - used for swapchain creation*/
 	struct SwapchainSupportDetails {

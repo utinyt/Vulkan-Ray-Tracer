@@ -1,5 +1,76 @@
 #include "vulkan_utils.h"
 
+/*
+* proxy functions (extension)
+*/
+namespace vkfp{
+	PFN_vkCreateAccelerationStructureKHR vkCreateAccelerationStructureKHRProxy;
+	PFN_vkGetAccelerationStructureBuildSizesKHR vkGetAccelerationStructureBuildSizesKHRProxy;
+	PFN_vkCmdBuildAccelerationStructuresKHR vkCmdBuildAccelerationStructuresKHRProxy;
+	PFN_vkCmdWriteAccelerationStructuresPropertiesKHR vkCmdWriteAccelerationStructuresPropertiesKHRProxy;
+	PFN_vkCmdCopyAccelerationStructureKHR vkCmdCopyAccelerationStructureKHRProxy;
+	PFN_vkDestroyAccelerationStructureKHR vkDestroyAccelerationStructureKHRProxy;
+
+	VkResult vkCreateAccelerationStructureKHR(VkDevice device,
+		const VkAccelerationStructureCreateInfoKHR* pCreateInfo,
+		const VkAllocationCallbacks* pAllocator,
+		VkAccelerationStructureKHR* pAccelerationStructure) {
+		return vkCreateAccelerationStructureKHRProxy(device, pCreateInfo, pAllocator, pAccelerationStructure);
+	}
+
+	void vkGetAccelerationStructureBuildSizesKHR(VkDevice device,
+		VkAccelerationStructureBuildTypeKHR buildType,
+		const VkAccelerationStructureBuildGeometryInfoKHR* pBuildInfo,
+		const uint32_t* pMaxPrimitiveCounts,
+		VkAccelerationStructureBuildSizesInfoKHR* pSizeInfo) {
+		vkGetAccelerationStructureBuildSizesKHRProxy(device, buildType, pBuildInfo, pMaxPrimitiveCounts, pSizeInfo);
+	}
+
+	void vkCmdBuildAccelerationStructuresKHR(VkCommandBuffer commandBuffer,
+		uint32_t infoCount,
+		const VkAccelerationStructureBuildGeometryInfoKHR* pInfos,
+		const VkAccelerationStructureBuildRangeInfoKHR* const* ppBuildRangeInfos) {
+		vkCmdBuildAccelerationStructuresKHRProxy(commandBuffer, infoCount, pInfos, ppBuildRangeInfos);
+	}
+
+	void vkCmdWriteAccelerationStructuresPropertiesKHR(VkCommandBuffer commandBuffer,
+		uint32_t accelerationStructureCount,
+		const VkAccelerationStructureKHR* pAccelerationStructures,
+		VkQueryType queryType,
+		VkQueryPool queryPool,
+		uint32_t firstQuery) {
+		vkCmdWriteAccelerationStructuresPropertiesKHRProxy(commandBuffer, accelerationStructureCount,
+			pAccelerationStructures, queryType, queryPool, firstQuery);
+	}
+
+	void vkCmdCopyAccelerationStructureKHR(VkCommandBuffer commandBuffer, const VkCopyAccelerationStructureInfoKHR* pInfo) {
+		vkCmdCopyAccelerationStructureKHRProxy(commandBuffer, pInfo);
+	}
+
+	void vkDestroyAccelerationStructureKHR(VkDevice device, VkAccelerationStructureKHR accelerationStructure,
+		const VkAllocationCallbacks* pAllocator) {
+		vkDestroyAccelerationStructureKHRProxy(device, accelerationStructure, pAllocator);
+	}
+
+	/*
+	* get function pointers
+	*/
+	void init(VkInstance instance) {
+		vkCreateAccelerationStructureKHRProxy = (PFN_vkCreateAccelerationStructureKHR)vkGetInstanceProcAddr(
+			instance, "vkCreateAccelerationStructureKHR");
+		vkGetAccelerationStructureBuildSizesKHRProxy = (PFN_vkGetAccelerationStructureBuildSizesKHR)vkGetInstanceProcAddr(
+			instance, "vkGetAccelerationStructureBuildSizesKHR");
+		vkCmdBuildAccelerationStructuresKHRProxy = (PFN_vkCmdBuildAccelerationStructuresKHR)vkGetInstanceProcAddr(
+			instance, "vkCmdBuildAccelerationStructuresKHR");
+		vkCmdWriteAccelerationStructuresPropertiesKHRProxy = (PFN_vkCmdWriteAccelerationStructuresPropertiesKHR)vkGetInstanceProcAddr(
+			instance, "vkCmdWriteAccelerationStructuresPropertiesKHR");
+		vkCmdCopyAccelerationStructureKHRProxy = (PFN_vkCmdCopyAccelerationStructureKHR)vkGetInstanceProcAddr(
+			instance, "vkCmdCopyAccelerationStructureKHR");
+		vkDestroyAccelerationStructureKHRProxy = (PFN_vkDestroyAccelerationStructureKHR)vkGetInstanceProcAddr(
+			instance, "vkDestroyAccelerationStructureKHR");
+	}
+}
+
 namespace vktools {
 	/*
 	* read binary file

@@ -96,6 +96,7 @@ void VulkanAppBase::initWindow() {
 void VulkanAppBase::initVulkan() {
 	//instance
 	createInstance();
+	vkfp::init(instance);
 
 	//debug messenger
 	if (enableValidationLayer) {

@@ -1,4 +1,5 @@
 #include <set>
+#include <algorithm>
 #include "vulkan_device.h"
 
 /*
@@ -40,7 +41,9 @@ void VulkanDevice::pickPhysicalDevice(VkInstance instance, VkSurfaceKHR surface,
 
 	vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memProperties);
 	vkGetPhysicalDeviceProperties(physicalDevice, &properties);
-	vkGetPhysicalDeviceFeatures(physicalDevice, &availableFeatures);
+	vk12Features.pNext = &rtFeatures;
+	availableFeatures.pNext = &vk12Features;
+	vkGetPhysicalDeviceFeatures2(physicalDevice, &availableFeatures);
 
 	LOG("initialized:\tphysical device");
 }
@@ -98,11 +101,42 @@ void VulkanDevice::createLogicalDevice() {
 	deviceInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
 	deviceInfo.pQueueCreateInfos = queueInfos.data();
 	deviceInfo.queueCreateInfoCount = static_cast<uint32_t>(queueInfos.size());
-	VkPhysicalDeviceFeatures deviceFeatures{};
-	if (availableFeatures.samplerAnisotropy == VK_TRUE) {
-		deviceFeatures.samplerAnisotropy = VK_TRUE;
+	VkPhysicalDeviceFeatures2 deviceFeatures{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
+	if (availableFeatures.features.samplerAnisotropy == VK_TRUE) {
+		deviceFeatures.features.samplerAnisotropy = VK_TRUE;
 	}
-	deviceInfo.pEnabledFeatures = &deviceFeatures;
+	deviceInfo.pNext = &deviceFeatures;
+
+	//add device features
+	VkPhysicalDeviceVulkan12Features device12Features{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES };
+	VkMemoryAllocateFlags memflags = 0;
+
+	//add buffer device address feature
+	if (std::find(requiredExtensions.begin(), requiredExtensions.end(),
+		VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME) != requiredExtensions.end()) {
+		if (vk12Features.bufferDeviceAddress == VK_TRUE) {
+			device12Features.bufferDeviceAddress = VK_TRUE;
+			deviceFeatures.pNext = &device12Features;
+			memflags |= VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT;
+		}
+	}
+
+	//add rat tracing pipeline feature
+	VkPhysicalDeviceRayTracingPipelineFeaturesKHR deviceRtFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR };
+	if (std::find(requiredExtensions.begin(), requiredExtensions.end(),
+		VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME) != requiredExtensions.end()) {
+		if (rtFeatures.rayTracingPipeline == VK_TRUE) {
+			deviceRtFeatures.rayTracingPipeline = VK_TRUE;
+			if (deviceFeatures.pNext == &device12Features) {
+				device12Features.pNext = &deviceRtFeatures;
+			}
+			else {
+				deviceFeatures.pNext = &rtFeatures;
+			}
+		}
+	}
+
+	//deviceInfo.pEnabledFeatures = &deviceFeatures;
 	deviceInfo.enabledExtensionCount = static_cast<uint32_t>(requiredExtensions.size());
 	deviceInfo.ppEnabledExtensionNames = requiredExtensions.data();
 	deviceInfo.enabledLayerCount = 0;
@@ -117,7 +151,7 @@ void VulkanDevice::createLogicalDevice() {
 	LOG("created:\tlogical device");
 
 	//custom memory allocator
-	memoryAllocator.init(device, properties.limits.bufferImageGranularity, memProperties);
+	memoryAllocator.init(device, properties.limits.bufferImageGranularity, memProperties, memflags);
 }
 
 /*
@@ -251,38 +285,19 @@ VulkanDevice::SwapchainSupportDetails VulkanDevice::querySwapchainSupport(
 * @param size - required buffer size
 * @param usage - required buffer usage
 * @param properties - bit field specifying required memory properties
-* @param buffer - return buffer handle
-* @param bufferMemory - return buffer memory handle
+* 
+* @return buffer - created buffer
 */
-void VulkanDevice::createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties,
-	VkBuffer& buffer, VkDeviceMemory& bufferMemory) const {
+VkBuffer VulkanDevice::createBuffer(VkDeviceSize size,
+	VkBufferUsageFlags usage, VkMemoryPropertyFlags properties) {
 	//buffer creation
-	VkBufferCreateInfo bufferInfo{};
-	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-	bufferInfo.size = size;
-	bufferInfo.usage = usage;
-	bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	VkBuffer buffer = VK_NULL_HANDLE;
+	VkBufferCreateInfo bufferInfo = vktools::initializers::bufferCreateInfo(size, usage);
 	VK_CHECK_RESULT(vkCreateBuffer(device, &bufferInfo, nullptr, &buffer));
-
-	//buffer allocation
-	VkMemoryRequirements memRequirements;
-	vkGetBufferMemoryRequirements(device, buffer, &memRequirements);
-
-	VkMemoryAllocateInfo memAllocInfo{};
-	memAllocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-	memAllocInfo.allocationSize = memRequirements.size;
-	memAllocInfo.memoryTypeIndex = MemoryAllocator::findMemoryType(memRequirements.memoryTypeBits, properties, memProperties);
-	VK_CHECK_RESULT(vkAllocateMemory(device, &memAllocInfo, nullptr, &bufferMemory));
-	vkBindBufferMemory(device, buffer, bufferMemory, 0);
+	memoryAllocator.allocateBufferMemory(buffer, properties);
+	return buffer;
 }
 
-/*
-* copy data to another buffer
-*
-* @param srcBuffer - source buffer to be copied
-* @param dstBuffer - destination buffer
-* @param size - buffer size to copy
-*/
 void VulkanDevice::copyBuffer(VkCommandPool commandPool, VkBuffer srcBuffer, VkBuffer dstBuffer,
 	VkDeviceSize size) const {
 	VkCommandBuffer commandBuffer = beginOneTimeSubmitCommandBuffer();

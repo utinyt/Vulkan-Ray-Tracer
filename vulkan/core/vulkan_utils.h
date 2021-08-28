@@ -27,6 +27,49 @@
 	std::cerr << str << std::endl;	\
 }
 
+/*
+* proxy functions (extension)
+*/
+namespace vkfp {
+	VkResult vkCreateAccelerationStructureKHR(
+		VkDevice                                    device,
+		const VkAccelerationStructureCreateInfoKHR* pCreateInfo,
+		const VkAllocationCallbacks* pAllocator,
+		VkAccelerationStructureKHR* pAccelerationStructure);
+
+	void vkGetAccelerationStructureBuildSizesKHR(
+		VkDevice                                    device,
+		VkAccelerationStructureBuildTypeKHR         buildType,
+		const VkAccelerationStructureBuildGeometryInfoKHR* pBuildInfo,
+		const uint32_t* pMaxPrimitiveCounts,
+		VkAccelerationStructureBuildSizesInfoKHR* pSizeInfo);
+
+	void vkCmdBuildAccelerationStructuresKHR(
+		VkCommandBuffer                             commandBuffer,
+		uint32_t                                    infoCount,
+		const VkAccelerationStructureBuildGeometryInfoKHR* pInfos,
+		const VkAccelerationStructureBuildRangeInfoKHR* const* ppBuildRangeInfos);
+
+	void vkCmdWriteAccelerationStructuresPropertiesKHR(
+		VkCommandBuffer                             commandBuffer,
+		uint32_t                                    accelerationStructureCount,
+		const VkAccelerationStructureKHR* pAccelerationStructures,
+		VkQueryType                                 queryType,
+		VkQueryPool                                 queryPool,
+		uint32_t                                    firstQuery);
+
+	void vkCmdCopyAccelerationStructureKHR(
+		VkCommandBuffer                             commandBuffer,
+		const VkCopyAccelerationStructureInfoKHR* pInfo);
+
+	void vkDestroyAccelerationStructureKHR(
+		VkDevice                                    device,
+		VkAccelerationStructureKHR                  accelerationStructure,
+		const VkAllocationCallbacks* pAllocator);
+
+	void init(VkInstance instance);
+}
+
 namespace vktools {
 	/** @brief read binary file and store to a char vector */
 	std::vector<char> readFile(const std::string& filename);

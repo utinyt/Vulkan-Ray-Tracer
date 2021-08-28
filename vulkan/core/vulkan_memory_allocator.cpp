@@ -9,10 +9,12 @@
 * @param bufferImageGranularity
 */
 void MemoryAllocator::init(VkDevice device, VkDeviceSize bufferImageGranularity,
-	const VkPhysicalDeviceMemoryProperties& memProperties, uint32_t defaultChunkSize) {
+	const VkPhysicalDeviceMemoryProperties& memProperties, VkMemoryAllocateFlags allocateFlags,
+	uint32_t defaultChunkSize) {
 	this->memProperties = memProperties;
 	this->device = device;
 	this->bufferImageGranularity = bufferImageGranularity;
+	this->allocateFlags = allocateFlags;
 	memoryPools.resize(memProperties.memoryTypeCount);
 
 	//assign memory type index & chunk size to individual memory pool
@@ -63,7 +65,7 @@ MemoryAllocator::HostVisibleMemory MemoryAllocator::allocateBufferMemory(VkBuffe
 	}
 
 	//failed to find suitable memory location - add new memory chunk
-	pool.allocateChunk(device);
+	pool.allocateChunk(device, allocateFlags);
 	MemoryBlock memoryBlock{};
 	if (pool.memoryChunks.back().findSuitableMemoryLocation(memRequirements, bufferImageGranularity, memoryBlock)) {
 		pool.memoryChunks.back().addBufferMemoryBlock(device, buffer, memoryBlock);
@@ -107,7 +109,7 @@ MemoryAllocator::HostVisibleMemory MemoryAllocator::allocateImageMemory(VkImage 
 	}
 
 	//failed to find suitable memory location - add new memory chunk
-	pool.allocateChunk(device);
+	pool.allocateChunk(device, allocateFlags);
 	MemoryBlock memoryBlock{};
 	if (pool.memoryChunks.back().findSuitableMemoryLocation(memRequirements, bufferImageGranularity, memoryBlock)) {
 		pool.memoryChunks.back().addImageMemoryBlock(device, image, memoryBlock);
@@ -281,11 +283,18 @@ bool MemoryAllocator::findAndEraseImageMemoryBlock(VkImage image, uint32_t memor
 *
 * @param device - logical device handle needed for vkAllocateMemory
 */
-void MemoryAllocator::MemoryPool::allocateChunk(VkDevice device) {
+void MemoryAllocator::MemoryPool::allocateChunk(VkDevice device, VkMemoryAllocateFlags allocateFlags) {
 	VkMemoryAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 	allocInfo.allocationSize = defaultChunkSize;
 	allocInfo.memoryTypeIndex = memoryTypeIndex;
+	VkMemoryAllocateFlagsInfo flagsInfo{};
+	if (allocateFlags & VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT) {
+		flagsInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO;
+		flagsInfo.flags = allocateFlags;
+		//flagsInfo.deviceMask = 1;
+		allocInfo.pNext = &flagsInfo;
+	}
 	MemoryChunk newChunk{ VK_NULL_HANDLE, defaultChunkSize, defaultChunkSize };
 	VK_CHECK_RESULT(vkAllocateMemory(device, &allocInfo, nullptr, &newChunk.memoryHandle));
 	memoryChunks.push_back(newChunk);

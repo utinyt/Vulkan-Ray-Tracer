@@ -78,7 +78,7 @@ void Texture2D::load(VulkanDevice* devices, const std::string& path) {
 	samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
 	samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
 	samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-	if (devices->availableFeatures.samplerAnisotropy == VK_TRUE) {
+	if (devices->availableFeatures.features.samplerAnisotropy == VK_TRUE) {
 		samplerInfo.anisotropyEnable = VK_TRUE;
 		samplerInfo.maxAnisotropy = devices->properties.limits.maxSamplerAnisotropy;
 	}

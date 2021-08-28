@@ -18,7 +18,8 @@ public:
 	};
 
 	void init(VkDevice device, VkDeviceSize bufferImageGranularity,
-		const VkPhysicalDeviceMemoryProperties& memProperties, uint32_t defaultChunkSize = 268435000); //256 MiB
+		const VkPhysicalDeviceMemoryProperties& memProperties, VkMemoryAllocateFlags allocateFlags = 0,
+		uint32_t defaultChunkSize = 268435000); //256 MiB
 	/** @brief free all allocated memory */
 	void cleanup();
 	/** @brief suballocation - add new (buffer) memory block */
@@ -71,7 +72,7 @@ private:
 	/** allocated memory block by vkAllocateMemory */
 	struct MemoryPool {
 		/** @brief pre-allocate big chunk of memory */
-		void allocateChunk(VkDevice device);
+		void allocateChunk(VkDevice device, VkMemoryAllocateFlags allocateFlags);
 		/** @brief clean up all pre-allocated chunk of memory */
 		size_t cleanup(VkDevice device);
 
@@ -91,6 +92,8 @@ private:
 	VkDeviceSize bufferImageGranularity = 0;
 	/** memory pools for each memory types */
 	std::vector<MemoryPool> memoryPools;
+	/** memory allocate flags - used for vkAllocateMemory */
+	VkMemoryAllocateFlags allocateFlags = 0;
 
 	/** @brief helper function for freeBufferMemory */
 	bool findAndEraseBufferMemoryBlock(VkBuffer buffer, uint32_t memoryTypeIndex);
