@@ -4,6 +4,7 @@
 #include <vector>
 #include <fstream>
 #include <vulkan/vulkan.h>
+#include "glm/mat4x4.hpp"
 
 /*
 * checks vulkan function result and throws runtime error if it is failed
@@ -67,6 +68,10 @@ namespace vkfp {
 		VkAccelerationStructureKHR                  accelerationStructure,
 		const VkAllocationCallbacks* pAllocator);
 
+	VkDeviceAddress vkGetAccelerationStructureDeviceAddressKHR(
+		VkDevice                                    device,
+		const VkAccelerationStructureDeviceAddressInfoKHR* pInfo);
+
 	void init(VkInstance instance);
 }
 
@@ -88,6 +93,8 @@ namespace vktools {
 	bool hasStencilComponent(VkFormat format);
 	/** @brief get buffer address */
 	VkDeviceAddress getBufferDeviceAddress(VkDevice device, VkBuffer buffer);
+	/** convert glm mat4 to VkTransformMatrixKHR */
+	VkTransformMatrixKHR toTransformMatrixKHR(const glm::mat4& mat);
 
 	namespace initializers {
 		inline VkBufferCreateInfo bufferCreateInfo(VkDeviceSize size,

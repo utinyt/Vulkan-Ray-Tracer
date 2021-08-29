@@ -10,6 +10,7 @@ namespace vkfp{
 	PFN_vkCmdWriteAccelerationStructuresPropertiesKHR vkCmdWriteAccelerationStructuresPropertiesKHRProxy;
 	PFN_vkCmdCopyAccelerationStructureKHR vkCmdCopyAccelerationStructureKHRProxy;
 	PFN_vkDestroyAccelerationStructureKHR vkDestroyAccelerationStructureKHRProxy;
+	PFN_vkGetAccelerationStructureDeviceAddressKHR vkGetAccelerationStructureDeviceAddressKHRProxy;
 
 	VkResult vkCreateAccelerationStructureKHR(VkDevice device,
 		const VkAccelerationStructureCreateInfoKHR* pCreateInfo,
@@ -52,6 +53,11 @@ namespace vkfp{
 		vkDestroyAccelerationStructureKHRProxy(device, accelerationStructure, pAllocator);
 	}
 
+	VkDeviceAddress vkGetAccelerationStructureDeviceAddressKHR(VkDevice device,
+		const VkAccelerationStructureDeviceAddressInfoKHR* pInfo) {
+		return vkGetAccelerationStructureDeviceAddressKHRProxy(device, pInfo);
+	}
+
 	/*
 	* get function pointers
 	*/
@@ -68,6 +74,8 @@ namespace vkfp{
 			instance, "vkCmdCopyAccelerationStructureKHR");
 		vkDestroyAccelerationStructureKHRProxy = (PFN_vkDestroyAccelerationStructureKHR)vkGetInstanceProcAddr(
 			instance, "vkDestroyAccelerationStructureKHR");
+		vkGetAccelerationStructureDeviceAddressKHRProxy = (PFN_vkGetAccelerationStructureDeviceAddressKHR)vkGetInstanceProcAddr(
+			instance, "vkGetAccelerationStructureDeviceAddressKHR");
 	}
 }
 
@@ -241,5 +249,19 @@ namespace vktools {
 		bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
 		bufferInfo.buffer = buffer;
 		return vkGetBufferDeviceAddress(device, &bufferInfo);
+	}
+
+	/*
+	* convert glm mat4 to VkTransformMatrixKHR
+	* 
+	* @param mat - glm matrix to convert
+	* 
+	* @return VkTransformMatrixKHR - converted vk matrix
+	*/
+	VkTransformMatrixKHR toTransformMatrixKHR(const glm::mat4& mat) {//column major
+		glm::mat4 transposed = glm::transpose(mat);
+		VkTransformMatrixKHR vkMat; //row major
+		memcpy(&vkMat, &transposed, sizeof(VkTransformMatrixKHR));
+		return vkMat;
 	}
 }
