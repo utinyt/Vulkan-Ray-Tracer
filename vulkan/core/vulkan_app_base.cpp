@@ -26,6 +26,7 @@ VulkanAppBase::VulkanAppBase(int width, int height, const std::string& appName)
 * app destructor
 */
 VulkanAppBase::~VulkanAppBase() {
+	destroyDepthStencilImage();
 	devices.memoryAllocator.cleanup();
 
 	if (!presentCompleteSemaphores.empty()) {
@@ -36,7 +37,6 @@ VulkanAppBase::~VulkanAppBase() {
 		}
 	}
 
-	destroyDepthStencilImage();
 	swapchain.cleanup();
 
 	vkDestroyPipelineCache(devices.device, pipelineCache, nullptr);
@@ -372,6 +372,6 @@ void VulkanAppBase::createDepthStencilImage() {
 */
 void VulkanAppBase::destroyDepthStencilImage() {
 	vkDestroyImageView(devices.device, depthImageView, nullptr);
+	devices.memoryAllocator.freeImageMemory(depthImage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 	vkDestroyImage(devices.device, depthImage, nullptr);
-	vkFreeMemory(devices.device, depthImageMemory, nullptr);
 }

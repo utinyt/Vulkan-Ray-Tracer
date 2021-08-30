@@ -7,7 +7,8 @@ public:
 	void cleanup();
 	virtual void load(VulkanDevice* devices, const std::string& path) = 0;
 	/** @brief just get the handle from the user and init texture */
-	void init(VkImage image, VkImageView imageView, VkSampler sampler = VK_NULL_HANDLE) {
+	void init(VulkanDevice* devices, VkImage image, VkImageView imageView, VkSampler sampler = VK_NULL_HANDLE) {
+		this->devices = devices;
 		this->image = image;
 		this->imageView = imageView;
 		this->sampler = sampler;

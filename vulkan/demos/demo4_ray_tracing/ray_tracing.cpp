@@ -22,42 +22,54 @@ public:
 	* destructor - destroy vulkan objects created in this level
 	*/
 	~VulkanApp() {
+		//BLAS
 		for (auto& as : blas) {
 			vkfp::vkDestroyAccelerationStructureKHR(devices.device, as.accel, nullptr);
 			devices.memoryAllocator.freeBufferMemory(as.buffer);
 			vkDestroyBuffer(devices.device, as.buffer, nullptr);
 		}
 
+		//instance buffer
 		devices.memoryAllocator.freeBufferMemory(instanceBuffer);
 		vkDestroyBuffer(devices.device, instanceBuffer, nullptr);
 
+		//TLAS
 		vkfp::vkDestroyAccelerationStructureKHR(devices.device, tlas.accel, nullptr);
 		devices.memoryAllocator.freeBufferMemory(tlas.buffer);
 		vkDestroyBuffer(devices.device, tlas.buffer, nullptr);
 
+		//vertex & index buffers
 		devices.memoryAllocator.freeBufferMemory(vertexBuffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 		vkDestroyBuffer(devices.device, vertexBuffer, nullptr);
 		devices.memoryAllocator.freeBufferMemory(indexBuffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 		vkDestroyBuffer(devices.device, indexBuffer, nullptr);
 
+		//offscreen framebuffer
 		for (auto& framebuffer : offscreenFramebuffers) {
 			vkDestroyFramebuffer(devices.device, framebuffer, nullptr);
 		}
 
+		//offscreen renderpass
 		vkDestroyRenderPass(devices.device, offscreenRenderPass, nullptr);
 
+		//offscreen images
 		for (auto& offscreen : offscreens) {
 			offscreen.offscreenColorBuffer.cleanup();
 			offscreen.offscreenDepthBuffer.cleanup();
 		}
 
-
+		//descriptors
+		vkDestroyDescriptorPool(devices.device, descriptorPool, nullptr);
+		vkDestroyDescriptorSetLayout(devices.device, descriptorSetLayout, nullptr);
+		vkDestroyDescriptorPool(devices.device, rtDescriptorPool, nullptr);
+		vkDestroyDescriptorSetLayout(devices.device, rtDescriptorSetLayout, nullptr);
 	}
 
 	/*
 	* application initialization - also contain base class initApp()
 	*/
 	virtual void initApp() override {
+		VulkanAppBase::initApp();
 		////request ray tracing properties
 		//VkPhysicalDeviceRayTracingPipelinePropertiesKHR rtProperties{ 
 		//	VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR };
@@ -70,11 +82,15 @@ public:
 		mesh.load("../../meshes/bunny.obj");
 
 		//create vertex & index buffers
+		VkBufferUsageFlags rtFlags = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | 
+			VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | 
+			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+
 		createBuffer(mesh.vertices.data(), mesh.vertices.bufferSize,
-			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | rtFlags,
 			vertexBuffer);
 		createBuffer(mesh.indices.data(), sizeof(mesh.indices[0]) * mesh.indices.size(),
-			VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+			VK_BUFFER_USAGE_INDEX_BUFFER_BIT | rtFlags,
 			indexBuffer);
 
 		//BLAS
@@ -101,6 +117,11 @@ public:
 
 		createOffscreenRender();
 		createRtDescriptorSet();
+		createDescriptorSet();
+
+		for (size_t i = 0; i < static_cast<int>(MAX_FRAMES_IN_FLIGHT); ++i) {
+			updateRtDescriptorSet(i);
+		}
 	}
 
 	/*
@@ -124,6 +145,17 @@ public:
 
 	}
 
+	/*
+	* resize
+	*/
+	virtual void resizeWindow() override {
+		VulkanAppBase::resizeWindow();
+		createOffscreenRender();
+		for (size_t i = 0; i < static_cast<int>(MAX_FRAMES_IN_FLIGHT); ++i) {
+			updateRtDescriptorSet(i);
+		}
+	}
+
 private:
 	struct AccelKHR {
 		VkAccelerationStructureKHR accel = VK_NULL_HANDLE;
@@ -138,22 +170,31 @@ private:
 	};
 
 	/** vertex & index buffer */
-	VkBuffer vertexBuffer, indexBuffer;
+	VkBuffer vertexBuffer = VK_NULL_HANDLE, indexBuffer = VK_NULL_HANDLE;
 	/** bunny mesh */
 	Mesh mesh;
 	/** bottom-level acceleration structures */
 	std::vector<AccelKHR> blas;
 	/** top-level acceleration structure */
-	AccelKHR tlas;
+	AccelKHR tlas{};
 	/** instance buffer for tlas */
 	VkBuffer instanceBuffer = VK_NULL_HANDLE;
 
 	/** descriptor set layout bindings */
+	DescriptorSetBindings descriptorSetBindings;
+	/** descriptor set layout */
+	VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
+	/** decriptor pool */
+	VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
+	/** descriptor sets */
+	std::vector<VkDescriptorSet> descriptorSets;
+
+	/** descriptor set layout bindings */
 	DescriptorSetBindings rtDescriptorSetBindings;
 	/** descriptor set layout */
-	VkDescriptorSetLayout rtDescriptorSetLayout;
+	VkDescriptorSetLayout rtDescriptorSetLayout = VK_NULL_HANDLE;
 	/** decriptor pool */
-	VkDescriptorPool rtDescriptorPool;
+	VkDescriptorPool rtDescriptorPool = VK_NULL_HANDLE;
 	/** descriptor sets */
 	std::vector<VkDescriptorSet> rtDescriptorSets;
 
@@ -542,7 +583,7 @@ private:
 
 		//allocate rt descriptor sets
 		std::vector<VkDescriptorSetLayout> layout(nbRtDescriptorSet, rtDescriptorSetLayout);
-		rtDescriptorSets.reserve(nbRtDescriptorSet);
+		rtDescriptorSets.assign(nbRtDescriptorSet, {});
 		VkDescriptorSetAllocateInfo descInfo{};
 		descInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 		descInfo.descriptorPool = rtDescriptorPool;
@@ -580,7 +621,7 @@ private:
 			devices.availableFeatures, devices.properties);
 		VK_CHECK_RESULT(vkCreateSampler(devices.device, &samplerInfo, nullptr, &sampler));
 
-		images.offscreenColorBuffer.init(offscreenColorImage, offscreenColorImageView, sampler);
+		images.offscreenColorBuffer.init(&devices, offscreenColorImage, offscreenColorImageView, sampler);
 
 		//create offscreen depth buffer
 		VkImage offscreenDepthImage = devices.createImage({ swapchain.extent.width,swapchain.extent.height, 1 },
@@ -591,7 +632,7 @@ private:
 		VkImageView offscreenDepthImageView = vktools::createImageView(devices.device, offscreenDepthImage,
 			VK_IMAGE_VIEW_TYPE_2D, offscreenDepthFormat, VK_IMAGE_ASPECT_DEPTH_BIT);
 
-		images.offscreenDepthBuffer.init(offscreenDepthImage, offscreenDepthImageView);
+		images.offscreenDepthBuffer.init(&devices, offscreenDepthImage, offscreenDepthImageView);
 
 		//setting image layout
 		VkCommandBuffer cmdBuf = devices.beginOneTimeSubmitCommandBuffer();
@@ -605,7 +646,14 @@ private:
 	}
 
 	void createOffscreenRender() {
-		for (int i = 0; i < static_cast<int>(MAX_FRAMES_IN_FLIGHT); ++i) {
+		for (auto& offscreen : offscreens) {
+			offscreen.offscreenColorBuffer.cleanup();
+			offscreen.offscreenDepthBuffer.cleanup();
+		}
+		offscreens.clear();
+
+		size_t nbImages = static_cast<size_t>(MAX_FRAMES_IN_FLIGHT);
+		for (int i = 0; i < nbImages; ++i) {
 			offscreens.push_back(createOffscreenImages());
 		}
 
@@ -622,8 +670,16 @@ private:
 		}
 
 		//create framebuffers for the offscreen
-		offscreenFramebuffers.reserve(static_cast<size_t>(MAX_FRAMES_IN_FLIGHT));
-		for (int i = 0; i < static_cast<int>(MAX_FRAMES_IN_FLIGHT); ++i) {
+		if (offscreenFramebuffers.empty()) {
+			offscreenFramebuffers.assign(nbImages, {});
+		}
+		else {
+			for (auto& framebuffer : offscreenFramebuffers) {
+				vkDestroyFramebuffer(devices.device, framebuffer, nullptr);
+			}
+		}
+		
+		for (size_t i = 0; i < nbImages; ++i) {
 			std::array<VkImageView, 2> attachments{ offscreens[i].offscreenColorBuffer.imageView,
 				offscreens[i].offscreenDepthBuffer.imageView };
 
@@ -637,6 +693,40 @@ private:
 			framebufferInfo.layers = 1;
 			VK_CHECK_RESULT(vkCreateFramebuffer(devices.device, &framebufferInfo, nullptr, &offscreenFramebuffers[i]));
 		}
+	}
+
+	void createDescriptorSet() {
+		uint32_t nbTexture = 0;
+
+		//camera matrix
+		descriptorSetBindings.addBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1,
+			VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_RAYGEN_BIT_KHR);
+		//scene description
+		descriptorSetBindings.addBinding(1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1,
+			VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR);
+		//textures
+		/*descriptorSetBindings.addBinding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, nbTexture,
+			VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR);*/
+
+		uint32_t nbDescriptorSet = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+		descriptorSetLayout = descriptorSetBindings.createDescriptorSetLayout(devices.device);
+		descriptorPool = descriptorSetBindings.createDescriptorPool(devices.device, nbDescriptorSet);
+		
+		VkDescriptorSetAllocateInfo descInfo{};
+		std::vector<VkDescriptorSetLayout> layout(nbDescriptorSet, descriptorSetLayout);
+		descInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+		descInfo.descriptorPool = descriptorPool;
+		descInfo.descriptorSetCount = nbDescriptorSet;
+		descInfo.pSetLayouts = layout.data();
+		descriptorSets.reserve(nbDescriptorSet);
+		VK_CHECK_RESULT(vkAllocateDescriptorSets(devices.device, &descInfo, descriptorSets.data()));
+	}
+
+	void updateRtDescriptorSet(size_t currentFrame) {
+		VkDescriptorImageInfo imageInfo{ {}, offscreens[currentFrame].offscreenColorBuffer.imageView,
+			VK_IMAGE_LAYOUT_GENERAL };
+		VkWriteDescriptorSet wds = rtDescriptorSetBindings.makeWrite(rtDescriptorSets[currentFrame], 1, &imageInfo);
+		vkUpdateDescriptorSets(devices.device, 1, &wds, 0, nullptr);
 	}
 };
 

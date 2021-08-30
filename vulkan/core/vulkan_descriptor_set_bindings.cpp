@@ -85,6 +85,7 @@ VkWriteDescriptorSet DescriptorSetBindings::makeWrite(VkDescriptorSet dstSet, ui
 		writeSet.descriptorType != VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT) {
 		throw std::runtime_error("DescriptorSetBindings::makeWrite(): descriptor type doesn't match");
 	}
+	writeSet.pImageInfo = pImageInfo;
 	return writeSet;
 }
 

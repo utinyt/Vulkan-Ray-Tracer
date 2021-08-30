@@ -18,7 +18,7 @@ protected:
 	uint32_t prepareFrame();
 	void submitFrame(uint32_t imageIndex);
 	
-	void resizeWindow();
+	virtual void resizeWindow();
 	static void windowResizeCallbck(GLFWwindow* window, int width, int height);
 	virtual void createFramebuffers() = 0;
 	virtual void recordCommandBuffer() = 0;
@@ -63,8 +63,6 @@ protected:
 	VkFormat depthFormat;
 	/** depth image handle */
 	VkImage depthImage;
-	/** depth image memory handle */
-	VkDeviceMemory depthImageMemory;
 	/** depth image view handle */
 	VkImageView depthImageView;
 

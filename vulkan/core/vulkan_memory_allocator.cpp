@@ -131,6 +131,10 @@ MemoryAllocator::HostVisibleMemory MemoryAllocator::allocateImageMemory(VkImage 
 *	if it is not provided then memory allocator should search the whole memory pools
 */
 void MemoryAllocator::freeBufferMemory(VkBuffer buffer, VkMemoryPropertyFlags properties) {
+	if (buffer == VK_NULL_HANDLE) {
+		return;
+	}
+
 	if (properties == VK_MEMORY_PROPERTY_FLAG_BITS_MAX_ENUM) {
 		//memory properties are not provided; search the whole memory pools
 		for (uint32_t memoryTypeIndex = 0; memoryTypeIndex < memoryPools.size(); ++memoryTypeIndex) {
@@ -161,6 +165,10 @@ void MemoryAllocator::freeBufferMemory(VkBuffer buffer, VkMemoryPropertyFlags pr
 *	if it is not provided then memory allocator should search the whole memory pools
 */
 void MemoryAllocator::freeImageMemory(VkImage image, VkMemoryPropertyFlags properties) {
+	if (image == VK_NULL_HANDLE) {
+		return;
+	}
+
 	if (properties == VK_MEMORY_PROPERTY_FLAG_BITS_MAX_ENUM) {
 		//memory properties are not provided; search the whole memory pools
 		for (uint32_t memoryTypeIndex = 0; memoryTypeIndex < memoryPools.size(); ++memoryTypeIndex) {
