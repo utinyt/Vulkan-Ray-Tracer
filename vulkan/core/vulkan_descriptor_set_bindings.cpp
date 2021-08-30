@@ -44,6 +44,51 @@ VkDescriptorSetLayout DescriptorSetBindings::createDescriptorSetLayout(VkDevice 
 }
 
 /*
+* create make write structure - VkAccelerationStructureKHR 
+* 
+* @param dstSet - target descriptor set
+* @param dstBinding
+* @param pAccel
+* @param arrayElement
+* 
+* @return VkWriteDescriptorSet 
+* 
+*/
+VkWriteDescriptorSet DescriptorSetBindings::makeWrite(VkDescriptorSet dstSet, uint32_t dstBinding,
+	const VkWriteDescriptorSetAccelerationStructureKHR* pAccel, uint32_t arrayElement) {
+	VkWriteDescriptorSet writeSet = makeWrite(dstSet, dstBinding, arrayElement);
+	writeSet.pNext = pAccel;
+	if (writeSet.descriptorType != VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR) {
+		throw std::runtime_error("DescriptorSetBindings::makeWrite(): descriptor type doesn't match");
+	}
+	return writeSet;
+}
+
+/*
+* create make write structure - VkAccelerationStructureKHR
+*
+* @param dstSet - target descriptor set
+* @param dstBinding
+* @param pImageInfo
+* @param arrayElement
+*
+* @return VkWriteDescriptorSet
+*
+*/
+VkWriteDescriptorSet DescriptorSetBindings::makeWrite(VkDescriptorSet dstSet, uint32_t dstBinding,
+	const VkDescriptorImageInfo* pImageInfo, uint32_t arrayElement) {
+	VkWriteDescriptorSet writeSet = makeWrite(dstSet, dstBinding, arrayElement);
+	if (writeSet.descriptorType != VK_DESCRIPTOR_TYPE_SAMPLER					&&
+		writeSet.descriptorType != VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER	&&
+		writeSet.descriptorType != VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE				&&
+		writeSet.descriptorType != VK_DESCRIPTOR_TYPE_STORAGE_IMAGE				&&
+		writeSet.descriptorType != VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT) {
+		throw std::runtime_error("DescriptorSetBindings::makeWrite(): descriptor type doesn't match");
+	}
+	return writeSet;
+}
+
+/*
 * return descriptor pool sizes built from added bindings 
 * 
 * @param maximum number of descriptor SETs
@@ -74,4 +119,32 @@ std::vector<VkDescriptorPoolSize> DescriptorSetBindings::getRequiredPoolSizes(ui
 	}
 
 	return poolSizes;
+}
+
+/*
+* helper function for makeWrite***
+*
+* @param dstSet - target descriptor set
+* @param dstBinding
+* @param arrayElement
+*
+* @return VkWriteDescriptorSet
+*
+*/
+VkWriteDescriptorSet DescriptorSetBindings::makeWrite(VkDescriptorSet dstSet, uint32_t dstBinding, uint32_t arrayElement) {
+	VkWriteDescriptorSet writeSet{};
+	writeSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	writeSet.descriptorType = VK_DESCRIPTOR_TYPE_MAX_ENUM;
+	for (size_t i = 0; i < bindings.size(); ++i) {
+		if (bindings[i].binding == dstBinding) {
+			writeSet.descriptorCount = 1;
+			writeSet.descriptorType = bindings[i].descriptorType;
+			writeSet.dstBinding = dstBinding;
+			writeSet.dstSet = dstSet;
+			writeSet.dstArrayElement = arrayElement;
+			return writeSet;
+		}
+	}
+	throw std::runtime_error("DescriptorSetBindings::makeWrite(): cannot find binding");
+	return writeSet;
 }
