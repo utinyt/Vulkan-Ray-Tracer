@@ -11,6 +11,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="core\vulkan_descriptor_set_bindings.cpp" />
     <ClCompile Include="core\vulkan_memory_allocator.cpp" />
     <ClCompile Include="core\vulkan_mesh.cpp" />
     <ClCompile Include="core\vulkan_app_base.cpp" />
@@ -21,6 +22,7 @@
     <ClCompile Include="core\vulkan_utils.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="core\vulkan_descriptor_set_bindings.h" />
     <ClInclude Include="core\vulkan_memory_allocator.h" />
     <ClInclude Include="core\vulkan_mesh.h" />
     <ClInclude Include="core\vulkan_texture.h" />

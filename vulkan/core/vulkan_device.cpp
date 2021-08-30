@@ -327,42 +327,14 @@ void VulkanDevice::copyBuffer(VkCommandPool commandPool, VkBuffer srcBuffer, VkB
 * @param image - return image handle
 * @param imageMemory - return image memory handle
 */
-void VulkanDevice::createImage(VkExtent3D extent, VkFormat format, VkImageTiling tiling,
-	VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory) const{
+VkImage VulkanDevice::createImage(VkExtent3D extent, VkFormat format, VkImageTiling tiling,
+	VkImageUsageFlags usage, VkMemoryPropertyFlags properties){
 	//image creation
-	VkImageCreateInfo imageInfo{};
-	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-	if (extent.depth == 1) {
-		if (extent.height == 1) {
-			imageInfo.imageType = VK_IMAGE_TYPE_1D;
-		}
-		imageInfo.imageType = VK_IMAGE_TYPE_2D;
-	}
-	else {
-		imageInfo.imageType = VK_IMAGE_TYPE_3D;
-	}
-	imageInfo.extent = extent;
-	imageInfo.mipLevels = 1;
-	imageInfo.arrayLayers = 1;
-	imageInfo.format = format;
-	imageInfo.tiling = tiling;
-	imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	imageInfo.usage = usage;
-	imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-	imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+	VkImage image;
+	VkImageCreateInfo imageInfo = vktools::initializers::imageCreateInfo(extent, format, tiling, usage);
 	VK_CHECK_RESULT(vkCreateImage(device, &imageInfo, nullptr, &image));
-
-	//image memory allocation
-	VkMemoryRequirements memRequirements;
-	vkGetImageMemoryRequirements(device, image, &memRequirements);
-
-	VkMemoryAllocateInfo allocInfo{};
-	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-	allocInfo.allocationSize = memRequirements.size;
-	allocInfo.memoryTypeIndex = MemoryAllocator::findMemoryType(memRequirements.memoryTypeBits, properties, memProperties);
-	VK_CHECK_RESULT(vkAllocateMemory(device, &allocInfo, nullptr, &imageMemory));
-
-	vkBindImageMemory(device, image, imageMemory, 0);
+	memoryAllocator.allocateImageMemory(image, properties);
+	return image;
 }
 
 void VulkanDevice::copyBufferToImage(VkBuffer buffer, VkImage image,

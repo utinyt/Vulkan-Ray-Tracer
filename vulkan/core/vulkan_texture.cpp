@@ -10,8 +10,8 @@
 void TextureBase::cleanup() {
 	vkDestroySampler(devices->device, sampler, nullptr);
 	vkDestroyImageView(devices->device, imageView, nullptr);
-	devices->memoryAllocator.freeImageMemory(texture, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-	vkDestroyImage(devices->device, texture, nullptr);
+	devices->memoryAllocator.freeImageMemory(image, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+	vkDestroyImage(devices->device, image, nullptr);
 }
 
 /*
@@ -51,15 +51,15 @@ void Texture2D::load(VulkanDevice* devices, const std::string& path) {
 		VK_FORMAT_R8G8B8A8_SRGB,
 		VK_IMAGE_TILING_OPTIMAL,
 		VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
-	VK_CHECK_RESULT(vkCreateImage(devices->device, &imageCreateInfo, nullptr, &texture));
+	VK_CHECK_RESULT(vkCreateImage(devices->device, &imageCreateInfo, nullptr, &image));
 
 	//image memory (sub)llocation
-	devices->memoryAllocator.allocateImageMemory(texture, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+	devices->memoryAllocator.allocateImageMemory(image, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
 	//layout trasition & data transfer
 	transitionImageLayout(VK_FORMAT_R8G8B8A8_SRGB,
 		VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-	devices->copyBufferToImage(stagingBuffer, texture, { 0, 0, 0 },
+	devices->copyBufferToImage(stagingBuffer, image, { 0, 0, 0 },
 		{ static_cast<uint32_t>(width), static_cast<uint32_t>(height), 1 });
 	transitionImageLayout(VK_FORMAT_R8G8B8A8_SRGB,
 		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
@@ -68,34 +68,12 @@ void Texture2D::load(VulkanDevice* devices, const std::string& path) {
 	vkDestroyBuffer(devices->device, stagingBuffer, nullptr);
 
 	//image view creation
-	imageView = vktools::createImageView(devices->device, texture,
+	imageView = vktools::createImageView(devices->device, image,
 		VK_IMAGE_VIEW_TYPE_2D, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT);
 
-	VkSamplerCreateInfo samplerInfo{};
-	samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-	samplerInfo.minFilter = VK_FILTER_LINEAR;
-	samplerInfo.magFilter = VK_FILTER_LINEAR;
-	samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-	samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-	samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-	if (devices->availableFeatures.features.samplerAnisotropy == VK_TRUE) {
-		samplerInfo.anisotropyEnable = VK_TRUE;
-		samplerInfo.maxAnisotropy = devices->properties.limits.maxSamplerAnisotropy;
-	}
-	else {
-		samplerInfo.anisotropyEnable = VK_FALSE;
-		samplerInfo.maxAnisotropy = 1.f;
-	}
-	samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-	samplerInfo.unnormalizedCoordinates = VK_FALSE;
-	samplerInfo.compareEnable = VK_FALSE;
-	samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
-	samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-	samplerInfo.mipLodBias = 0.f;
-	samplerInfo.minLod = 0.f;
-	samplerInfo.maxLod = 0.f;
+	VkSamplerCreateInfo samplerInfo = vktools::initializers::samplerCreateInfo(
+		devices->availableFeatures, devices->properties);
 	VK_CHECK_RESULT(vkCreateSampler(devices->device, &samplerInfo, nullptr, &sampler));
-	
 }
 
 /*
@@ -108,6 +86,6 @@ void Texture2D::load(VulkanDevice* devices, const std::string& path) {
 void TextureBase::transitionImageLayout(VkFormat format,
 	VkImageLayout oldLayout, VkImageLayout newLayout) {
 	VkCommandBuffer commandBuffer = devices->beginOneTimeSubmitCommandBuffer();
-	vktools::setImageLayout(commandBuffer, texture, format, oldLayout, newLayout);
+	vktools::setImageLayout(commandBuffer, image, oldLayout, newLayout);
 	devices->endOneTimeSubmitCommandBuffer(commandBuffer);
 }

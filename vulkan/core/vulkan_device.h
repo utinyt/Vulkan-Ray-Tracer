@@ -18,8 +18,8 @@ struct VulkanDevice {
 	void copyBuffer(VkCommandPool commandPool, VkBuffer srcBuffer, VkBuffer dstBuffer,
 		VkDeviceSize size) const;
 	/** @brief create image & image memory */
-	void createImage(VkExtent3D extent, VkFormat format, VkImageTiling tiling,
-		VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory) const;
+	VkImage createImage(VkExtent3D extent, VkFormat format, VkImageTiling tiling,
+		VkImageUsageFlags usage, VkMemoryPropertyFlags properties);
 	/** @brief copy data to an image */
 	void copyBufferToImage(VkBuffer buffer, VkImage image, VkOffset3D offset, VkExtent3D extent) const;
 	/** @brief create & start one-time submit command buffer */

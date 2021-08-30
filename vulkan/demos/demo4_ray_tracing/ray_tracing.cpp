@@ -3,6 +3,8 @@
 #include "glm/glm.hpp"
 #include "glm/gtc/matrix_transform.hpp"
 #include "core/vulkan_mesh.h"
+#include "core/vulkan_descriptor_set_bindings.h"
+#include "core/vulkan_texture.h"
 
 class VulkanApp : public VulkanAppBase {
 public:
@@ -129,6 +131,26 @@ private:
 	AccelKHR tlas;
 	/** instance buffer for tlas */
 	VkBuffer instanceBuffer = VK_NULL_HANDLE;
+
+	/** descriptor set layout bindings */
+	DescriptorSetBindings rtDescriptorSetBindings;
+	/** descriptor set layout */
+	VkDescriptorSetLayout rtDescriptorSetLayout;
+	/** decriptor pool */
+	VkDescriptorPool rtDescriptorPool;
+	/** descriptor sets */
+	std::vector<VkDescriptorSet> rtDescriptorSets;
+
+	/** offscreen depth image */
+	Texture2D offscreenDepthBuffer;
+	/** offscreen depth format */
+	VkFormat offscreenDepthFormat{ VK_FORMAT_X8_D24_UNORM_PACK32 };
+	/** offscreen color image */
+	Texture2D offscreenColorBuffer;
+	/** offscreen color format */
+	VkFormat offscreenColorFormat{ VK_FORMAT_R32G32B32A32_SFLOAT };
+	/** offscreen renderpass */
+	VkRenderPass offscreenRenderPass = VK_NULL_HANDLE;
 
 	/** @brief build buffer - used to create vertex / index buffer */
 	/*
@@ -479,6 +501,83 @@ private:
 		vkDestroyBuffer(devices.device, stagingBuffer, nullptr);
 		devices.memoryAllocator.freeBufferMemory(scratchBuffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 		vkDestroyBuffer(devices.device, scratchBuffer, nullptr);
+	}
+
+	void createRtDescriptorSet() {
+		rtDescriptorSetBindings.addBinding(0,
+			VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,
+			1,
+			VK_SHADER_STAGE_RAYGEN_BIT_KHR); //tlas
+		rtDescriptorSetBindings.addBinding(1,
+			VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+			1,
+			VK_SHADER_STAGE_RAYGEN_BIT_KHR); //output image
+
+		//create rt descriptor pool & layout
+		uint32_t nbRtDescriptorSet = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+		rtDescriptorPool = rtDescriptorSetBindings.createDescriptorPool(devices.device, nbRtDescriptorSet);
+		rtDescriptorSetLayout = rtDescriptorSetBindings.createDescriptorSetLayout(devices.device);
+
+		//allocate rt descriptor sets
+		std::vector<VkDescriptorSetLayout> layout(nbRtDescriptorSet, rtDescriptorSetLayout);
+		VkDescriptorSetAllocateInfo descInfo{};
+		descInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+		descInfo.descriptorPool = rtDescriptorPool;
+		descInfo.descriptorSetCount = nbRtDescriptorSet;
+		descInfo.pSetLayouts = layout.data();
+		VK_CHECK_RESULT(vkAllocateDescriptorSets(devices.device, &descInfo, rtDescriptorSets.data()));
+
+	}
+
+	void createOffscreenRender() {
+		//create offscreen color buffer
+		VkImage offscreenColorImage = devices.createImage({ swapchain.extent.width,swapchain.extent.height, 1 },
+			offscreenColorFormat,
+			VK_IMAGE_TILING_OPTIMAL,
+			VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		VkImageView offscreenColorImageView = vktools::createImageView(devices.device, offscreenColorImage,
+			VK_IMAGE_VIEW_TYPE_2D, offscreenColorFormat, VK_IMAGE_ASPECT_COLOR_BIT);
+		VkSampler sampler;
+		VkSamplerCreateInfo samplerInfo = vktools::initializers::samplerCreateInfo(
+			devices.availableFeatures, devices.properties);
+		VK_CHECK_RESULT(vkCreateSampler(devices.device, &samplerInfo, nullptr, &sampler));
+
+		offscreenColorBuffer.init(offscreenColorImage, offscreenColorImageView, sampler);
+
+		//create offscreen depth buffer
+		VkImage offscreenDepthImage = devices.createImage({ swapchain.extent.width,swapchain.extent.height, 1 },
+			offscreenDepthFormat,
+			VK_IMAGE_TILING_OPTIMAL,
+			VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		VkImageView offscreenDepthImageView = vktools::createImageView(devices.device, offscreenDepthImage,
+			VK_IMAGE_VIEW_TYPE_2D, offscreenDepthFormat, VK_IMAGE_ASPECT_DEPTH_BIT);
+
+		offscreenDepthBuffer.init(offscreenDepthImage, offscreenDepthImageView);
+
+		//setting image layout
+		VkCommandBuffer cmdBuf = devices.beginOneTimeSubmitCommandBuffer();
+		vktools::setImageLayout(cmdBuf, offscreenColorBuffer.image,
+			VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+		vktools::setImageLayout(cmdBuf, offscreenDepthBuffer.image,
+			VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT);
+		devices.endOneTimeSubmitCommandBuffer(cmdBuf);
+
+		//create renderpass for the offscreen
+		if (!offscreenRenderPass) {
+			offscreenRenderPass = vktools::createRenderPass(devices.device,
+				{ offscreenColorFormat },
+				offscreenDepthFormat,
+				1,
+				true,
+				true,
+				VK_IMAGE_LAYOUT_GENERAL,
+				VK_IMAGE_LAYOUT_GENERAL);
+		}
+
+		//create framebuffers for the offscreen
+
 	}
 };
 

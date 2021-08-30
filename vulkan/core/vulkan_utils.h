@@ -82,7 +82,7 @@ namespace vktools {
 	VkShaderModule createShaderModule(VkDevice device, const std::vector<char>& code);
 	/** @brief transit image layout */
 	void setImageLayout(VkCommandBuffer commandBuffer, VkImage image,
-		VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
+		VkImageLayout oldLayout, VkImageLayout newLayout, VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT);
 	/** @brief create & return image view */
 	VkImageView createImageView(VkDevice device, VkImage image, VkImageViewType viewType,
 		VkFormat format, VkImageAspectFlags aspectFlags);
@@ -93,8 +93,23 @@ namespace vktools {
 	bool hasStencilComponent(VkFormat format);
 	/** @brief get buffer address */
 	VkDeviceAddress getBufferDeviceAddress(VkDevice device, VkBuffer buffer);
-	/** convert glm mat4 to VkTransformMatrixKHR */
+	/** @brief convert glm mat4 to VkTransformMatrixKHR */
 	VkTransformMatrixKHR toTransformMatrixKHR(const glm::mat4& mat);
+	/** @brief create renderpass */
+	VkRenderPass createRenderPass(VkDevice device,
+		const std::vector<VkFormat>& colorAttachmentFormats,
+		VkFormat depthAttachmentFormat,
+		uint32_t subpassCount = 1,
+		bool clearColor = true,
+		bool clearDepth = true,
+		VkImageLayout initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+		VkImageLayout finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+		VkPipelineStageFlags stageFlags = 
+			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
+			VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+		VkAccessFlags dstAccessMask = 
+			VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | 
+			VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
 
 	namespace initializers {
 		inline VkBufferCreateInfo bufferCreateInfo(VkDeviceSize size,
@@ -130,6 +145,38 @@ namespace vktools {
 			info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 			info.samples = VK_SAMPLE_COUNT_1_BIT;
 			return info;
+		}
+
+		inline VkSamplerCreateInfo samplerCreateInfo(
+			VkPhysicalDeviceFeatures2 availableFeatures,
+			VkPhysicalDeviceProperties properties,
+			VkFilter filter = VK_FILTER_LINEAR,
+			VkSamplerAddressMode mode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE) {
+
+			VkSamplerCreateInfo samplerInfo{};
+			samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+			samplerInfo.minFilter = filter;
+			samplerInfo.magFilter = filter;
+			samplerInfo.addressModeU = mode;
+			samplerInfo.addressModeV = mode;
+			samplerInfo.addressModeW = mode;
+			if (availableFeatures.features.samplerAnisotropy == VK_TRUE) {
+				samplerInfo.anisotropyEnable = VK_TRUE;
+				samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
+			}
+			else {
+				samplerInfo.anisotropyEnable = VK_FALSE;
+				samplerInfo.maxAnisotropy = 1.f;
+			}
+			samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+			samplerInfo.unnormalizedCoordinates = VK_FALSE;
+			samplerInfo.compareEnable = VK_FALSE;
+			samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+			samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+			samplerInfo.mipLodBias = 0.f;
+			samplerInfo.minLod = 0.f;
+			samplerInfo.maxLod = 0.f;
+			return samplerInfo;
 		}
 	}
 }

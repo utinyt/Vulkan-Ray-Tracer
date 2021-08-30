@@ -11,7 +11,7 @@ namespace vkfp{
 	PFN_vkCmdCopyAccelerationStructureKHR vkCmdCopyAccelerationStructureKHRProxy;
 	PFN_vkDestroyAccelerationStructureKHR vkDestroyAccelerationStructureKHRProxy;
 	PFN_vkGetAccelerationStructureDeviceAddressKHR vkGetAccelerationStructureDeviceAddressKHRProxy;
-
+	
 	VkResult vkCreateAccelerationStructureKHR(VkDevice device,
 		const VkAccelerationStructureCreateInfoKHR* pCreateInfo,
 		const VkAllocationCallbacks* pAllocator,
@@ -124,12 +124,12 @@ namespace vktools {
 	*
 	* @param commandBuffer - command buffer to record
 	* @param image - image to transit layout
-	* @param format
 	* @param oldLayout
 	* @param newLayout
+	* @param aspect
 	*/
 	void setImageLayout(VkCommandBuffer commandBuffer, VkImage image,
-		VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout) {
+		VkImageLayout oldLayout, VkImageLayout newLayout, VkImageAspectFlags aspect) {
 		VkImageMemoryBarrier imageBarrier{};
 		imageBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
 		imageBarrier.oldLayout = oldLayout;
@@ -137,7 +137,7 @@ namespace vktools {
 		imageBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 		imageBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 		imageBarrier.image = image;
-		imageBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		imageBarrier.subresourceRange.aspectMask = aspect;
 		imageBarrier.subresourceRange.baseMipLevel = 0;
 		imageBarrier.subresourceRange.levelCount = 1;
 		imageBarrier.subresourceRange.baseArrayLayer = 0;
@@ -145,7 +145,7 @@ namespace vktools {
 
 		VkPipelineStageFlags srcStage;
 		VkPipelineStageFlags dstStage;
-
+		
 		if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED &&
 			newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
 			imageBarrier.srcAccessMask = 0;
@@ -159,6 +159,20 @@ namespace vktools {
 			imageBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 			srcStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
 			dstStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+		}
+		else if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED &&
+			newLayout == VK_IMAGE_LAYOUT_GENERAL) {
+			imageBarrier.srcAccessMask = 0;
+			imageBarrier.dstAccessMask = 0;
+			srcStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+			dstStage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+		}
+		else if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED &&
+			newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) {
+			imageBarrier.srcAccessMask = 0;
+			imageBarrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+			srcStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+			dstStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
 		}
 		else {
 			std::invalid_argument("VulkanTextureBase::setImageLayout(): unsupported layout transition");
@@ -263,5 +277,110 @@ namespace vktools {
 		VkTransformMatrixKHR vkMat; //row major
 		memcpy(&vkMat, &transposed, sizeof(VkTransformMatrixKHR));
 		return vkMat;
+	}
+
+	/*
+	* create render pass
+	* 
+	* @param device - logical device handle
+	* @param colorAttachmentFormats
+	* @param depthAttachmentFormat
+	* @param subpassCount
+	* @param clearColor
+	* @param depthColor
+	* @param initialLayout
+	* @param finalLayout
+	*/
+	VkRenderPass createRenderPass(VkDevice	device,
+		const std::vector<VkFormat>&		colorAttachmentFormats, 
+		VkFormat							depthAttachmentFormat,
+		uint32_t							subpassCount, 
+		bool								clearColor, 
+		bool								clearDepth, 
+		VkImageLayout						initialLayout, 
+		VkImageLayout						finalLayout,
+		VkPipelineStageFlags				stageFlags,
+		VkAccessFlags						dstAccessMask) {
+		std::vector<VkAttachmentDescription> allAttachments;
+		std::vector<VkAttachmentReference> colorAttachmentsRef;
+		bool hasDepth = (depthAttachmentFormat != VK_FORMAT_UNDEFINED);
+
+		//color attachments
+		for (const auto& format : colorAttachmentFormats) {
+			VkAttachmentDescription colorAttachment{};
+			colorAttachment.format			= format;
+			colorAttachment.samples			= VK_SAMPLE_COUNT_1_BIT;
+			colorAttachment.loadOp			= clearColor ?
+												VK_ATTACHMENT_LOAD_OP_CLEAR : (initialLayout == VK_IMAGE_LAYOUT_UNDEFINED ?
+													VK_ATTACHMENT_LOAD_OP_DONT_CARE : VK_ATTACHMENT_LOAD_OP_LOAD);
+			colorAttachment.storeOp			= VK_ATTACHMENT_STORE_OP_STORE;
+			colorAttachment.stencilLoadOp	= VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+			colorAttachment.stencilStoreOp	= VK_ATTACHMENT_STORE_OP_DONT_CARE;
+			colorAttachment.initialLayout	= initialLayout;
+			colorAttachment.finalLayout		= finalLayout;
+
+			VkAttachmentReference colorAttachmentRef{};
+			colorAttachmentRef.attachment	= static_cast<uint32_t>(allAttachments.size());
+			colorAttachmentRef.layout		= VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+			allAttachments.push_back(colorAttachment);
+			colorAttachmentsRef.push_back(colorAttachmentRef);
+		}
+
+		//depth attachment
+		VkAttachmentReference depthAttachmentRef{};
+		if (hasDepth) {
+			VkAttachmentDescription depthAttachment{};
+			depthAttachment.format			= depthAttachmentFormat;
+			depthAttachment.samples			= VK_SAMPLE_COUNT_1_BIT;
+			depthAttachment.loadOp			= clearDepth ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
+			depthAttachment.storeOp			= VK_ATTACHMENT_STORE_OP_STORE;
+			depthAttachment.stencilLoadOp	= VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+			depthAttachment.stencilStoreOp	= VK_ATTACHMENT_STORE_OP_DONT_CARE;
+			depthAttachment.initialLayout	= VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+			depthAttachment.finalLayout		= VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+			depthAttachmentRef.attachment	= static_cast<uint32_t>(allAttachments.size());
+			depthAttachmentRef.layout		= VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+			 
+			allAttachments.push_back(depthAttachment);
+		}
+
+		//subpass dependency
+		std::vector<VkSubpassDescription> subpasses;
+		std::vector<VkSubpassDependency> subpassDependencies;
+
+		for (uint32_t i = 0; i < subpassCount; ++i) {
+			VkSubpassDescription subpass{};
+			subpass.pipelineBindPoint		= VK_PIPELINE_BIND_POINT_GRAPHICS;
+			subpass.colorAttachmentCount	= static_cast<uint32_t>(colorAttachmentsRef.size());
+			subpass.pColorAttachments		= colorAttachmentsRef.data();
+			subpass.pDepthStencilAttachment = hasDepth ? &depthAttachmentRef : VK_NULL_HANDLE;
+
+			VkSubpassDependency dependency{};
+			dependency.srcSubpass			= i == 0 ? VK_SUBPASS_EXTERNAL : (i - 1);
+			dependency.dstSubpass			= i;
+			dependency.srcStageMask			= stageFlags;
+			dependency.dstStageMask			= stageFlags;
+			dependency.srcAccessMask		= 0;
+			dependency.dstAccessMask		= dstAccessMask;
+
+			subpasses.push_back(subpass);
+			subpassDependencies.push_back(dependency);
+		}
+
+		//create renderpass
+		VkRenderPassCreateInfo renderPassInfo{};
+		renderPassInfo.sType				= VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+		renderPassInfo.attachmentCount		= static_cast<uint32_t>(allAttachments.size());
+		renderPassInfo.pAttachments			= allAttachments.data();
+		renderPassInfo.subpassCount			= static_cast<uint32_t>(subpasses.size());
+		renderPassInfo.pSubpasses			= subpasses.data();
+		renderPassInfo.dependencyCount		= static_cast<uint32_t>(subpassDependencies.size());
+		renderPassInfo.pDependencies		= subpassDependencies.data();
+
+		VkRenderPass renderPass = VK_NULL_HANDLE;
+		VK_CHECK_RESULT(vkCreateRenderPass(device, &renderPassInfo, nullptr, &renderPass));
+		return renderPass;
 	}
 }
