@@ -215,6 +215,21 @@ private:
 	/** offscreen framebuffers */
 	std::vector<VkFramebuffer> offscreenFramebuffers;
 
+	//ray trace pipeline
+	/** ray trace shader groups */
+	std::vector<VkRayTracingShaderGroupCreateInfoKHR> rtShaderGroups;
+	/** ray trace pipeline layout */
+	VkPipelineLayout rtPipelineLayout = VK_NULL_HANDLE;
+	/** ray trace pipeline */
+	VkPipeline rtPipeline = VK_NULL_HANDLE;
+
+	struct RtPushConstant {
+		glm::vec4 clearColor;
+		glm::vec3 lightPos;
+		float lightIntensity = 100.f;
+		int lightType = 0;
+	};
+
 	/** @brief build buffer - used to create vertex / index buffer */
 	/*
 	* build buffer - used to create vertex / index buffer
@@ -727,6 +742,32 @@ private:
 			VK_IMAGE_LAYOUT_GENERAL };
 		VkWriteDescriptorSet wds = rtDescriptorSetBindings.makeWrite(rtDescriptorSets[currentFrame], 1, &imageInfo);
 		vkUpdateDescriptorSets(devices.device, 1, &wds, 0, nullptr);
+	}
+
+	void createRtPipeline() {
+		enum StageIndices {
+			STAGE_RAYGEN,
+			STAGE_MISS,
+			STAGE_CLOSEST_HIT,
+			SHADER_GROUP_COUNT
+		};
+
+		std::array<VkPipelineShaderStageCreateInfo, SHADER_GROUP_COUNT> stages{};
+		VkPipelineShaderStageCreateInfo stage{};
+		stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+		stage.pName = "main";
+		//raygen
+		stage.module = vktools::createShaderModule(devices.device, vktools::readFile("shaders/raytrace_rgen.spv"));
+		stage.stage = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
+		stages[STAGE_RAYGEN] = stage;
+		//miss
+		stage.module = vktools::createShaderModule(devices.device, vktools::readFile("shaders/raytrace_rmiss.spv"));
+		stage.stage = VK_SHADER_STAGE_MISS_BIT_KHR;
+		stages[STAGE_MISS] = stage;
+		//closest hit
+		stage.module = vktools::createShaderModule(devices.device, vktools::readFile("shaders/raytrace_rchit.spv"));
+		stage.stage = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
+		stages[STAGE_CLOSEST_HIT] = stage;
 	}
 };
 
