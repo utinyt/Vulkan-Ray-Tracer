@@ -42,7 +42,7 @@ void Texture2D::load(VulkanDevice* devices, const std::string& path) {
 	VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 	MemoryAllocator::HostVisibleMemory hostVisibleMemory = devices->memoryAllocator.allocateBufferMemory(
 		stagingBuffer, properties);
-	hostVisibleMemory.MapData(devices->device, pixels);
+	hostVisibleMemory.mapData(devices->device, pixels);
 	stbi_image_free(pixels);
 
 	//image creation

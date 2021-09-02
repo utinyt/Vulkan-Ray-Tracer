@@ -29,6 +29,16 @@
 }
 
 /*
+* aligning function
+* 
+* @param x - integer to align
+* @param a - alignment
+*/
+inline uint32_t alignUp(uint32_t x, size_t a) {
+	return static_cast<uint32_t>((x + (a - 1)) & ~(a - 1));
+}
+
+/*
 * proxy functions (extension)
 */
 namespace vkfp {
@@ -71,6 +81,23 @@ namespace vkfp {
 	VkDeviceAddress vkGetAccelerationStructureDeviceAddressKHR(
 		VkDevice                                    device,
 		const VkAccelerationStructureDeviceAddressInfoKHR* pInfo);
+
+	VkResult vkCreateRayTracingPipelinesKHR(
+		VkDevice                                    device,
+		VkDeferredOperationKHR                      deferredOperation,
+		VkPipelineCache                             pipelineCache,
+		uint32_t                                    createInfoCount,
+		const VkRayTracingPipelineCreateInfoKHR* pCreateInfos,
+		const VkAllocationCallbacks* pAllocator,
+		VkPipeline* pPipelines);
+
+	VkResult vkGetRayTracingShaderGroupHandlesKHR(
+		VkDevice                                    device,
+		VkPipeline                                  pipeline,
+		uint32_t                                    firstGroup,
+		uint32_t                                    groupCount,
+		size_t                                      dataSize,
+		void* pData);
 
 	void init(VkInstance instance);
 }

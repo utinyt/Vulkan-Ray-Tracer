@@ -436,9 +436,27 @@ void MemoryAllocator::MemoryChunk::addImageMemoryBlock(VkDevice device, VkImage 
 * @param device - logical device  handle needed for vkMapMemory
 * @param bufferData - data to be copied
 */
-void MemoryAllocator::HostVisibleMemory::MapData(VkDevice device, const void* bufferData) {
+void MemoryAllocator::HostVisibleMemory::mapData(VkDevice device, const void* bufferData) {
 	void* data;
 	vkMapMemory(device, memory, offset, size, 0, &data);
 	memcpy(data, bufferData, (size_t)size);
+	vkUnmapMemory(device, memory);
+}
+
+/*
+* return data pointer
+* 
+* @return void* - data pointer
+*/
+void* MemoryAllocator::HostVisibleMemory::getHandle(VkDevice device) {
+	void* data;
+	vkMapMemory(device, memory, offset, size, 0, &data);
+	return data;
+}
+
+/*
+* unmap memory - vkUnmapMemory
+*/
+void MemoryAllocator::HostVisibleMemory::unmap(VkDevice device) {
 	vkUnmapMemory(device, memory);
 }

@@ -22,6 +22,12 @@ public:
 	* destructor - destroy vulkan objects created in this level
 	*/
 	~VulkanApp() {
+		devices.memoryAllocator.freeBufferMemory(rtSBTBuffer,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+		vkDestroyBuffer(devices.device, rtSBTBuffer, nullptr);
+		vkDestroyPipeline(devices.device, rtPipeline, nullptr);
+		vkDestroyPipelineLayout(devices.device, rtPipelineLayout, nullptr);
+
 		//BLAS
 		for (auto& as : blas) {
 			vkfp::vkDestroyAccelerationStructureKHR(devices.device, as.accel, nullptr);
@@ -70,13 +76,11 @@ public:
 	*/
 	virtual void initApp() override {
 		VulkanAppBase::initApp();
-		////request ray tracing properties
-		//VkPhysicalDeviceRayTracingPipelinePropertiesKHR rtProperties{ 
-		//	VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR };
-		//VkPhysicalDeviceProperties2 properties2{};
-		//properties2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
-		//properties2.pNext = &rtProperties;
-		//vkGetPhysicalDeviceProperties2(devices.physicalDevice, &properties2);
+		//request ray tracing properties
+		VkPhysicalDeviceProperties2 properties2{};
+		properties2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+		properties2.pNext = &rtProperties;
+		vkGetPhysicalDeviceProperties2(devices.physicalDevice, &properties2);
 
 		//load bunny mesh
 		mesh.load("../../meshes/bunny.obj");
@@ -122,6 +126,9 @@ public:
 		for (size_t i = 0; i < static_cast<int>(MAX_FRAMES_IN_FLIGHT); ++i) {
 			updateRtDescriptorSet(i);
 		}
+
+		createRtPipeline();
+		createRtShaderBindingTable();
 	}
 
 	/*
@@ -168,6 +175,10 @@ private:
 		VkAccelerationStructureBuildSizesInfoKHR buildSizesInfo{ VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR };
 		AccelKHR as{};
 	};
+
+	/** rt properties */
+	VkPhysicalDeviceRayTracingPipelinePropertiesKHR rtProperties{
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR };
 
 	/** vertex & index buffer */
 	VkBuffer vertexBuffer = VK_NULL_HANDLE, indexBuffer = VK_NULL_HANDLE;
@@ -222,6 +233,8 @@ private:
 	VkPipelineLayout rtPipelineLayout = VK_NULL_HANDLE;
 	/** ray trace pipeline */
 	VkPipeline rtPipeline = VK_NULL_HANDLE;
+	/** shader binding table buffer */
+	VkBuffer rtSBTBuffer = VK_NULL_HANDLE;
 
 	struct RtPushConstant {
 		glm::vec4 clearColor;
@@ -253,7 +266,7 @@ private:
 		MemoryAllocator::HostVisibleMemory hostVisibleMemory = devices.memoryAllocator.allocateBufferMemory(
 			stagingBuffer, properties);
 
-		hostVisibleMemory.MapData(devices.device, bufferData);
+		hostVisibleMemory.mapData(devices.device, bufferData);
 
 		//create vertex & index buffer
 		VkBufferCreateInfo bufferCreateInfo = vktools::initializers::bufferCreateInfo(
@@ -489,7 +502,7 @@ private:
 		MemoryAllocator::HostVisibleMemory hostVisibleMemory = devices.memoryAllocator.allocateBufferMemory(
 			stagingBuffer, properties);
 
-		hostVisibleMemory.MapData(devices.device, instances.data());
+		hostVisibleMemory.mapData(devices.device, instances.data());
 
 		//create vertex & index buffer
 		VkBufferCreateInfo bufferCreateInfo = vktools::initializers::bufferCreateInfo(
@@ -768,6 +781,109 @@ private:
 		stage.module = vktools::createShaderModule(devices.device, vktools::readFile("shaders/raytrace_rchit.spv"));
 		stage.stage = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
 		stages[STAGE_CLOSEST_HIT] = stage;
+
+		//shader groups
+		VkRayTracingShaderGroupCreateInfoKHR group{};
+		group.sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
+		group.anyHitShader			= VK_SHADER_UNUSED_KHR;
+		group.closestHitShader		= VK_SHADER_UNUSED_KHR;
+		group.generalShader			= VK_SHADER_UNUSED_KHR;
+		group.intersectionShader	= VK_SHADER_UNUSED_KHR;
+
+		//raygen
+		group.type					= VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
+		group.generalShader = STAGE_RAYGEN;
+		rtShaderGroups.push_back(group);
+
+		//miss
+		group.type					= VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
+		group.generalShader = STAGE_MISS;
+		rtShaderGroups.push_back(group);
+
+		//closest hit
+		group.type					= VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR;
+		group.generalShader			= VK_SHADER_UNUSED_KHR;
+		group.closestHitShader		= STAGE_CLOSEST_HIT;
+		rtShaderGroups.push_back(group);
+
+		//push constant
+		VkPushConstantRange pushConstant{};
+		pushConstant.stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR | 
+			VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | 
+			VK_SHADER_STAGE_MISS_BIT_KHR;
+		pushConstant.offset = 0;
+		pushConstant.size = sizeof(RtPushConstant);
+
+		//pipeline layout
+		VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo{};
+		pipelineLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+		pipelineLayoutCreateInfo.pushConstantRangeCount = 1;
+		pipelineLayoutCreateInfo.pPushConstantRanges = &pushConstant;
+
+		//descriptor sets: one specific to ray tracing, and one shadred with the rasterization pipeline
+		std::vector<VkDescriptorSetLayout> rtDescSetLayouts = { rtDescriptorSetLayout, descriptorSetLayout };
+		pipelineLayoutCreateInfo.setLayoutCount = static_cast<uint32_t>(rtDescSetLayouts.size());
+		pipelineLayoutCreateInfo.pSetLayouts = rtDescSetLayouts.data();
+
+		VK_CHECK_RESULT(vkCreatePipelineLayout(devices.device, &pipelineLayoutCreateInfo, nullptr, &rtPipelineLayout));
+
+		//assemble the shader stages and recursion depth info into the ray tracing pipeline
+		VkRayTracingPipelineCreateInfoKHR rayPipelineInfo{};
+		rayPipelineInfo.sType = VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR;
+		rayPipelineInfo.stageCount = static_cast<uint32_t>(stages.size()); //shaders
+		rayPipelineInfo.pStages = stages.data();
+		// rtShaderGroups.size() == 3, 1 raygen group, 1 miss shader group, 1 hit group
+		rayPipelineInfo.groupCount = static_cast<uint32_t>(rtShaderGroups.size());
+		rayPipelineInfo.pGroups = rtShaderGroups.data();
+
+		rayPipelineInfo.maxPipelineRayRecursionDepth = 1; //ray depth
+		rayPipelineInfo.layout = rtPipelineLayout;
+
+		VK_CHECK_RESULT(vkfp::vkCreateRayTracingPipelinesKHR(devices.device, {}, {}, 1, & rayPipelineInfo, nullptr, & rtPipeline));
+
+		for (auto& s : stages) {
+			vkDestroyShaderModule(devices.device, s.module, nullptr);
+		}
+	}
+
+	/*
+	* shader binding table (SBT)
+	* 
+	* gets all shader handles and write them in a SBT buffer
+	*/
+	void createRtShaderBindingTable() {
+		uint32_t groupCount = static_cast<uint32_t>(rtShaderGroups.size()); // 3 shaders: raygen, miss, chit
+		uint32_t groupHandleSize = rtProperties.shaderGroupHandleSize;
+		//compute the actual size needed per SBT entry (round up to alignment needed)
+		uint32_t groupSizeAligned = alignUp(groupHandleSize, static_cast<size_t>(rtProperties.shaderGroupBaseAlignment));
+		//bytes needed for the SBT
+		uint32_t sbtSize = groupCount * groupSizeAligned;
+
+		//fetch all the shader handles used in the pipeline
+		std::vector<uint8_t> shaderHandleStorage(sbtSize);
+		VK_CHECK_RESULT(vkfp::vkGetRayTracingShaderGroupHandlesKHR(devices.device, rtPipeline, 0, groupCount,
+			sbtSize, shaderHandleStorage.data()));
+		
+		//allocate a buffer for storing the SBT
+		VkBufferCreateInfo bufferInfo = vktools::initializers::bufferCreateInfo(sbtSize,
+			VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR |
+			VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+			VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
+		VK_CHECK_RESULT(vkCreateBuffer(devices.device, &bufferInfo, nullptr, &rtSBTBuffer));
+		
+		//allocate memory
+		MemoryAllocator::HostVisibleMemory memory = devices.memoryAllocator.allocateBufferMemory(rtSBTBuffer,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+		//map data
+		uint8_t* pData = reinterpret_cast<uint8_t*>(memory.getHandle(devices.device));
+		for (uint32_t g = 0; g < groupCount; ++g) {
+			memcpy(pData, shaderHandleStorage.data() + g * groupHandleSize, groupHandleSize);
+			pData += groupSizeAligned;
+		}
+		memory.unmap(devices.device);
+
+
 	}
 };
 

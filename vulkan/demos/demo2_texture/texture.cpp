@@ -376,7 +376,7 @@ private:
 			stagingBuffer, properties);
 
 		//data mapping
-		hostVisibleMemory.MapData(devices.device, bufferData);
+		hostVisibleMemory.mapData(devices.device, bufferData);
 
 		//create vertex & index buffer
 		VkBufferCreateInfo bufferCreateInfo = vktools::initializers::bufferCreateInfo(
@@ -512,7 +512,7 @@ private:
 			swapchain.extent.width / (float)swapchain.extent.height, 0.1f, 10.f);
 		ubo.proj[1][1] *= -1;
 
-		uniformBufferMemories[currentFrame].MapData(devices.device, &ubo);
+		uniformBufferMemories[currentFrame].mapData(devices.device, &ubo);
 	}
 
 	/*

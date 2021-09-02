@@ -11,9 +11,17 @@ public:
 	struct HostVisibleMemory {
 	public:
 		/** @brief memcpy bufferData to device memory */
-		void MapData(VkDevice device, const void* bufferData);
+		void mapData(VkDevice device, const void* bufferData);
+		/** @brief return data pointer */
+		void* getHandle(VkDevice device);
+		/** @brief vkUnmapMemory */
+		void unmap(VkDevice device);
+
+		/** device memory handle */
 		VkDeviceMemory memory = VK_NULL_HANDLE;
+		/** size of memory block */
 		VkDeviceSize size = 0;
+		/** offset where this memory block begins */
 		VkDeviceSize offset = 0;
 	};
 

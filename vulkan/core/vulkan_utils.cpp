@@ -11,7 +11,9 @@ namespace vkfp{
 	PFN_vkCmdCopyAccelerationStructureKHR vkCmdCopyAccelerationStructureKHRProxy;
 	PFN_vkDestroyAccelerationStructureKHR vkDestroyAccelerationStructureKHRProxy;
 	PFN_vkGetAccelerationStructureDeviceAddressKHR vkGetAccelerationStructureDeviceAddressKHRProxy;
-	
+	PFN_vkCreateRayTracingPipelinesKHR vkCreateRayTracingPipelinesKHRProxy;
+	PFN_vkGetRayTracingShaderGroupHandlesKHR vkGetRayTracingShaderGroupHandlesKHRProxy;
+
 	VkResult vkCreateAccelerationStructureKHR(VkDevice device,
 		const VkAccelerationStructureCreateInfoKHR* pCreateInfo,
 		const VkAllocationCallbacks* pAllocator,
@@ -58,6 +60,20 @@ namespace vkfp{
 		return vkGetAccelerationStructureDeviceAddressKHRProxy(device, pInfo);
 	}
 
+	VkResult vkCreateRayTracingPipelinesKHR(VkDevice device, VkDeferredOperationKHR deferredOperation,
+		VkPipelineCache pipelineCache, uint32_t createInfoCount,
+		const VkRayTracingPipelineCreateInfoKHR* pCreateInfos, 
+		const VkAllocationCallbacks* pAllocator, VkPipeline* pPipelines) {
+		return vkCreateRayTracingPipelinesKHRProxy(device, deferredOperation, pipelineCache,
+			createInfoCount, pCreateInfos, pAllocator, pPipelines);
+	}
+
+	VkResult vkGetRayTracingShaderGroupHandlesKHR(VkDevice device, VkPipeline pipeline,
+		uint32_t firstGroup, uint32_t groupCount, size_t dataSize, void* pData) {
+		return vkGetRayTracingShaderGroupHandlesKHRProxy(device, pipeline, firstGroup,
+			groupCount, dataSize, pData);
+	}
+
 	/*
 	* get function pointers
 	*/
@@ -76,6 +92,10 @@ namespace vkfp{
 			instance, "vkDestroyAccelerationStructureKHR");
 		vkGetAccelerationStructureDeviceAddressKHRProxy = (PFN_vkGetAccelerationStructureDeviceAddressKHR)vkGetInstanceProcAddr(
 			instance, "vkGetAccelerationStructureDeviceAddressKHR");
+		vkCreateRayTracingPipelinesKHRProxy = (PFN_vkCreateRayTracingPipelinesKHR)vkGetInstanceProcAddr(
+			instance, "vkCreateRayTracingPipelinesKHR");
+		vkGetRayTracingShaderGroupHandlesKHRProxy = (PFN_vkGetRayTracingShaderGroupHandlesKHR)vkGetInstanceProcAddr(
+			instance, "vkGetRayTracingShaderGroupHandlesKHR");
 	}
 }
 
