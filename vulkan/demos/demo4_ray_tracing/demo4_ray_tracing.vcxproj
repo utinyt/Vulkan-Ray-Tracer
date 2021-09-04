@@ -88,6 +88,7 @@
     <None Include="shaders\raytrace.rchit" />
     <None Include="shaders\raytrace.rgen" />
     <None Include="shaders\raytrace.rmiss" />
+    <None Include="shaders\ray_common.glsl" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -65,7 +65,7 @@ VkWriteDescriptorSet DescriptorSetBindings::makeWrite(VkDescriptorSet dstSet, ui
 }
 
 /*
-* create make write structure - VkAccelerationStructureKHR
+* create make write structure - VkDescriptorImageInfo
 *
 * @param dstSet - target descriptor set
 * @param dstBinding
@@ -86,6 +86,24 @@ VkWriteDescriptorSet DescriptorSetBindings::makeWrite(VkDescriptorSet dstSet, ui
 		throw std::runtime_error("DescriptorSetBindings::makeWrite(): descriptor type doesn't match");
 	}
 	writeSet.pImageInfo = pImageInfo;
+	return writeSet;
+}
+
+/*
+* create make write structure - VkDescriptorBufferInfo
+*
+* @param dstSet - target descriptor set
+* @param dstBinding
+* @param pBufferInfo
+* @param arrayElement
+*
+* @return VkWriteDescriptorSet
+*
+*/
+VkWriteDescriptorSet DescriptorSetBindings::makeWrite(VkDescriptorSet dstSet, uint32_t dstBinding,
+	const VkDescriptorBufferInfo* pBufferInfo, uint32_t arrayElement) {
+	VkWriteDescriptorSet writeSet = makeWrite(dstSet, dstBinding, arrayElement);
+	writeSet.pBufferInfo = pBufferInfo;
 	return writeSet;
 }
 

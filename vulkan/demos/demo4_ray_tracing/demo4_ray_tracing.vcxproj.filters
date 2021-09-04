@@ -38,5 +38,8 @@
     <None Include="shaders\raytrace.rmiss">
       <Filter>Source Files\shaders</Filter>
     </None>
+    <None Include="shaders\ray_common.glsl">
+      <Filter>Source Files\shaders</Filter>
+    </None>
   </ItemGroup>
 </Project>

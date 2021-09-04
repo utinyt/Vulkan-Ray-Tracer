@@ -27,6 +27,9 @@ public:
 	/** @brief create make write structure - VkDescriptorImageInfo */
 	VkWriteDescriptorSet makeWrite(VkDescriptorSet dstSet, uint32_t dstBinding,
 		const VkDescriptorImageInfo* pImageInfo, uint32_t arrayElement = 0);
+	/** @brief create make write structure - VkDescriptorBufferInfo */
+	VkWriteDescriptorSet makeWrite(VkDescriptorSet dstSet, uint32_t dstBinding,
+		const VkDescriptorBufferInfo* pBufferInfo, uint32_t arrayElement = 0);
 
 private:
 	/** @brief return descriptor pool sizes built from added bindings */

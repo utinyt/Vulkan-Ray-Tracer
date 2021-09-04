@@ -99,6 +99,16 @@ namespace vkfp {
 		size_t                                      dataSize,
 		void* pData);
 
+	void vkCmdTraceRaysKHR(
+		VkCommandBuffer                             commandBuffer,
+		const VkStridedDeviceAddressRegionKHR* pRaygenShaderBindingTable,
+		const VkStridedDeviceAddressRegionKHR* pMissShaderBindingTable,
+		const VkStridedDeviceAddressRegionKHR* pHitShaderBindingTable,
+		const VkStridedDeviceAddressRegionKHR* pCallableShaderBindingTable,
+		uint32_t                                    width,
+		uint32_t                                    height,
+		uint32_t                                    depth);
+
 	void init(VkInstance instance);
 }
 
@@ -140,6 +150,8 @@ namespace vktools {
 	/** @brief allocate descriptor sets */
 	std::vector<VkDescriptorSet> allocateDescriptorSets(VkDevice device, VkDescriptorSetLayout layout,
 		VkDescriptorPool pool, uint32_t nbDescriptors);
+	/** @brief set dynamic state (viewport & scissor) */
+	void setViewportScissorDynamicStates(VkCommandBuffer cmdBuf, VkExtent2D extent);
 
 	namespace initializers {
 		inline VkBufferCreateInfo bufferCreateInfo(VkDeviceSize size,

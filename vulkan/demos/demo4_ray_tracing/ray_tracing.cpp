@@ -53,6 +53,11 @@ public:
 		devices.memoryAllocator.freeBufferMemory(indexBuffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 		vkDestroyBuffer(devices.device, indexBuffer, nullptr);
 
+		//swapchain framebuffers
+		for (auto& framebuffer : framebuffers) {
+			vkDestroyFramebuffer(devices.device, framebuffer, nullptr);
+		}
+
 		//offscreen framebuffer
 		for (auto& framebuffer : offscreenFramebuffers) {
 			vkDestroyFramebuffer(devices.device, framebuffer, nullptr);
@@ -74,6 +79,13 @@ public:
 		vkDestroyDescriptorSetLayout(devices.device, rtDescriptorSetLayout, nullptr);
 		vkDestroyDescriptorPool(devices.device, postDescriptorPool, nullptr);
 		vkDestroyDescriptorSetLayout(devices.device, postDescriptorSetLayout, nullptr);
+
+		//uniform buffers
+		for (auto& uniformBuffer : uniformBuffers) {
+			devices.memoryAllocator.freeBufferMemory(uniformBuffer,
+				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+			vkDestroyBuffer(devices.device, uniformBuffer, nullptr);
+		}
 	}
 
 	/*
@@ -81,6 +93,19 @@ public:
 	*/
 	virtual void initApp() override {
 		VulkanAppBase::initApp();
+
+		glm::vec3 camPos = glm::vec3(0, 0, 3);
+		glm::vec3 camFront = glm::vec3(0, 0, -1);
+		glm::vec3 camUp = glm::vec3(0, 1, 0);
+
+		//camera
+		camera.view = glm::lookAt(camPos, camPos + camFront, camUp);
+		camera.viewInverse = glm::inverse(camera.view);
+		camera.proj = glm::perspective(glm::radians(45.f),
+			static_cast<float>(swapchain.extent.width / swapchain.extent.height), 0.1f, 100.f);
+		camera.proj[1][1] *= -1;
+		camera.projInverse = glm::inverse(camera.proj);
+
 		//request ray tracing properties
 		VkPhysicalDeviceProperties2 properties2{};
 		properties2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
@@ -124,6 +149,12 @@ public:
 		}
 		buildTlas(tlas, VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR);
 
+		//uniform buffers
+		createUniformbuffer();
+		for (size_t i = 0; i < static_cast<int>(MAX_FRAMES_IN_FLIGHT); ++i) {
+			UpdateUniformBuffer(i);
+		}
+
 		createOffscreenRender();
 		createRtDescriptorSet();
 		createDescriptorSet();
@@ -142,27 +173,130 @@ public:
 		postRenderPass = vktools::createRenderPass(devices.device,
 			{ swapchain.surfaceFormat.format }, depthFormat, 1, true, true);
 		createPostPipeline();
+
+		createFramebuffers();
+		recordCommandBuffer();
 	}
 
 	/*
 	* draw
 	*/
 	virtual void draw() override {
+		uint32_t imageIndex = prepareFrame();
 
+		//updateUniformBuffer(currentFrame);
+
+		//render
+		VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT };
+		VkSubmitInfo submitInfo{};
+		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+		submitInfo.waitSemaphoreCount = 1;
+		submitInfo.pWaitSemaphores = &presentCompleteSemaphores[currentFrame];
+		submitInfo.pWaitDstStageMask = waitStages;
+		submitInfo.commandBufferCount = 1;
+		size_t commandBufferIndex = currentFrame * framebuffers.size() + imageIndex;
+		submitInfo.pCommandBuffers = &commandBuffers[commandBufferIndex];
+		submitInfo.signalSemaphoreCount = 1;
+		submitInfo.pSignalSemaphores = &renderCompleteSemaphores[currentFrame];
+		VK_CHECK_RESULT(vkQueueSubmit(devices.graphicsQueue, 1, &submitInfo, frameLimitFences[currentFrame]));
+
+		submitFrame(imageIndex);
 	}
 
 	/*
 	* create framebuffers
 	*/
 	virtual void createFramebuffers() override {
+		for (auto& framebuffer : framebuffers) {
+			vkDestroyFramebuffer(devices.device, framebuffer, nullptr);
+		}
+		framebuffers.resize(swapchain.imageCount);
 
+		for (size_t i = 0; i < swapchain.imageCount; ++i) {
+			std::array<VkImageView, 2> attachments = {
+				swapchain.imageViews[i],
+				depthImageView
+			};
+
+			VkFramebufferCreateInfo framebufferInfo{};
+			framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+			framebufferInfo.renderPass = postRenderPass;
+			framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+			framebufferInfo.pAttachments = attachments.data();
+			framebufferInfo.width = swapchain.extent.width;
+			framebufferInfo.height = swapchain.extent.height;
+			framebufferInfo.layers = 1;
+			VK_CHECK_RESULT(vkCreateFramebuffer(devices.device, &framebufferInfo, nullptr, &framebuffers[i]));
+		}
 	}
 
 	/*
 	* record command buffer
 	*/
 	virtual void recordCommandBuffer() override {
+		VkCommandBufferBeginInfo cmdBufBeginInfo{};
+		cmdBufBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
+		std::array<VkClearValue, 2> clearValues{};
+		clearValues[0].color = { 0.2f, 0.0f, 0.f, 1.f };
+		clearValues[1].depthStencil = { 1.f, 0 };
+
+		//for #2 render pass
+		VkRenderPassBeginInfo postRenderPassBeginInfo{ VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO };
+		postRenderPassBeginInfo.clearValueCount = 2;
+		postRenderPassBeginInfo.pClearValues = clearValues.data();
+		postRenderPassBeginInfo.renderPass = postRenderPass;
+		postRenderPassBeginInfo.renderArea = { {0, 0},swapchain.extent };
+
+		for (size_t i = 0; i < framebuffers.size() * MAX_FRAMES_IN_FLIGHT; ++i) {
+			//offscreenRenderPassBeginInfo.framebuffer = framebuffers[framebufferIndex];
+
+			//#1 raytracing
+			VK_CHECK_RESULT(vkBeginCommandBuffer(commandBuffers[i], &cmdBufBeginInfo));
+
+			rtPushConstants.clearColor = { 0.f, 0.2f, 0.f, 1.f };
+			rtPushConstants.lightPos = { 2.f, 2.f, 2.f };
+
+			size_t descriptorSetIndex = i / framebuffers.size();
+			vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, rtPipeline);
+
+			std::vector<VkDescriptorSet> descSets{ rtDescriptorSets[descriptorSetIndex], descriptorSets[descriptorSetIndex] };
+			vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, rtPipelineLayout,
+				0, static_cast<uint32_t>(descSets.size()), descSets.data(), 0, nullptr);
+			vkCmdPushConstants(commandBuffers[i], rtPipelineLayout,
+				VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_MISS_BIT_KHR,
+				0, sizeof(RtPushConstant), &rtPushConstants);
+
+			//size of a program identifier
+			uint32_t groupSize = alignUp(rtProperties.shaderGroupHandleSize, rtProperties.shaderGroupBaseAlignment);
+			uint32_t groupStride = groupSize;
+
+			VkDeviceAddress sbtAddress = vktools::getBufferDeviceAddress(devices.device, rtSBTBuffer);
+
+			using Stride = VkStridedDeviceAddressRegionKHR;
+			std::array<Stride, 4> strideAddress{
+				Stride{sbtAddress + 0u * groupSize, groupStride, groupSize * 1},
+				Stride{sbtAddress + 1u * groupSize, groupStride, groupSize * 1},
+				Stride{sbtAddress + 2u * groupSize, groupStride, groupSize * 1},
+				Stride{0u, 0u, 0u}
+			};
+
+			vkfp::vkCmdTraceRaysKHR(commandBuffers[i], &strideAddress[0], &strideAddress[1],
+				&strideAddress[2], &strideAddress[3], swapchain.extent.width, swapchain.extent.height, 1);
+
+			//#2 full screen quad
+			size_t framebufferIndex = i % framebuffers.size();
+			postRenderPassBeginInfo.framebuffer = framebuffers[framebufferIndex];
+			vkCmdBeginRenderPass(commandBuffers[i], &postRenderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+			vktools::setViewportScissorDynamicStates(commandBuffers[i], swapchain.extent);
+			vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, postPipeline);
+			vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, postPipelineLayout, 0, 1,
+				&postDescriptorSets[descriptorSetIndex], 0, nullptr);
+			vkCmdDraw(commandBuffers[i], 3, 1, 0, 0); //full screen triangle
+			vkCmdEndRenderPass(commandBuffers[i]);
+			VK_CHECK_RESULT(vkEndCommandBuffer(commandBuffers[i]));
+		}
 	}
 
 	/*
@@ -189,6 +323,9 @@ private:
 		VkAccelerationStructureBuildSizesInfoKHR buildSizesInfo{ VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR };
 		AccelKHR as{};
 	};
+
+	/** swapchain framebuffers */
+	std::vector<VkFramebuffer> framebuffers;
 
 	/** rt properties */
 	VkPhysicalDeviceRayTracingPipelinePropertiesKHR rtProperties{
@@ -266,10 +403,24 @@ private:
 	VkDescriptorPool postDescriptorPool = VK_NULL_HANDLE;
 	/** descriptor sets */
 	std::vector<VkDescriptorSet> postDescriptorSets;
-
+	/** full quad pipeline */
 	VkPipeline postPipeline = VK_NULL_HANDLE;
+	/** full quad pipeline layout */
 	VkPipelineLayout postPipelineLayout = VK_NULL_HANDLE;
+	/** normal render pass */
 	VkRenderPass postRenderPass = VK_NULL_HANDLE;
+
+	struct CameraMatrices {
+		glm::mat4 view;
+		glm::mat4 proj;
+		glm::mat4 viewInverse;
+		glm::mat4 projInverse;
+	} camera;
+
+	/** uniform buffers for camera matrices */
+	std::vector<VkBuffer> uniformBuffers;
+	/** uniform buffer memories */
+	std::vector<MemoryAllocator::HostVisibleMemory> uniformBufferMemories;
 
 	/** @brief build buffer - used to create vertex / index buffer */
 	/*
@@ -688,7 +839,8 @@ private:
 		VkImageView offscreenDepthImageView = vktools::createImageView(devices.device, offscreenDepthImage,
 			VK_IMAGE_VIEW_TYPE_2D, offscreenDepthFormat, VK_IMAGE_ASPECT_DEPTH_BIT);
 
-		images.offscreenDepthBuffer.init(&devices, offscreenDepthImage, offscreenDepthImageView, {});
+		images.offscreenDepthBuffer.init(&devices, offscreenDepthImage, offscreenDepthImageView,
+			VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 
 		//setting image layout
 		VkCommandBuffer cmdBuf = devices.beginOneTimeSubmitCommandBuffer();
@@ -727,7 +879,7 @@ private:
 
 		//create framebuffers for the offscreen
 		if (offscreenFramebuffers.empty()) {
-			offscreenFramebuffers.assign(nbImages, {});
+			offscreenFramebuffers.resize(nbImages);
 		}
 		else {
 			for (auto& framebuffer : offscreenFramebuffers) {
@@ -758,8 +910,8 @@ private:
 		descriptorSetBindings.addBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1,
 			VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_RAYGEN_BIT_KHR);
 		//scene description
-		descriptorSetBindings.addBinding(1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1,
-			VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR);
+		/*descriptorSetBindings.addBinding(1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1,
+			VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR);*/
 		//textures
 		/*descriptorSetBindings.addBinding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, nbTexture,
 			VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR);*/
@@ -774,8 +926,18 @@ private:
 		descInfo.descriptorPool = descriptorPool;
 		descInfo.descriptorSetCount = nbDescriptorSet;
 		descInfo.pSetLayouts = layout.data();
-		descriptorSets.reserve(nbDescriptorSet);
+		descriptorSets.resize(nbDescriptorSet);
 		VK_CHECK_RESULT(vkAllocateDescriptorSets(devices.device, &descInfo, descriptorSets.data()));
+
+		for (size_t i = 0; i < static_cast<size_t>(MAX_FRAMES_IN_FLIGHT); ++i) {
+			VkDescriptorBufferInfo bufferInfo{};
+			bufferInfo.buffer = uniformBuffers[i];
+			bufferInfo.offset = 0;
+			bufferInfo.range = sizeof(CameraMatrices);
+
+			VkWriteDescriptorSet write = descriptorSetBindings.makeWrite(descriptorSets[i], 0, &bufferInfo);
+			vkUpdateDescriptorSets(devices.device, 1, &write, 0, nullptr);
+		}
 	}
 
 	void updateRtDescriptorSet(size_t currentFrame) {
@@ -912,14 +1074,6 @@ private:
 		memory.unmap(devices.device);
 	}
 
-	void raytrace(const VkCommandBuffer& cmdBuf, const glm::vec4& clearColor) {
-		rtPushConstants.clearColor = clearColor;
-		rtPushConstants.lightPos = { 2.f, 2.f, 2.f };
-		
-		std::vector<VkDescriptorSet> descSets{};
-		//vkCmdBindPipeline(cmdBuf,  )
-	}
-
 	void createPostPipeline() {
 		auto vertexInputStateInfo = vktools::initializers::getPipelineVertexInputStateCreateInfo(0, nullptr, 0, nullptr);
 		auto inputAssemblyInfo = vktools::initializers::getPipelineInputAssemblyStateCreateInfo();
@@ -980,6 +1134,25 @@ private:
 		VkWriteDescriptorSet wd = postDescriptorSetBindings.makeWrite(postDescriptorSets[currentFrame], 0,
 			&offscreens[currentFrame].offscreenColorBuffer.descriptor);
 		vkUpdateDescriptorSets(devices.device, 1, &wd, 0, nullptr);
+	}
+
+	void createUniformbuffer() {
+		VkDeviceSize size = sizeof(CameraMatrices);
+		uniformBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+		uniformBufferMemories.resize(MAX_FRAMES_IN_FLIGHT);
+
+		VkBufferCreateInfo info = vktools::initializers::bufferCreateInfo(size,
+			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+
+		for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+			VK_CHECK_RESULT(vkCreateBuffer(devices.device, &info, nullptr, &uniformBuffers[i]));
+			uniformBufferMemories[i] = devices.memoryAllocator.allocateBufferMemory(uniformBuffers[i],
+				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+		}
+	}
+
+	void UpdateUniformBuffer(size_t currentFrame) {
+		uniformBufferMemories[currentFrame].mapData(devices.device, &camera);
 	}
 };
 

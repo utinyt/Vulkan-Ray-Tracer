@@ -13,6 +13,7 @@ namespace vkfp{
 	PFN_vkGetAccelerationStructureDeviceAddressKHR vkGetAccelerationStructureDeviceAddressKHRProxy;
 	PFN_vkCreateRayTracingPipelinesKHR vkCreateRayTracingPipelinesKHRProxy;
 	PFN_vkGetRayTracingShaderGroupHandlesKHR vkGetRayTracingShaderGroupHandlesKHRProxy;
+	PFN_vkCmdTraceRaysKHR vkCmdTraceRaysKHRProxy;
 
 	VkResult vkCreateAccelerationStructureKHR(VkDevice device,
 		const VkAccelerationStructureCreateInfoKHR* pCreateInfo,
@@ -74,6 +75,16 @@ namespace vkfp{
 			groupCount, dataSize, pData);
 	}
 
+	void vkCmdTraceRaysKHR(VkCommandBuffer commandBuffer,
+		const VkStridedDeviceAddressRegionKHR* pRaygenShaderBindingTable,
+		const VkStridedDeviceAddressRegionKHR* pMissShaderBindingTable,
+		const VkStridedDeviceAddressRegionKHR* pHitShaderBindingTable,
+		const VkStridedDeviceAddressRegionKHR* pCallableShaderBindingTable,
+		uint32_t width, uint32_t height, uint32_t depth) {
+		vkCmdTraceRaysKHRProxy(commandBuffer, pRaygenShaderBindingTable,
+			pMissShaderBindingTable, pHitShaderBindingTable, pCallableShaderBindingTable, width, height, depth);
+	}
+
 	/*
 	* get function pointers
 	*/
@@ -96,6 +107,8 @@ namespace vkfp{
 			instance, "vkCreateRayTracingPipelinesKHR");
 		vkGetRayTracingShaderGroupHandlesKHRProxy = (PFN_vkGetRayTracingShaderGroupHandlesKHR)vkGetInstanceProcAddr(
 			instance, "vkGetRayTracingShaderGroupHandlesKHR");
+		vkCmdTraceRaysKHRProxy = (PFN_vkCmdTraceRaysKHR)vkGetInstanceProcAddr(
+			instance, "vkCmdTraceRaysKHR");
 	}
 }
 
@@ -428,5 +441,27 @@ namespace vktools {
 		VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &descInfo, descriptorSets.data()));
 
 		return descriptorSets;
+	}
+
+	/*
+	* set dynamic state (viewport & scissor)
+	* 
+	* @param cmdBuf - command buffer to record
+	*/
+	void setViewportScissorDynamicStates(VkCommandBuffer cmdBuf, VkExtent2D extent) {
+		//dynamic states
+		VkViewport viewport{};
+		viewport.x = 0.f;
+		viewport.y = 0.f;
+		viewport.width = static_cast<float>(extent.width);
+		viewport.height = static_cast<float>(extent.height);
+		viewport.minDepth = 0.f;
+		viewport.maxDepth = 1.f;
+		vkCmdSetViewport(cmdBuf, 0, 1, &viewport);
+
+		VkRect2D scissor{};
+		scissor.offset = { 0, 0 };
+		scissor.extent = extent;
+		vkCmdSetScissor(cmdBuf, 0, 1, &scissor);
 	}
 }
