@@ -27,6 +27,9 @@ public:
 		vkDestroyBuffer(devices.device, rtSBTBuffer, nullptr);
 		vkDestroyPipeline(devices.device, rtPipeline, nullptr);
 		vkDestroyPipelineLayout(devices.device, rtPipelineLayout, nullptr);
+		vkDestroyPipeline(devices.device, postPipeline, nullptr);
+		vkDestroyPipelineLayout(devices.device, postPipelineLayout, nullptr);
+		vkDestroyRenderPass(devices.device, postRenderPass, nullptr);
 
 		//BLAS
 		for (auto& as : blas) {
@@ -69,6 +72,8 @@ public:
 		vkDestroyDescriptorSetLayout(devices.device, descriptorSetLayout, nullptr);
 		vkDestroyDescriptorPool(devices.device, rtDescriptorPool, nullptr);
 		vkDestroyDescriptorSetLayout(devices.device, rtDescriptorSetLayout, nullptr);
+		vkDestroyDescriptorPool(devices.device, postDescriptorPool, nullptr);
+		vkDestroyDescriptorSetLayout(devices.device, postDescriptorSetLayout, nullptr);
 	}
 
 	/*
@@ -129,6 +134,14 @@ public:
 
 		createRtPipeline();
 		createRtShaderBindingTable();
+
+		createPostDescriptorSet();
+		for (size_t i = 0; i < static_cast<int>(MAX_FRAMES_IN_FLIGHT); ++i) {
+			updatePostDescriptorSet(i);
+		}
+		postRenderPass = vktools::createRenderPass(devices.device,
+			{ swapchain.surfaceFormat.format }, depthFormat, 1, true, true);
+		createPostPipeline();
 	}
 
 	/*
@@ -160,6 +173,7 @@ public:
 		createOffscreenRender();
 		for (size_t i = 0; i < static_cast<int>(MAX_FRAMES_IN_FLIGHT); ++i) {
 			updateRtDescriptorSet(i);
+			updatePostDescriptorSet(i);
 		}
 	}
 
@@ -241,7 +255,21 @@ private:
 		glm::vec3 lightPos;
 		float lightIntensity = 100.f;
 		int lightType = 0;
-	};
+	} rtPushConstants;
+
+	/** post */
+	/** descriptor set layout bindings */
+	DescriptorSetBindings postDescriptorSetBindings;
+	/** descriptor set layout */
+	VkDescriptorSetLayout postDescriptorSetLayout = VK_NULL_HANDLE;
+	/** decriptor pool */
+	VkDescriptorPool postDescriptorPool = VK_NULL_HANDLE;
+	/** descriptor sets */
+	std::vector<VkDescriptorSet> postDescriptorSets;
+
+	VkPipeline postPipeline = VK_NULL_HANDLE;
+	VkPipelineLayout postPipelineLayout = VK_NULL_HANDLE;
+	VkRenderPass postRenderPass = VK_NULL_HANDLE;
 
 	/** @brief build buffer - used to create vertex / index buffer */
 	/*
@@ -624,7 +652,7 @@ private:
 			descAsInfo.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR;
 			descAsInfo.accelerationStructureCount = 1;
 			descAsInfo.pAccelerationStructures = &tlas.accel;
-			VkDescriptorImageInfo imageInfo{ {}, offscreens[i].offscreenColorBuffer.imageView, VK_IMAGE_LAYOUT_GENERAL};
+			VkDescriptorImageInfo imageInfo{ {}, offscreens[i].offscreenColorBuffer.descriptor.imageView, VK_IMAGE_LAYOUT_GENERAL};
 
 			std::vector<VkWriteDescriptorSet> writes;
 			writes.emplace_back(rtDescriptorSetBindings.makeWrite(rtDescriptorSets[i], 0, &descAsInfo));
@@ -649,7 +677,7 @@ private:
 			devices.availableFeatures, devices.properties);
 		VK_CHECK_RESULT(vkCreateSampler(devices.device, &samplerInfo, nullptr, &sampler));
 
-		images.offscreenColorBuffer.init(&devices, offscreenColorImage, offscreenColorImageView, sampler);
+		images.offscreenColorBuffer.init(&devices, offscreenColorImage, offscreenColorImageView, VK_IMAGE_LAYOUT_GENERAL, sampler);
 
 		//create offscreen depth buffer
 		VkImage offscreenDepthImage = devices.createImage({ swapchain.extent.width,swapchain.extent.height, 1 },
@@ -660,7 +688,7 @@ private:
 		VkImageView offscreenDepthImageView = vktools::createImageView(devices.device, offscreenDepthImage,
 			VK_IMAGE_VIEW_TYPE_2D, offscreenDepthFormat, VK_IMAGE_ASPECT_DEPTH_BIT);
 
-		images.offscreenDepthBuffer.init(&devices, offscreenDepthImage, offscreenDepthImageView);
+		images.offscreenDepthBuffer.init(&devices, offscreenDepthImage, offscreenDepthImageView, {});
 
 		//setting image layout
 		VkCommandBuffer cmdBuf = devices.beginOneTimeSubmitCommandBuffer();
@@ -708,8 +736,8 @@ private:
 		}
 		
 		for (size_t i = 0; i < nbImages; ++i) {
-			std::array<VkImageView, 2> attachments{ offscreens[i].offscreenColorBuffer.imageView,
-				offscreens[i].offscreenDepthBuffer.imageView };
+			std::array<VkImageView, 2> attachments{ offscreens[i].offscreenColorBuffer.descriptor.imageView,
+				offscreens[i].offscreenDepthBuffer.descriptor.imageView };
 
 			VkFramebufferCreateInfo framebufferInfo{};
 			framebufferInfo.sType			= VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
@@ -751,7 +779,7 @@ private:
 	}
 
 	void updateRtDescriptorSet(size_t currentFrame) {
-		VkDescriptorImageInfo imageInfo{ {}, offscreens[currentFrame].offscreenColorBuffer.imageView,
+		VkDescriptorImageInfo imageInfo{ {}, offscreens[currentFrame].offscreenColorBuffer.descriptor.imageView,
 			VK_IMAGE_LAYOUT_GENERAL };
 		VkWriteDescriptorSet wds = rtDescriptorSetBindings.makeWrite(rtDescriptorSets[currentFrame], 1, &imageInfo);
 		vkUpdateDescriptorSets(devices.device, 1, &wds, 0, nullptr);
@@ -882,8 +910,76 @@ private:
 			pData += groupSizeAligned;
 		}
 		memory.unmap(devices.device);
+	}
 
+	void raytrace(const VkCommandBuffer& cmdBuf, const glm::vec4& clearColor) {
+		rtPushConstants.clearColor = clearColor;
+		rtPushConstants.lightPos = { 2.f, 2.f, 2.f };
+		
+		std::vector<VkDescriptorSet> descSets{};
+		//vkCmdBindPipeline(cmdBuf,  )
+	}
 
+	void createPostPipeline() {
+		auto vertexInputStateInfo = vktools::initializers::getPipelineVertexInputStateCreateInfo(0, nullptr, 0, nullptr);
+		auto inputAssemblyInfo = vktools::initializers::getPipelineInputAssemblyStateCreateInfo();
+		auto viewportStateInfo = vktools::initializers::getPipelineViewportStateCreateInfo();
+		VkDynamicState dynamicStates[] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
+		auto dynamicStatesInfo = vktools::initializers::getPipelineDynamicStateCreateInfo(dynamicStates, 2);
+		auto rasterizationInfo = vktools::initializers::getPipelineRasterizationStateCreateInfo(
+			VK_POLYGON_MODE_FILL, VK_CULL_MODE_FRONT_BIT);
+		auto multisamplingInfo = vktools::initializers::getPipelineMultisampleStateCreateInfo();
+		auto depthStencilInfo = vktools::initializers::getPipelineDepthStencilStateCreateInfo();
+		auto blendAttachmentState = vktools::initializers::getPipelineColorBlendAttachment(VK_FALSE);
+		auto colorBlendStateInfo = vktools::initializers::getPipelineColorBlendStateCreateInfo(1, &blendAttachmentState);
+		auto pipelineLayoutInfo = vktools::initializers::getPipelineLayoutCreateInfo(1, &postDescriptorSetLayout);
+		VK_CHECK_RESULT(vkCreatePipelineLayout(devices.device, &pipelineLayoutInfo, nullptr, &postPipelineLayout));
+
+		VkShaderModule vertModule = vktools::createShaderModule(devices.device, vktools::readFile("shaders/full_quad_vert.spv"));
+		auto vertShaderStageInfo = vktools::initializers::getPipelineShaderStageCreateInfo(
+			VK_SHADER_STAGE_VERTEX_BIT, vertModule);
+
+		VkShaderModule fragModule = vktools::createShaderModule(devices.device, vktools::readFile("shaders/full_quad_frag.spv"));
+		auto fragShaderStageInfo = vktools::initializers::getPipelineShaderStageCreateInfo(
+			VK_SHADER_STAGE_FRAGMENT_BIT, fragModule);
+
+		VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
+		VkGraphicsPipelineCreateInfo pipelineInfo{};
+		pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+		pipelineInfo.stageCount = 2;
+		pipelineInfo.pStages = shaderStages;
+		pipelineInfo.pVertexInputState = &vertexInputStateInfo;
+		pipelineInfo.pInputAssemblyState = &inputAssemblyInfo;
+		pipelineInfo.pViewportState = &viewportStateInfo;
+		pipelineInfo.pRasterizationState = &rasterizationInfo;
+		pipelineInfo.pMultisampleState = &multisamplingInfo;
+		pipelineInfo.pDepthStencilState = &depthStencilInfo;
+		pipelineInfo.pColorBlendState = &colorBlendStateInfo;
+		pipelineInfo.pDynamicState = &dynamicStatesInfo;
+		pipelineInfo.layout = postPipelineLayout;
+		pipelineInfo.renderPass = postRenderPass;
+		pipelineInfo.subpass = 0;
+		VK_CHECK_RESULT(vkCreateGraphicsPipelines(devices.device, {}, 1, &pipelineInfo, nullptr, &postPipeline));
+
+		vkDestroyShaderModule(devices.device, vertModule, nullptr);
+		vkDestroyShaderModule(devices.device, fragModule, nullptr);
+	}
+
+	void createPostDescriptorSet() {
+		postDescriptorSetBindings.addBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			1, VK_SHADER_STAGE_FRAGMENT_BIT);
+
+		uint32_t nbDescriptorSet = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+		postDescriptorSetLayout = postDescriptorSetBindings.createDescriptorSetLayout(devices.device);
+		postDescriptorPool = postDescriptorSetBindings.createDescriptorPool(devices.device, nbDescriptorSet);
+		postDescriptorSets = vktools::allocateDescriptorSets(devices.device, postDescriptorSetLayout,
+			postDescriptorPool, nbDescriptorSet);
+	}
+
+	void updatePostDescriptorSet(size_t currentFrame) {
+		VkWriteDescriptorSet wd = postDescriptorSetBindings.makeWrite(postDescriptorSets[currentFrame], 0,
+			&offscreens[currentFrame].offscreenColorBuffer.descriptor);
+		vkUpdateDescriptorSets(devices.device, 1, &wd, 0, nullptr);
 	}
 };
 

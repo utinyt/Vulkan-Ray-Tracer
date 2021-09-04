@@ -82,6 +82,13 @@
   <ItemGroup>
     <ClCompile Include="ray_tracing.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="shaders\full_quad.frag" />
+    <None Include="shaders\full_quad.vert" />
+    <None Include="shaders\raytrace.rchit" />
+    <None Include="shaders\raytrace.rgen" />
+    <None Include="shaders\raytrace.rmiss" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

@@ -13,10 +13,30 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="Source Files\shaders">
+      <UniqueIdentifier>{4503a282-4c80-4dea-bf5d-56b644a175bc}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="ray_tracing.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="shaders\full_quad.frag">
+      <Filter>Source Files\shaders</Filter>
+    </None>
+    <None Include="shaders\full_quad.vert">
+      <Filter>Source Files\shaders</Filter>
+    </None>
+    <None Include="shaders\raytrace.rchit">
+      <Filter>Source Files\shaders</Filter>
+    </None>
+    <None Include="shaders\raytrace.rgen">
+      <Filter>Source Files\shaders</Filter>
+    </None>
+    <None Include="shaders\raytrace.rmiss">
+      <Filter>Source Files\shaders</Filter>
+    </None>
   </ItemGroup>
 </Project>

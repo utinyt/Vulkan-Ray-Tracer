@@ -8,8 +8,8 @@
 * must be called if texture is not null
 */
 void TextureBase::cleanup() {
-	vkDestroySampler(devices->device, sampler, nullptr);
-	vkDestroyImageView(devices->device, imageView, nullptr);
+	vkDestroySampler(devices->device, descriptor.sampler, nullptr);
+	vkDestroyImageView(devices->device, descriptor.imageView, nullptr);
 	devices->memoryAllocator.freeImageMemory(image, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 	vkDestroyImage(devices->device, image, nullptr);
 }
@@ -68,12 +68,12 @@ void Texture2D::load(VulkanDevice* devices, const std::string& path) {
 	vkDestroyBuffer(devices->device, stagingBuffer, nullptr);
 
 	//image view creation
-	imageView = vktools::createImageView(devices->device, image,
+	descriptor.imageView = vktools::createImageView(devices->device, image,
 		VK_IMAGE_VIEW_TYPE_2D, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT);
 
 	VkSamplerCreateInfo samplerInfo = vktools::initializers::samplerCreateInfo(
 		devices->availableFeatures, devices->properties);
-	VK_CHECK_RESULT(vkCreateSampler(devices->device, &samplerInfo, nullptr, &sampler));
+	VK_CHECK_RESULT(vkCreateSampler(devices->device, &samplerInfo, nullptr, &descriptor.sampler));
 }
 
 /*

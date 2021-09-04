@@ -137,6 +137,9 @@ namespace vktools {
 		VkAccessFlags dstAccessMask = 
 			VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | 
 			VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
+	/** @brief allocate descriptor sets */
+	std::vector<VkDescriptorSet> allocateDescriptorSets(VkDevice device, VkDescriptorSetLayout layout,
+		VkDescriptorPool pool, uint32_t nbDescriptors);
 
 	namespace initializers {
 		inline VkBufferCreateInfo bufferCreateInfo(VkDeviceSize size,
@@ -204,6 +207,140 @@ namespace vktools {
 			samplerInfo.minLod = 0.f;
 			samplerInfo.maxLod = 0.f;
 			return samplerInfo;
+		}
+
+		/*
+		* pipeline-related create infos
+		*/
+
+		inline VkPipelineVertexInputStateCreateInfo getPipelineVertexInputStateCreateInfo(
+			uint32_t vertexBindingDescriptionCount, VkVertexInputBindingDescription* pVertexBindingDescriptions,
+			uint32_t vertexAttributeDescriptionCount, VkVertexInputAttributeDescription* pVertexAttributeDescriptions) {
+			VkPipelineVertexInputStateCreateInfo info{};
+			info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+			info.vertexBindingDescriptionCount = vertexBindingDescriptionCount;
+			info.pVertexBindingDescriptions = pVertexBindingDescriptions;
+			info.vertexAttributeDescriptionCount = vertexAttributeDescriptionCount;
+			info.pVertexAttributeDescriptions = pVertexAttributeDescriptions;
+			return info;
+		}
+
+		inline VkPipelineInputAssemblyStateCreateInfo getPipelineInputAssemblyStateCreateInfo(
+			VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST) {
+			VkPipelineInputAssemblyStateCreateInfo info{};
+			info.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+			info.topology = topology;
+			info.primitiveRestartEnable = VK_FALSE;
+			return info;
+		}
+
+		inline VkPipelineViewportStateCreateInfo getPipelineViewportStateCreateInfo(
+			uint32_t viewportCount = 1, uint32_t scissorCount = 1) {
+			VkPipelineViewportStateCreateInfo info{};
+			info.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+			info.viewportCount = viewportCount;
+			info.scissorCount = scissorCount;
+			return info;
+		}
+
+		inline VkPipelineDynamicStateCreateInfo getPipelineDynamicStateCreateInfo(
+			VkDynamicState* pStates, uint32_t statesCount) {
+			VkPipelineDynamicStateCreateInfo info{};
+			info.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+			info.dynamicStateCount = statesCount;
+			info.pDynamicStates = pStates;
+			return info;
+		}
+
+		inline VkPipelineRasterizationStateCreateInfo getPipelineRasterizationStateCreateInfo(
+			VkPolygonMode polygonMode = VK_POLYGON_MODE_FILL,
+			VkCullModeFlags cullMode = VK_CULL_MODE_BACK_BIT,
+			VkFrontFace frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE) {
+			VkPipelineRasterizationStateCreateInfo info{};
+			info.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+			info.depthClampEnable = VK_FALSE; //require gpu feature
+			info.rasterizerDiscardEnable = VK_FALSE;
+			info.polygonMode = polygonMode;
+			info.lineWidth = 1.f; //require gpu feature to set this above 1.f
+			info.cullMode = cullMode;
+			info.frontFace = frontFace;
+			info.depthBiasEnable = VK_FALSE;
+			return info;
+		}
+
+		inline VkPipelineMultisampleStateCreateInfo getPipelineMultisampleStateCreateInfo(
+			VkSampleCountFlagBits sampleCount = VK_SAMPLE_COUNT_1_BIT) {
+			VkPipelineMultisampleStateCreateInfo info{};
+			info.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+			info.rasterizationSamples = sampleCount;
+			info.sampleShadingEnable = VK_FALSE;
+			return info;
+		}
+
+		inline VkPipelineDepthStencilStateCreateInfo getPipelineDepthStencilStateCreateInfo(
+			VkBool32 depthTest = VK_TRUE, VkBool32 depthWrite = VK_TRUE, VkCompareOp depthCompareOp = VK_COMPARE_OP_LESS) {
+			VkPipelineDepthStencilStateCreateInfo info{};
+			info.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+			info.depthTestEnable = depthTest;
+			info.depthWriteEnable = depthWrite;
+			info.depthCompareOp = depthCompareOp;
+			info.depthBoundsTestEnable = VK_FALSE;
+			info.stencilTestEnable = VK_FALSE;
+			return info;
+		}
+
+		inline VkPipelineColorBlendAttachmentState getPipelineColorBlendAttachment(VkBool32 blendEnable) {
+			VkPipelineColorBlendAttachmentState state{};
+			state.blendEnable = blendEnable;
+			state.colorWriteMask =
+				VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+				VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+
+			if(blendEnable == VK_TRUE){
+				//alpha blending
+				state.srcColorBlendFactor	= VK_BLEND_FACTOR_SRC_ALPHA;
+				state.dstColorBlendFactor	= VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+				state.colorBlendOp			= VK_BLEND_OP_ADD;
+				state.srcAlphaBlendFactor	= VK_BLEND_FACTOR_ONE;
+				state.dstAlphaBlendFactor	= VK_BLEND_FACTOR_ZERO;
+				state.alphaBlendOp			= VK_BLEND_OP_ADD;
+			}
+
+			return state;
+		}
+
+		inline VkPipelineColorBlendStateCreateInfo getPipelineColorBlendStateCreateInfo(
+			uint32_t attachmentCount, VkPipelineColorBlendAttachmentState* pAttachmentStates,
+			VkBool32 logicOpEnable = VK_FALSE,
+			float blendConstant1 = 0.f,
+			float blendConstant2 = 0.f,
+			float blendConstant3 = 0.f,
+			float blendConstant4 = 0.f) {
+			VkPipelineColorBlendStateCreateInfo info{};
+			info.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+			info.logicOpEnable = logicOpEnable;
+			info.attachmentCount = attachmentCount;
+			info.pAttachments = pAttachmentStates;
+			return info;
+		}
+
+		inline VkPipelineLayoutCreateInfo getPipelineLayoutCreateInfo(
+			uint32_t layoutCount, VkDescriptorSetLayout* pSetLayouts) {
+			VkPipelineLayoutCreateInfo info{};
+			info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+			info.setLayoutCount = layoutCount;
+			info.pSetLayouts = pSetLayouts;
+			return info;
+		}
+
+		inline VkPipelineShaderStageCreateInfo getPipelineShaderStageCreateInfo(
+			VkShaderStageFlagBits shaderStage, VkShaderModule shaderModule) {
+			VkPipelineShaderStageCreateInfo info{};
+			info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+			info.stage = shaderStage;
+			info.module = shaderModule;
+			info.pName = "main";
+			return info;
 		}
 	}
 }

@@ -7,21 +7,21 @@ public:
 	void cleanup();
 	virtual void load(VulkanDevice* devices, const std::string& path) = 0;
 	/** @brief just get the handle from the user and init texture */
-	void init(VulkanDevice* devices, VkImage image, VkImageView imageView, VkSampler sampler = VK_NULL_HANDLE) {
+	void init(VulkanDevice* devices, VkImage image, VkImageView imageView,
+		VkImageLayout imageLayout, VkSampler sampler = VK_NULL_HANDLE) {
 		this->devices = devices;
 		this->image = image;
-		this->imageView = imageView;
-		this->sampler = sampler;
+		descriptor.imageView = imageView;
+		descriptor.sampler = sampler;
+		descriptor.imageLayout = imageLayout;
 	}
 
 	/** abstracted vulkan device handle */
 	VulkanDevice* devices = nullptr;
 	/** texture buffer handle */
 	VkImage image = VK_NULL_HANDLE;
-	/** image view handle */
-	VkImageView imageView = VK_NULL_HANDLE;
-	/** image sampler handle */
-	VkSampler sampler = VK_NULL_HANDLE;
+	/** image descriptor */
+	VkDescriptorImageInfo descriptor{};
 
 protected:
 	void transitionImageLayout(VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);

@@ -403,4 +403,30 @@ namespace vktools {
 		VK_CHECK_RESULT(vkCreateRenderPass(device, &renderPassInfo, nullptr, &renderPass));
 		return renderPass;
 	}
+
+	/*
+	* allocate descriptor sets
+	* 
+	* @param device - logical device handle
+	* @param layout - descriptor layout
+	* @param pool - descriptor pool
+	* @param nbDescriptor - number of descriptors to allocate
+	* 
+	* @return std::vector<VkDescriptorSet> - vector of allocated descriptor sets
+	*/
+	std::vector<VkDescriptorSet> allocateDescriptorSets(VkDevice device, VkDescriptorSetLayout layout,
+		VkDescriptorPool pool, uint32_t nbDescriptorSets) {
+		std::vector<VkDescriptorSet> descriptorSets;
+		descriptorSets.assign(nbDescriptorSets, {});
+
+		std::vector<VkDescriptorSetLayout> layouts(nbDescriptorSets, layout);
+		VkDescriptorSetAllocateInfo descInfo{};
+		descInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+		descInfo.descriptorPool = pool;
+		descInfo.descriptorSetCount = nbDescriptorSets;
+		descInfo.pSetLayouts = layouts.data();
+		VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &descInfo, descriptorSets.data()));
+
+		return descriptorSets;
+	}
 }
