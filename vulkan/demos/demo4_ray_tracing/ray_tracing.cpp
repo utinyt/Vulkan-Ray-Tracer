@@ -94,15 +94,15 @@ public:
 	virtual void initApp() override {
 		VulkanAppBase::initApp();
 
-		glm::vec3 camPos = glm::vec3(0, 0, 3);
-		glm::vec3 camFront = glm::vec3(0, 0, -1);
+		glm::vec3 camPos = glm::vec3(0, 0, 4);
+		glm::vec3 camFront = glm::vec3(0, 0.5, -4);
 		glm::vec3 camUp = glm::vec3(0, 1, 0);
 
 		//camera
 		camera.view = glm::lookAt(camPos, camPos + camFront, camUp);
 		camera.viewInverse = glm::inverse(camera.view);
 		camera.proj = glm::perspective(glm::radians(45.f),
-			static_cast<float>(swapchain.extent.width / swapchain.extent.height), 0.1f, 100.f);
+			swapchain.extent.width / static_cast<float>(swapchain.extent.height), 0.1f, 10.f);
 		camera.proj[1][1] *= -1;
 		camera.projInverse = glm::inverse(camera.proj);
 
