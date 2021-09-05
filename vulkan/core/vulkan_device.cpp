@@ -137,6 +137,10 @@ void VulkanDevice::createLogicalDevice() {
 			else {
 				deviceFeatures.pNext = &rtFeatures;
 			}
+
+			if (availableFeatures.features.shaderInt64 == VK_TRUE) {
+				deviceFeatures.features.shaderInt64 = VK_TRUE;
+			}
 		}
 	}
 

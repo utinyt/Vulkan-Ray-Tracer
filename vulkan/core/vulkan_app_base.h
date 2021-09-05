@@ -18,7 +18,7 @@ protected:
 	uint32_t prepareFrame();
 	void submitFrame(uint32_t imageIndex);
 	
-	virtual void resizeWindow();
+	virtual void resizeWindow(bool recordCommandBuffer = true);
 	static void windowResizeCallbck(GLFWwindow* window, int width, int height);
 	virtual void createFramebuffers() = 0;
 	virtual void recordCommandBuffer() = 0;

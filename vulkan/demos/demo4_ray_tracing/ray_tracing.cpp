@@ -31,6 +31,9 @@ public:
 		vkDestroyPipelineLayout(devices.device, postPipelineLayout, nullptr);
 		vkDestroyRenderPass(devices.device, postRenderPass, nullptr);
 
+		devices.memoryAllocator.freeBufferMemory(sceneBuffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		vkDestroyBuffer(devices.device, sceneBuffer, nullptr);
+
 		//BLAS
 		for (auto& as : blas) {
 			vkfp::vkDestroyAccelerationStructureKHR(devices.device, as.accel, nullptr);
@@ -94,11 +97,10 @@ public:
 	virtual void initApp() override {
 		VulkanAppBase::initApp();
 
+		//camera
 		glm::vec3 camPos = glm::vec3(0, 0, 4);
 		glm::vec3 camFront = glm::vec3(0, 0.5, -4);
 		glm::vec3 camUp = glm::vec3(0, 1, 0);
-
-		//camera
 		camera.view = glm::lookAt(camPos, camPos + camFront, camUp);
 		camera.viewInverse = glm::inverse(camera.view);
 		camera.proj = glm::perspective(glm::radians(45.f),
@@ -127,6 +129,12 @@ public:
 			VK_BUFFER_USAGE_INDEX_BUFFER_BIT | rtFlags,
 			indexBuffer);
 
+		//push bunny obj instance
+		objInstances.push_back({ glm::mat4(1.f), glm::mat4(1.f),
+			vktools::getBufferDeviceAddress(devices.device, vertexBuffer),
+			vktools::getBufferDeviceAddress(devices.device, indexBuffer) }
+		);
+
 		//BLAS
 		std::vector<Mesh::BlasInput> allBlas;
 		allBlas.push_back(mesh.getVkGeometryKHR(devices.device, vertexBuffer, indexBuffer));
@@ -154,6 +162,10 @@ public:
 		for (size_t i = 0; i < static_cast<int>(MAX_FRAMES_IN_FLIGHT); ++i) {
 			UpdateUniformBuffer(i);
 		}
+
+		//scene description buffer
+		createBuffer(objInstances.data(), static_cast<VkDeviceSize>(objInstances.size() * sizeof(ObjInstance)),
+			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, sceneBuffer);
 
 		createOffscreenRender();
 		createRtDescriptorSet();
@@ -241,6 +253,9 @@ public:
 		clearValues[0].color = { 0.2f, 0.0f, 0.f, 1.f };
 		clearValues[1].depthStencil = { 1.f, 0 };
 
+		rtPushConstants.clearColor = { 0.95f, 0.95f, 0.95f, 1.f };
+		rtPushConstants.lightPos = { 2.f, 2.f, 2.f };
+
 		//for #2 render pass
 		VkRenderPassBeginInfo postRenderPassBeginInfo{ VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO };
 		postRenderPassBeginInfo.clearValueCount = 2;
@@ -253,9 +268,6 @@ public:
 
 			//#1 raytracing
 			VK_CHECK_RESULT(vkBeginCommandBuffer(commandBuffers[i], &cmdBufBeginInfo));
-
-			rtPushConstants.clearColor = { 0.f, 0.2f, 0.f, 1.f };
-			rtPushConstants.lightPos = { 2.f, 2.f, 2.f };
 
 			size_t descriptorSetIndex = i / framebuffers.size();
 			vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, rtPipeline);
@@ -302,13 +314,14 @@ public:
 	/*
 	* resize
 	*/
-	virtual void resizeWindow() override {
-		VulkanAppBase::resizeWindow();
+	virtual void resizeWindow(bool /*recordCmdBuf*/) override {
+		VulkanAppBase::resizeWindow(false);
 		createOffscreenRender();
 		for (size_t i = 0; i < static_cast<int>(MAX_FRAMES_IN_FLIGHT); ++i) {
 			updateRtDescriptorSet(i);
 			updatePostDescriptorSet(i);
 		}
+		recordCommandBuffer();
 	}
 
 private:
@@ -421,6 +434,18 @@ private:
 	std::vector<VkBuffer> uniformBuffers;
 	/** uniform buffer memories */
 	std::vector<MemoryAllocator::HostVisibleMemory> uniformBufferMemories;
+
+	struct ObjInstance {
+		glm::mat4 transform;
+		glm::mat4 transformIT;
+		uint64_t vertexAddress;
+		uint64_t IndexAddress;
+	};
+
+	/** vector of obj instances */
+	std::vector<ObjInstance> objInstances;
+	/** obj instances buffer */
+	VkBuffer sceneBuffer = VK_NULL_HANDLE;
 
 	/** @brief build buffer - used to create vertex / index buffer */
 	/*
@@ -910,8 +935,8 @@ private:
 		descriptorSetBindings.addBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1,
 			VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_RAYGEN_BIT_KHR);
 		//scene description
-		/*descriptorSetBindings.addBinding(1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1,
-			VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR);*/
+		descriptorSetBindings.addBinding(1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1,
+			VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR);
 		//textures
 		/*descriptorSetBindings.addBinding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, nbTexture,
 			VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR);*/
@@ -930,13 +955,13 @@ private:
 		VK_CHECK_RESULT(vkAllocateDescriptorSets(devices.device, &descInfo, descriptorSets.data()));
 
 		for (size_t i = 0; i < static_cast<size_t>(MAX_FRAMES_IN_FLIGHT); ++i) {
-			VkDescriptorBufferInfo bufferInfo{};
-			bufferInfo.buffer = uniformBuffers[i];
-			bufferInfo.offset = 0;
-			bufferInfo.range = sizeof(CameraMatrices);
+			VkDescriptorBufferInfo camMatricesInfo{ uniformBuffers[i], 0, sizeof(CameraMatrices) };
+			VkDescriptorBufferInfo sceneBufferInfo{ sceneBuffer, 0, sizeof(ObjInstance) };
 
-			VkWriteDescriptorSet write = descriptorSetBindings.makeWrite(descriptorSets[i], 0, &bufferInfo);
-			vkUpdateDescriptorSets(devices.device, 1, &write, 0, nullptr);
+			std::vector<VkWriteDescriptorSet> writes;
+			writes.emplace_back(descriptorSetBindings.makeWrite(descriptorSets[i], 0, &camMatricesInfo));
+			writes.emplace_back(descriptorSetBindings.makeWrite(descriptorSets[i], 1, &sceneBufferInfo));
+			vkUpdateDescriptorSets(devices.device, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
 		}
 	}
 

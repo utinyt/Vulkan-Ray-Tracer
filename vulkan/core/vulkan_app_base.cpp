@@ -175,7 +175,7 @@ void VulkanAppBase::submitFrame(uint32_t imageIndex) {
 /*
 * handle window resize event - recreate swapchain and swaochain-dependent objects
 */
-void VulkanAppBase::resizeWindow() {
+void VulkanAppBase::resizeWindow(bool recordCmdBuf) {
 	int width = 0, height = 0;
 	glfwGetFramebufferSize(window, &width, &height);
 	while (width == 0 || height == 0) {
@@ -193,7 +193,9 @@ void VulkanAppBase::resizeWindow() {
 
 	destroyCommandBuffers();
 	createCommandBuffers();
-	recordCommandBuffer();
+	if (recordCmdBuf) {
+		recordCommandBuffer();
+	}
 }
 
 /*
