@@ -131,9 +131,7 @@ VkVertexInputBindingDescription Mesh::getBindingDescription() const{
 	if (vertices.buffer == nullptr) {
 		throw std::runtime_error("Mesh::getBindingDescription(): current mesh is empty");
 	}
-	VkVertexInputBindingDescription bindingDescription{};
-	bindingDescription.binding = 0;
-
+	
 	uint32_t stride = sizeof(glm::vec3); //position
 	if (hasNormalAttribute) {
 		stride += sizeof(glm::vec3); //normal
@@ -142,9 +140,7 @@ VkVertexInputBindingDescription Mesh::getBindingDescription() const{
 		stride += sizeof(glm::vec2); //texcoord
 	}
 
-	bindingDescription.stride = stride;
-	bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-	return bindingDescription;
+	return vktools::initializers::vertexInputBindingDescription(0, stride);
 }
 
 std::vector<VkVertexInputAttributeDescription> Mesh::getAttributeDescriptions() const{
@@ -156,29 +152,23 @@ std::vector<VkVertexInputAttributeDescription> Mesh::getAttributeDescriptions() 
 	std::vector<VkVertexInputAttributeDescription> attributeDescriptions(attributeCount);
 
 	//position
-	attributeDescriptions[0].binding = 0;
-	attributeDescriptions[0].location = 0;
-	attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
-	attributeDescriptions[0].offset = 0;
+	attributeDescriptions[0] = 
+		vktools::initializers::vertexInputAttributeDescription(0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0);
 	uint32_t currentAttributeIndex = 1;
 	uint32_t offset = sizeof(glm::vec3);
 
 	//normal
 	if (hasNormalAttribute) {
-		attributeDescriptions[currentAttributeIndex].binding = 0;
-		attributeDescriptions[currentAttributeIndex].location = currentAttributeIndex;
-		attributeDescriptions[currentAttributeIndex].format = VK_FORMAT_R32G32B32_SFLOAT;
-		attributeDescriptions[currentAttributeIndex].offset = offset;
+		attributeDescriptions[currentAttributeIndex] =
+			vktools::initializers::vertexInputAttributeDescription(0, currentAttributeIndex, VK_FORMAT_R32G32B32_SFLOAT, offset);
 		currentAttributeIndex++;
 		offset += sizeof(glm::vec3);
 	}
 
 	//texcoord
 	if (hasTexcoordAttribute) {
-		attributeDescriptions[currentAttributeIndex].binding = 0;
-		attributeDescriptions[currentAttributeIndex].location = currentAttributeIndex;
-		attributeDescriptions[currentAttributeIndex].format = VK_FORMAT_R32G32_SFLOAT;
-		attributeDescriptions[currentAttributeIndex].offset = offset;
+		attributeDescriptions[currentAttributeIndex] =
+			vktools::initializers::vertexInputAttributeDescription(0, currentAttributeIndex, VK_FORMAT_R32G32_SFLOAT, offset);
 		currentAttributeIndex++;
 		offset += sizeof(glm::vec2);
 	}

@@ -221,23 +221,53 @@ namespace vktools {
 			return samplerInfo;
 		}
 
+		inline VkBufferImageCopy bufferCopyRegion(
+			VkExtent3D extent,
+			VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT) {
+			VkBufferImageCopy copy{};
+			copy.imageSubresource.aspectMask = aspect;
+			copy.imageSubresource.layerCount = 1;
+			copy.imageExtent = extent;
+			return copy;
+		}
+
+		inline VkVertexInputBindingDescription vertexInputBindingDescription(uint32_t binding,
+			uint32_t stride,
+			VkVertexInputRate inputRate = VK_VERTEX_INPUT_RATE_VERTEX) {
+			VkVertexInputBindingDescription desc{};
+			desc.binding = binding;
+			desc.stride = stride;
+			desc.inputRate = inputRate;
+			return desc;
+		}
+
+		inline VkVertexInputAttributeDescription vertexInputAttributeDescription(
+			uint32_t binding, uint32_t location, VkFormat format, uint32_t offset) {
+			VkVertexInputAttributeDescription desc{};
+			desc.binding = binding;
+			desc.location = location;
+			desc.format = format;
+			desc.offset = offset;
+			return desc;
+		}
+
 		/*
 		* pipeline-related create infos
 		*/
 
-		inline VkPipelineVertexInputStateCreateInfo getPipelineVertexInputStateCreateInfo(
-			uint32_t vertexBindingDescriptionCount, VkVertexInputBindingDescription* pVertexBindingDescriptions,
-			uint32_t vertexAttributeDescriptionCount, VkVertexInputAttributeDescription* pVertexAttributeDescriptions) {
+		inline VkPipelineVertexInputStateCreateInfo pipelineVertexInputStateCreateInfo(
+			std::vector<VkVertexInputBindingDescription> vertexBindingDescriptions,
+			std::vector<VkVertexInputAttributeDescription> vertexAttributeDescriptions) {
 			VkPipelineVertexInputStateCreateInfo info{};
 			info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-			info.vertexBindingDescriptionCount = vertexBindingDescriptionCount;
-			info.pVertexBindingDescriptions = pVertexBindingDescriptions;
-			info.vertexAttributeDescriptionCount = vertexAttributeDescriptionCount;
-			info.pVertexAttributeDescriptions = pVertexAttributeDescriptions;
+			info.vertexBindingDescriptionCount = static_cast<uint32_t>(vertexBindingDescriptions.size());
+			info.pVertexBindingDescriptions = vertexBindingDescriptions.data();
+			info.vertexAttributeDescriptionCount = static_cast<uint32_t>(vertexAttributeDescriptions.size());
+			info.pVertexAttributeDescriptions = vertexAttributeDescriptions.data();
 			return info;
 		}
 
-		inline VkPipelineInputAssemblyStateCreateInfo getPipelineInputAssemblyStateCreateInfo(
+		inline VkPipelineInputAssemblyStateCreateInfo pipelineInputAssemblyStateCreateInfo(
 			VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST) {
 			VkPipelineInputAssemblyStateCreateInfo info{};
 			info.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -246,7 +276,7 @@ namespace vktools {
 			return info;
 		}
 
-		inline VkPipelineViewportStateCreateInfo getPipelineViewportStateCreateInfo(
+		inline VkPipelineViewportStateCreateInfo pipelineViewportStateCreateInfo(
 			uint32_t viewportCount = 1, uint32_t scissorCount = 1) {
 			VkPipelineViewportStateCreateInfo info{};
 			info.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -255,16 +285,16 @@ namespace vktools {
 			return info;
 		}
 
-		inline VkPipelineDynamicStateCreateInfo getPipelineDynamicStateCreateInfo(
-			VkDynamicState* pStates, uint32_t statesCount) {
+		inline VkPipelineDynamicStateCreateInfo pipelineDynamicStateCreateInfo(
+			VkDynamicState* states, uint32_t stateCount) {
 			VkPipelineDynamicStateCreateInfo info{};
 			info.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-			info.dynamicStateCount = statesCount;
-			info.pDynamicStates = pStates;
+			info.dynamicStateCount = stateCount;
+			info.pDynamicStates = states;
 			return info;
 		}
 
-		inline VkPipelineRasterizationStateCreateInfo getPipelineRasterizationStateCreateInfo(
+		inline VkPipelineRasterizationStateCreateInfo pipelineRasterizationStateCreateInfo(
 			VkPolygonMode polygonMode = VK_POLYGON_MODE_FILL,
 			VkCullModeFlags cullMode = VK_CULL_MODE_BACK_BIT,
 			VkFrontFace frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE) {
@@ -280,7 +310,7 @@ namespace vktools {
 			return info;
 		}
 
-		inline VkPipelineMultisampleStateCreateInfo getPipelineMultisampleStateCreateInfo(
+		inline VkPipelineMultisampleStateCreateInfo pipelineMultisampleStateCreateInfo(
 			VkSampleCountFlagBits sampleCount = VK_SAMPLE_COUNT_1_BIT) {
 			VkPipelineMultisampleStateCreateInfo info{};
 			info.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
@@ -289,7 +319,7 @@ namespace vktools {
 			return info;
 		}
 
-		inline VkPipelineDepthStencilStateCreateInfo getPipelineDepthStencilStateCreateInfo(
+		inline VkPipelineDepthStencilStateCreateInfo pipelineDepthStencilStateCreateInfo(
 			VkBool32 depthTest = VK_TRUE, VkBool32 depthWrite = VK_TRUE, VkCompareOp depthCompareOp = VK_COMPARE_OP_LESS) {
 			VkPipelineDepthStencilStateCreateInfo info{};
 			info.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
@@ -301,7 +331,7 @@ namespace vktools {
 			return info;
 		}
 
-		inline VkPipelineColorBlendAttachmentState getPipelineColorBlendAttachment(VkBool32 blendEnable) {
+		inline VkPipelineColorBlendAttachmentState pipelineColorBlendAttachment(VkBool32 blendEnable) {
 			VkPipelineColorBlendAttachmentState state{};
 			state.blendEnable = blendEnable;
 			state.colorWriteMask =
@@ -321,7 +351,7 @@ namespace vktools {
 			return state;
 		}
 
-		inline VkPipelineColorBlendStateCreateInfo getPipelineColorBlendStateCreateInfo(
+		inline VkPipelineColorBlendStateCreateInfo pipelineColorBlendStateCreateInfo(
 			uint32_t attachmentCount, VkPipelineColorBlendAttachmentState* pAttachmentStates,
 			VkBool32 logicOpEnable = VK_FALSE,
 			float blendConstant1 = 0.f,
@@ -336,7 +366,7 @@ namespace vktools {
 			return info;
 		}
 
-		inline VkPipelineLayoutCreateInfo getPipelineLayoutCreateInfo(
+		inline VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo(
 			uint32_t layoutCount, VkDescriptorSetLayout* pSetLayouts) {
 			VkPipelineLayoutCreateInfo info{};
 			info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -345,13 +375,22 @@ namespace vktools {
 			return info;
 		}
 
-		inline VkPipelineShaderStageCreateInfo getPipelineShaderStageCreateInfo(
+		inline VkPipelineShaderStageCreateInfo pipelineShaderStageCreateInfo(
 			VkShaderStageFlagBits shaderStage, VkShaderModule shaderModule) {
 			VkPipelineShaderStageCreateInfo info{};
 			info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
 			info.stage = shaderStage;
 			info.module = shaderModule;
 			info.pName = "main";
+			return info;
+		}
+
+		inline VkGraphicsPipelineCreateInfo graphicsPipelineCreateInfo(
+			VkPipelineLayout layout, VkRenderPass renderPass) {
+			VkGraphicsPipelineCreateInfo info{};
+			info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+			info.renderPass = renderPass;
+			info.layout = layout;
 			return info;
 		}
 	}

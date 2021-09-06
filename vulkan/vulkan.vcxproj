@@ -11,7 +11,13 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\third_party\include\imgui\imgui.cpp" />
+    <ClCompile Include="..\third_party\include\imgui\imgui_demo.cpp" />
+    <ClCompile Include="..\third_party\include\imgui\imgui_draw.cpp" />
+    <ClCompile Include="..\third_party\include\imgui\imgui_tables.cpp" />
+    <ClCompile Include="..\third_party\include\imgui\imgui_widgets.cpp" />
     <ClCompile Include="core\vulkan_descriptor_set_bindings.cpp" />
+    <ClCompile Include="core\vulkan_imgui.cpp" />
     <ClCompile Include="core\vulkan_memory_allocator.cpp" />
     <ClCompile Include="core\vulkan_mesh.cpp" />
     <ClCompile Include="core\vulkan_app_base.cpp" />
@@ -22,7 +28,14 @@
     <ClCompile Include="core\vulkan_utils.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\third_party\include\imgui\imconfig.h" />
+    <ClInclude Include="..\third_party\include\imgui\imgui.h" />
+    <ClInclude Include="..\third_party\include\imgui\imgui_internal.h" />
+    <ClInclude Include="..\third_party\include\imgui\imstb_rectpack.h" />
+    <ClInclude Include="..\third_party\include\imgui\imstb_textedit.h" />
+    <ClInclude Include="..\third_party\include\imgui\imstb_truetype.h" />
     <ClInclude Include="core\vulkan_descriptor_set_bindings.h" />
+    <ClInclude Include="core\vulkan_imgui.h" />
     <ClInclude Include="core\vulkan_memory_allocator.h" />
     <ClInclude Include="core\vulkan_mesh.h" />
     <ClInclude Include="core\vulkan_texture.h" />
@@ -31,6 +44,10 @@
     <ClInclude Include="core\vulkan_debug.h" />
     <ClInclude Include="core\vulkan_device.h" />
     <ClInclude Include="core\vulkan_swapchain.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="core\shaders\imgui.frag" />
+    <None Include="core\shaders\imgui.vert" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>

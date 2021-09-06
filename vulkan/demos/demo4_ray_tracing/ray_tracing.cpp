@@ -3,8 +3,7 @@
 #include "glm/glm.hpp"
 #include "glm/gtc/matrix_transform.hpp"
 #include "core/vulkan_mesh.h"
-#include "core/vulkan_descriptor_set_bindings.h"
-#include "core/vulkan_texture.h"
+#include "core/vulkan_imgui.h"
 
 class VulkanApp : public VulkanAppBase {
 public:
@@ -22,6 +21,8 @@ public:
 	* destructor - destroy vulkan objects created in this level
 	*/
 	~VulkanApp() {
+		imgui.cleanup();
+
 		devices.memoryAllocator.freeBufferMemory(rtSBTBuffer,
 			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 		vkDestroyBuffer(devices.device, rtSBTBuffer, nullptr);
@@ -168,6 +169,10 @@ public:
 			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, sceneBuffer);
 
 		createOffscreenRender();
+
+		imgui.init(&devices, swapchain.extent.width, swapchain.extent.height,
+			offscreenRenderPass, MAX_FRAMES_IN_FLIGHT);
+
 		createRtDescriptorSet();
 		createDescriptorSet();
 
@@ -446,6 +451,8 @@ private:
 	std::vector<ObjInstance> objInstances;
 	/** obj instances buffer */
 	VkBuffer sceneBuffer = VK_NULL_HANDLE;
+	/** imgui integration */
+	Imgui imgui;
 
 	/** @brief build buffer - used to create vertex / index buffer */
 	/*
@@ -487,6 +494,13 @@ private:
 		vkDestroyBuffer(devices.device, stagingBuffer, nullptr);
 	}
 
+	/*
+	* create acceleration structure & buffer
+	* 
+	* @param info - acceleration structure create info
+	* 
+	* @return AccelKHR - contain created acceleration structure & buffer
+	*/
 	AccelKHR createAcceleration(VkAccelerationStructureCreateInfoKHR& info) {
 		AccelKHR resultAs;
 		resultAs.buffer = devices.createBuffer(info.size,
@@ -498,6 +512,12 @@ private:
 		return resultAs;
 	}
 
+	/*
+	* build bottom-level acceleration structure
+	* 
+	* @param input - vector blas input built from mesh
+	* @param
+	*/
 	void buildBlas(const std::vector<Mesh::BlasInput>& input, VkBuildAccelerationStructureFlagsKHR flags) {
 		uint32_t nbBlas = static_cast<uint32_t>(input.size());
 		VkDeviceSize asTotalSize{ 0 };
@@ -588,6 +608,15 @@ private:
 		vkDestroyBuffer(devices.device, scratchBuffer, nullptr);
 	}
 
+	/*
+	* record building acceleration structure command to the command buffer
+	* 
+	* @param cmdBuf - command buffer to record
+	* @param indices - indices of blas
+	* @param buildAs - vector of acceleration structure info
+	* @param scratchAddress - buffer address where ac data is temporarily stored
+	* @param queryPool - query to find the real amount of memory
+	*/
 	void cmdCreateBlas(VkCommandBuffer cmdBuf, std::vector<uint32_t> indices,
 		std::vector<BuildAccelerationStructure>& buildAs, VkDeviceAddress scratchAddress, VkQueryPool queryPool) {
 		if (queryPool) {
@@ -631,6 +660,11 @@ private:
 
 	/*
 	* create and replace a new acceleration structure and buffer based on the size retrieved by the query
+	* 
+	* @param cmdBuf - command buffer to record
+	* @param indices - indices of blas
+	* @param buildAs - vector of acceleration structure info
+	* @param queryPool - query to find the real amount of memory
 	*/
 	void cmdCompactBlas(VkCommandBuffer cmdBuf, std::vector<uint32_t> indices,
 		std::vector<BuildAccelerationStructure>& buildAs, VkQueryPool queryPool) {
@@ -671,6 +705,8 @@ private:
 
 	/*
 	* return the device address of a Blas previously created
+	* 
+	* @param blasIndex - index of blas to find address
 	*/
 	VkDeviceAddress getBlasDeviceAddress(uint32_t blasIndex) {
 		assert((size_t)blasIndex < blas.size());
@@ -680,6 +716,12 @@ private:
 		return vkfp::vkGetAccelerationStructureDeviceAddressKHR(devices.device, &addressInfo);
 	}
 
+	/*
+	* build top-level acceleration structure
+	* 
+	* @param instance - 
+	* @param flags - used for acceleration structure build info
+	*/
 	void buildTlas(const std::vector<VkAccelerationStructureInstanceKHR>& instances,
 		VkBuildAccelerationStructureFlagsKHR flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR,
 		bool update = false) {
@@ -798,6 +840,9 @@ private:
 		vkDestroyBuffer(devices.device, scratchBuffer, nullptr);
 	}
 
+	/*
+	* create raytrace descriptor set - acceleration structure & raytracing pipeline destination image
+	*/
 	void createRtDescriptorSet() {
 		rtDescriptorSetBindings.addBinding(0,
 			VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,
@@ -823,6 +868,7 @@ private:
 		descInfo.pSetLayouts = layout.data();
 		VK_CHECK_RESULT(vkAllocateDescriptorSets(devices.device, &descInfo, rtDescriptorSets.data()));
 
+		//update raytrace descriptor sets
 		for (uint32_t i = 0; i < nbRtDescriptorSet; ++i) {
 			VkWriteDescriptorSetAccelerationStructureKHR descAsInfo{};
 			descAsInfo.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR;
@@ -837,6 +883,9 @@ private:
 		}
 	}
 
+	/*
+	* create offscreen images - color & depth images used as destinations of raytrace pipeline
+	*/
 	OffscreenImages createOffscreenImages() {
 		OffscreenImages images{};
 
@@ -878,6 +927,9 @@ private:
 		return images;
 	}
 
+	/*
+	* create offscreen images & render pass & framebuffers
+	*/
 	void createOffscreenRender() {
 		for (auto& offscreen : offscreens) {
 			offscreen.offscreenColorBuffer.cleanup();
@@ -928,6 +980,9 @@ private:
 		}
 	}
 
+	/*
+	* create (normal) descriptor set - set camera matrix uniform buffer & scene description buffer
+	*/
 	void createDescriptorSet() {
 		uint32_t nbTexture = 0;
 
@@ -965,6 +1020,12 @@ private:
 		}
 	}
 
+	/*
+	* update raytrace descriptor set - set image where raytrac pipeline output is stored
+	* this should be called in windowResized()
+	*
+	* @param currentFrame - index of raytrace descriptor set (0 <= currentFrame < MAX_FRAMES_IN_FLIGHT)
+	*/
 	void updateRtDescriptorSet(size_t currentFrame) {
 		VkDescriptorImageInfo imageInfo{ {}, offscreens[currentFrame].offscreenColorBuffer.descriptor.imageView,
 			VK_IMAGE_LAYOUT_GENERAL };
@@ -972,6 +1033,9 @@ private:
 		vkUpdateDescriptorSets(devices.device, 1, &wds, 0, nullptr);
 	}
 
+	/*
+	* create raytrace pipeline
+	*/
 	void createRtPipeline() {
 		enum StageIndices {
 			STAGE_RAYGEN,
@@ -1099,29 +1163,35 @@ private:
 		memory.unmap(devices.device);
 	}
 
+	/*
+	* full quad pipeline - used for #2 render pass
+	*/
 	void createPostPipeline() {
-		auto vertexInputStateInfo = vktools::initializers::getPipelineVertexInputStateCreateInfo(0, nullptr, 0, nullptr);
-		auto inputAssemblyInfo = vktools::initializers::getPipelineInputAssemblyStateCreateInfo();
-		auto viewportStateInfo = vktools::initializers::getPipelineViewportStateCreateInfo();
-		VkDynamicState dynamicStates[] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
-		auto dynamicStatesInfo = vktools::initializers::getPipelineDynamicStateCreateInfo(dynamicStates, 2);
-		auto rasterizationInfo = vktools::initializers::getPipelineRasterizationStateCreateInfo(
+		//fixed functions
+		auto vertexInputStateInfo = vktools::initializers::pipelineVertexInputStateCreateInfo({}, {});
+		auto inputAssemblyInfo = vktools::initializers::pipelineInputAssemblyStateCreateInfo();
+		auto viewportStateInfo = vktools::initializers::pipelineViewportStateCreateInfo();
+		VkDynamicState dynamicStates []= { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
+		auto dynamicStatesInfo = vktools::initializers::pipelineDynamicStateCreateInfo(dynamicStates, 2);
+		auto rasterizationInfo = vktools::initializers::pipelineRasterizationStateCreateInfo(
 			VK_POLYGON_MODE_FILL, VK_CULL_MODE_FRONT_BIT);
-		auto multisamplingInfo = vktools::initializers::getPipelineMultisampleStateCreateInfo();
-		auto depthStencilInfo = vktools::initializers::getPipelineDepthStencilStateCreateInfo();
-		auto blendAttachmentState = vktools::initializers::getPipelineColorBlendAttachment(VK_FALSE);
-		auto colorBlendStateInfo = vktools::initializers::getPipelineColorBlendStateCreateInfo(1, &blendAttachmentState);
-		auto pipelineLayoutInfo = vktools::initializers::getPipelineLayoutCreateInfo(1, &postDescriptorSetLayout);
+		auto multisamplingInfo = vktools::initializers::pipelineMultisampleStateCreateInfo();
+		auto depthStencilInfo = vktools::initializers::pipelineDepthStencilStateCreateInfo();
+		auto blendAttachmentState = vktools::initializers::pipelineColorBlendAttachment(VK_FALSE);
+		auto colorBlendStateInfo = vktools::initializers::pipelineColorBlendStateCreateInfo(1, &blendAttachmentState);
+		auto pipelineLayoutInfo = vktools::initializers::pipelineLayoutCreateInfo(1, &postDescriptorSetLayout);
 		VK_CHECK_RESULT(vkCreatePipelineLayout(devices.device, &pipelineLayoutInfo, nullptr, &postPipelineLayout));
 
+		//shader modules
 		VkShaderModule vertModule = vktools::createShaderModule(devices.device, vktools::readFile("shaders/full_quad_vert.spv"));
-		auto vertShaderStageInfo = vktools::initializers::getPipelineShaderStageCreateInfo(
+		auto vertShaderStageInfo = vktools::initializers::pipelineShaderStageCreateInfo(
 			VK_SHADER_STAGE_VERTEX_BIT, vertModule);
 
 		VkShaderModule fragModule = vktools::createShaderModule(devices.device, vktools::readFile("shaders/full_quad_frag.spv"));
-		auto fragShaderStageInfo = vktools::initializers::getPipelineShaderStageCreateInfo(
+		auto fragShaderStageInfo = vktools::initializers::pipelineShaderStageCreateInfo(
 			VK_SHADER_STAGE_FRAGMENT_BIT, fragModule);
 
+		//create pipeline
 		VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
 		VkGraphicsPipelineCreateInfo pipelineInfo{};
 		pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -1140,10 +1210,14 @@ private:
 		pipelineInfo.subpass = 0;
 		VK_CHECK_RESULT(vkCreateGraphicsPipelines(devices.device, {}, 1, &pipelineInfo, nullptr, &postPipeline));
 
+		//destroy shader modules
 		vkDestroyShaderModule(devices.device, vertModule, nullptr);
 		vkDestroyShaderModule(devices.device, fragModule, nullptr);
 	}
 
+	/*
+	* create post descriptor set - one image sampler for ray tracing pipeline output
+	*/
 	void createPostDescriptorSet() {
 		postDescriptorSetBindings.addBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 			1, VK_SHADER_STAGE_FRAGMENT_BIT);
@@ -1155,12 +1229,18 @@ private:
 			postDescriptorPool, nbDescriptorSet);
 	}
 
+	/*
+	* update post descriptor set - sampler references offscreen color buffer
+	*/
 	void updatePostDescriptorSet(size_t currentFrame) {
 		VkWriteDescriptorSet wd = postDescriptorSetBindings.makeWrite(postDescriptorSets[currentFrame], 0,
 			&offscreens[currentFrame].offscreenColorBuffer.descriptor);
 		vkUpdateDescriptorSets(devices.device, 1, &wd, 0, nullptr);
 	}
 
+	/*
+	* create uniform buffers - camera matrices
+	*/
 	void createUniformbuffer() {
 		VkDeviceSize size = sizeof(CameraMatrices);
 		uniformBuffers.resize(MAX_FRAMES_IN_FLIGHT);
@@ -1176,6 +1256,11 @@ private:
 		}
 	}
 
+	/*
+	* update uniform buffer
+	* 
+	* @param currentFrame - index of uniform buffer (0 <= currentFrame < MAX_FRAMES_IN_FLIGHT)
+	*/
 	void UpdateUniformBuffer(size_t currentFrame) {
 		uniformBufferMemories[currentFrame].mapData(devices.device, &camera);
 	}
