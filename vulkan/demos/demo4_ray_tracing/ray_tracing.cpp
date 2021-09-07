@@ -21,8 +21,6 @@ public:
 	* destructor - destroy vulkan objects created in this level
 	*/
 	~VulkanApp() {
-		imgui.cleanup();
-
 		devices.memoryAllocator.freeBufferMemory(rtSBTBuffer,
 			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 		vkDestroyBuffer(devices.device, rtSBTBuffer, nullptr);
@@ -169,9 +167,6 @@ public:
 			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, sceneBuffer);
 
 		createOffscreenRender();
-
-		imgui.init(&devices, swapchain.extent.width, swapchain.extent.height,
-			offscreenRenderPass, MAX_FRAMES_IN_FLIGHT);
 
 		createRtDescriptorSet();
 		createDescriptorSet();
@@ -451,8 +446,6 @@ private:
 	std::vector<ObjInstance> objInstances;
 	/** obj instances buffer */
 	VkBuffer sceneBuffer = VK_NULL_HANDLE;
-	/** imgui integration */
-	Imgui imgui;
 
 	/** @brief build buffer - used to create vertex / index buffer */
 	/*
@@ -503,7 +496,7 @@ private:
 	*/
 	AccelKHR createAcceleration(VkAccelerationStructureCreateInfoKHR& info) {
 		AccelKHR resultAs;
-		resultAs.buffer = devices.createBuffer(info.size,
+		devices.createBuffer(resultAs.buffer, info.size,
 			VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR |
 			VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
 
@@ -890,7 +883,8 @@ private:
 		OffscreenImages images{};
 
 		//create offscreen color buffer
-		VkImage offscreenColorImage = devices.createImage({ swapchain.extent.width,swapchain.extent.height, 1 },
+		VkImage offscreenColorImage;
+		devices.createImage(offscreenColorImage, { swapchain.extent.width,swapchain.extent.height, 1 },
 			offscreenColorFormat,
 			VK_IMAGE_TILING_OPTIMAL,
 			VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
@@ -905,7 +899,8 @@ private:
 		images.offscreenColorBuffer.init(&devices, offscreenColorImage, offscreenColorImageView, VK_IMAGE_LAYOUT_GENERAL, sampler);
 
 		//create offscreen depth buffer
-		VkImage offscreenDepthImage = devices.createImage({ swapchain.extent.width,swapchain.extent.height, 1 },
+		VkImage offscreenDepthImage;
+		devices.createImage(offscreenDepthImage, { swapchain.extent.width,swapchain.extent.height, 1 },
 			offscreenDepthFormat,
 			VK_IMAGE_TILING_OPTIMAL,
 			VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
@@ -1168,7 +1163,7 @@ private:
 	*/
 	void createPostPipeline() {
 		//fixed functions
-		auto vertexInputStateInfo = vktools::initializers::pipelineVertexInputStateCreateInfo({}, {});
+		auto vertexInputStateInfo = vktools::initializers::pipelineVertexInputStateCreateInfo(nullptr, 0, nullptr, 0);
 		auto inputAssemblyInfo = vktools::initializers::pipelineInputAssemblyStateCreateInfo();
 		auto viewportStateInfo = vktools::initializers::pipelineViewportStateCreateInfo();
 		VkDynamicState dynamicStates []= { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };

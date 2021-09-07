@@ -358,7 +358,7 @@ void VulkanAppBase::createDepthStencilImage() {
 		VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT
 	);
 
-	depthImage = devices.createImage({ swapchain.extent.width,swapchain.extent.height, 1 },
+	devices.createImage(depthImage, { swapchain.extent.width,swapchain.extent.height, 1 },
 		depthFormat,
 		VK_IMAGE_TILING_OPTIMAL,
 		VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,

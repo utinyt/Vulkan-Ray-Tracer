@@ -51,7 +51,7 @@ void Texture2D::load(VulkanDevice* devices, unsigned char* data,
 	//image creation
 	this->devices = devices;
 
-	image = devices->createImage({ texWidth, texHeight, 1 },
+	devices->createImage(image, { texWidth, texHeight, 1 },
 		format,
 		VK_IMAGE_TILING_OPTIMAL,
 		VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,

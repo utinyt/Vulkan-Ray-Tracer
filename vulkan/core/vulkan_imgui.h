@@ -7,8 +7,17 @@
 */
 class Imgui {
 private:
+	//UI params
+	struct PushConstBlock {
+		glm::vec2 scale;
+		glm::vec2 translate;
+	} pushConstBlock;
+
 	/** vertex & index buffer */
-	VkBuffer vertexIndexBuffer					= VK_NULL_HANDLE;
+	VkBuffer vertexBuffer						= VK_NULL_HANDLE;
+	VkBuffer indexBuffer						= VK_NULL_HANDLE;
+	MemoryAllocator::HostVisibleMemory vertexMem;
+	MemoryAllocator::HostVisibleMemory indexMem;
 	int32_t vertexCount							= 0;
 	int32_t indexCount							= 0;
 	/** font image */
@@ -29,5 +38,10 @@ public:
 		VkRenderPass renderPass, uint32_t MAX_FRAMES_IN_FLIGHT);
 	/** @brief destroy all resources */
 	void cleanup();
-	
+	/** @brief start imgui frame */
+	void newFrame();
+	/** @brief update vertex & index buffer */
+	void updateBuffers();
+	/** @brief record imgui draw commands */
+	void drawFrame(VkCommandBuffer cmdBuf, size_t currentFrame);
 };

@@ -256,14 +256,16 @@ namespace vktools {
 		*/
 
 		inline VkPipelineVertexInputStateCreateInfo pipelineVertexInputStateCreateInfo(
-			std::vector<VkVertexInputBindingDescription> vertexBindingDescriptions,
-			std::vector<VkVertexInputAttributeDescription> vertexAttributeDescriptions) {
+			VkVertexInputBindingDescription* pVertexBindingDescriptions,
+			uint32_t vertexBindingDescriptionCount,
+			VkVertexInputAttributeDescription* pVertexAttributeDescriptions,
+			uint32_t vertexAttributeDescriptionCount) {
 			VkPipelineVertexInputStateCreateInfo info{};
 			info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-			info.vertexBindingDescriptionCount = static_cast<uint32_t>(vertexBindingDescriptions.size());
-			info.pVertexBindingDescriptions = vertexBindingDescriptions.data();
-			info.vertexAttributeDescriptionCount = static_cast<uint32_t>(vertexAttributeDescriptions.size());
-			info.pVertexAttributeDescriptions = vertexAttributeDescriptions.data();
+			info.vertexBindingDescriptionCount = vertexBindingDescriptionCount;
+			info.pVertexBindingDescriptions = pVertexBindingDescriptions;
+			info.vertexAttributeDescriptionCount = vertexAttributeDescriptionCount;
+			info.pVertexAttributeDescriptions = pVertexAttributeDescriptions;
 			return info;
 		}
 

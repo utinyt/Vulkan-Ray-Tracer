@@ -12,14 +12,16 @@ struct VulkanDevice {
 	void createCommandPool();
 	
 	/** @brief create buffer & buffer memory */
-	VkBuffer createBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
+	MemoryAllocator::HostVisibleMemory createBuffer(VkBuffer& buffer, VkDeviceSize size,
+		VkBufferUsageFlags usage,
 		VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 	/** @brief copy data to another buffer */
 	void copyBuffer(VkCommandPool commandPool, VkBuffer srcBuffer, VkBuffer dstBuffer,
 		VkDeviceSize size) const;
 	/** @brief create image & image memory */
-	VkImage createImage(VkExtent3D extent, VkFormat format, VkImageTiling tiling,
-		VkImageUsageFlags usage, VkMemoryPropertyFlags properties);
+	MemoryAllocator::HostVisibleMemory createImage(VkImage& image, VkExtent3D extent, VkFormat format,
+		VkImageTiling tiling, VkImageUsageFlags usage,
+		VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 	/** @brief copy data to an image */
 	void copyBufferToImage(VkBuffer buffer, VkImage image, VkOffset3D offset, VkExtent3D extent) const;
 	/** @brief create & start one-time submit command buffer */

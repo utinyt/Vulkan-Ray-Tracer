@@ -55,7 +55,7 @@ MemoryAllocator::HostVisibleMemory MemoryAllocator::allocateBufferMemory(VkBuffe
 			MemoryBlock memoryBlock{};
 			if (pool.memoryChunks[i].findSuitableMemoryLocation(memRequirements, bufferImageGranularity, memoryBlock)) {
 				pool.memoryChunks[i].addBufferMemoryBlock(device, buffer, memoryBlock);
-				if(properties & (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT))
+				if(properties & (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT))
 					return { pool.memoryChunks[i].memoryHandle, memoryBlock.size, memoryBlock.offset };
 				else {
 					return{};
@@ -69,7 +69,7 @@ MemoryAllocator::HostVisibleMemory MemoryAllocator::allocateBufferMemory(VkBuffe
 	MemoryBlock memoryBlock{};
 	if (pool.memoryChunks.back().findSuitableMemoryLocation(memRequirements, bufferImageGranularity, memoryBlock)) {
 		pool.memoryChunks.back().addBufferMemoryBlock(device, buffer, memoryBlock);
-		if (properties & (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT))
+		if (properties & (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT))
 			return { pool.memoryChunks.back().memoryHandle, memoryBlock.size, memoryBlock.offset };
 		else {
 			return{};

@@ -296,14 +296,12 @@ VulkanDevice::SwapchainSupportDetails VulkanDevice::querySwapchainSupport(
 * 
 * @return buffer - created buffer
 */
-VkBuffer VulkanDevice::createBuffer(VkDeviceSize size,
+MemoryAllocator::HostVisibleMemory VulkanDevice::createBuffer(VkBuffer& buffer, VkDeviceSize size,
 	VkBufferUsageFlags usage, VkMemoryPropertyFlags properties) {
 	//buffer creation
-	VkBuffer buffer = VK_NULL_HANDLE;
 	VkBufferCreateInfo bufferInfo = vktools::initializers::bufferCreateInfo(size, usage);
 	VK_CHECK_RESULT(vkCreateBuffer(device, &bufferInfo, nullptr, &buffer));
-	memoryAllocator.allocateBufferMemory(buffer, properties);
-	return buffer;
+	return memoryAllocator.allocateBufferMemory(buffer, properties);;
 }
 
 void VulkanDevice::copyBuffer(VkCommandPool commandPool, VkBuffer srcBuffer, VkBuffer dstBuffer,
@@ -331,14 +329,13 @@ void VulkanDevice::copyBuffer(VkCommandPool commandPool, VkBuffer srcBuffer, VkB
 * @param image - return image handle
 * @param imageMemory - return image memory handle
 */
-VkImage VulkanDevice::createImage(VkExtent3D extent, VkFormat format, VkImageTiling tiling,
-	VkImageUsageFlags usage, VkMemoryPropertyFlags properties){
+MemoryAllocator::HostVisibleMemory VulkanDevice::createImage(VkImage& image, VkExtent3D extent,
+	VkFormat format, VkImageTiling tiling,
+	VkImageUsageFlags usage, VkMemoryPropertyFlags properties) {
 	//image creation
-	VkImage image;
 	VkImageCreateInfo imageInfo = vktools::initializers::imageCreateInfo(extent, format, tiling, usage);
 	VK_CHECK_RESULT(vkCreateImage(device, &imageInfo, nullptr, &image));
-	memoryAllocator.allocateImageMemory(image, properties);
-	return image;
+	return memoryAllocator.allocateImageMemory(image, properties);
 }
 
 void VulkanDevice::copyBufferToImage(VkBuffer buffer, VkImage image,
