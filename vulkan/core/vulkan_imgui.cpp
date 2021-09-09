@@ -1,7 +1,6 @@
-#include <array>
 #include <imgui/imgui.h>
+#include <array>
 #include "vulkan_imgui.h"
-#include <filesystem>
 
 /*
 * init context & style & resources
@@ -54,7 +53,7 @@ void Imgui::init(VulkanDevice* devices, int width, int height,
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo = 
 		vktools::initializers::pipelineLayoutCreateInfo(1, &descriptorSetLayout);
 	
-	VkPushConstantRange pushConstantRange{ VK_SHADER_STAGE_VERTEX_BIT, sizeof(PushConstBlock), 0 };
+	VkPushConstantRange pushConstantRange{ VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstBlock) };
 	pipelineLayoutInfo.pushConstantRangeCount = 1;
 	pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
 
@@ -158,15 +157,17 @@ void Imgui::newFrame() {
 
 /*
 * update vertex & index buffer
+* 
+* @return bool - is updated?
 */
-void Imgui::updateBuffers() {
+bool Imgui::updateBuffers() {
 	ImDrawData* imDrawData = ImGui::GetDrawData();
 
 	VkDeviceSize vertexBufferSize = imDrawData->TotalVtxCount * sizeof(ImDrawVert);
 	VkDeviceSize indexBufferSize = imDrawData->TotalIdxCount* sizeof(ImDrawIdx);
 
 	if (vertexBufferSize == 0 || indexBufferSize == 0) {
-		return;
+		return false;
 	}
 
 	//update buffers only if vertex or index count has been changed
@@ -202,6 +203,7 @@ void Imgui::updateBuffers() {
 
 	vertexMem.unmap(devices->device);
 	indexMem.unmap(devices->device);
+	return true;
 }
 
 /*

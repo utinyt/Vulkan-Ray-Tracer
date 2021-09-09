@@ -41,7 +41,7 @@ public:
 	/** @brief start imgui frame */
 	void newFrame();
 	/** @brief update vertex & index buffer */
-	void updateBuffers();
+	bool updateBuffers();
 	/** @brief record imgui draw commands */
 	void drawFrame(VkCommandBuffer cmdBuf, size_t currentFrame);
 };

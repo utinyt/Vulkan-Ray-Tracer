@@ -1,4 +1,6 @@
 #include <fstream>
+#include <imgui/imgui.h>
+#include "vulkan_imgui.h"
 #include "vulkan_app_base.h"
 #include "vulkan_debug.h"
 
@@ -64,14 +66,37 @@ void VulkanAppBase::init() {
 }
 
 /*
-* called every frame - may contain update & draw functions
+* called every frame - contain draw functions
 */
 void VulkanAppBase::run() {
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
+		update();
 		draw();
 	}
 	vkDeviceWaitIdle(devices.device);
+}
+
+/*
+* called every frame - update application
+*/
+void VulkanAppBase::update() {
+	glfwGetCursorPos(window, &xpos, &ypos);
+	left = (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS);
+	right = (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS);
+
+	if (imgui) {
+		ImGuiIO& io = ImGui::GetIO();
+		io.MousePos = ImVec2(static_cast<float>(xpos), static_cast<float>(ypos));
+		io.MouseDown[0] = left;
+		io.MouseDown[1] = right;
+
+		imgui->newFrame();
+		if (imgui->updateBuffers()) {
+			resetCommandBuffer();
+			recordCommandBuffer();
+		}
+	}
 }
 
 /*
@@ -185,6 +210,11 @@ void VulkanAppBase::resizeWindow(bool recordCmdBuf) {
 
 	vkDeviceWaitIdle(devices.device);
 
+	if (imgui) {
+		ImGuiIO& io = ImGui::GetIO();
+		io.DisplaySize = ImVec2(static_cast<float>(width), static_cast<float>(height));
+	}
+
 	swapchain.create();
 
 	destroyDepthStencilImage();
@@ -208,6 +238,12 @@ void VulkanAppBase::resizeWindow(bool recordCmdBuf) {
 void VulkanAppBase::windowResizeCallbck(GLFWwindow* window, int width, int height) {
 	auto app = reinterpret_cast<VulkanAppBase*>(glfwGetWindowUserPointer(window));
 	app->windowResized = true;
+}
+
+void VulkanAppBase::resetCommandBuffer() {
+	vkDeviceWaitIdle(devices.device);
+	destroyCommandBuffers();
+	createCommandBuffers();
 }
 
 /*

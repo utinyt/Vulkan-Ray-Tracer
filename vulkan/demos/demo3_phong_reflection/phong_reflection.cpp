@@ -1,5 +1,6 @@
 #include <array>
 #include <chrono>
+#include <include/imgui/imgui.h>
 #include "core/vulkan_app_base.h"
 #include "core/vulkan_mesh.h"
 #define GLM_FORCE_RADIANS
@@ -20,12 +21,17 @@ public:
 	* constructor - get window size & title
 	*/
 	VulkanApp(int width, int height, const std::string& appName)
-		: VulkanAppBase(width, height, appName) {}
+		: VulkanAppBase(width, height, appName) {
+		imgui = new Imgui;
+	}
 
 	/*
 	* destructor - destroy vulkan objects created in this level
 	*/
 	~VulkanApp() {
+		imgui->cleanup();
+		delete imgui;
+
 		vkDestroyDescriptorPool(devices.device, descriptorPool, nullptr);
 
 		for (size_t i = 0; i < uniformBuffers.size(); ++i) {
@@ -51,7 +57,7 @@ public:
 	*/
 	virtual void initApp() override {
 		VulkanAppBase::initApp();
-
+		
 		//descriptor - 1 uniform buffer
 		bindings.addBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT);
 		descriptorPool = bindings.createDescriptorPool(devices.device, MAX_FRAMES_IN_FLIGHT);
@@ -79,6 +85,12 @@ public:
 		createUniformBuffers();
 		//update descriptor set
 		updateDescriptorSets();
+		//imgui
+		if (imgui) {
+			imgui->init(&devices, swapchain.extent.width, swapchain.extent.height, renderPass, MAX_FRAMES_IN_FLIGHT);
+			imgui->newFrame();
+			imgui->updateBuffers();
+		}
 		//record command buffer
 		recordCommandBuffer();
 	}
@@ -117,7 +129,7 @@ private:
 		uint32_t imageIndex = prepareFrame();
 
 		updateUniformBuffer(currentFrame);
-
+		
 		//render
 		VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
 		VkSubmitInfo submitInfo{};
@@ -318,6 +330,8 @@ private:
 
 			vkCmdDrawIndexed(commandBuffers[i], static_cast<uint32_t>(mesh.indices.size()), 1, 0, 0, 0);
 			//vkCmdDraw(commandBuffers[i], static_cast<uint32_t>(vertices.size()), 1, 0, 0);
+
+			imgui->drawFrame(commandBuffers[i], descriptorSetIndex);
 
 			vkCmdEndRenderPass(commandBuffers[i]);
 			VK_CHECK_RESULT(vkEndCommandBuffer(commandBuffers[i]));
