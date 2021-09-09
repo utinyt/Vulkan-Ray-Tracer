@@ -8,6 +8,16 @@
 #include "glm/gtc/matrix_transform.hpp"
 #include "core/vulkan_imgui.h"
 
+class Imgui : public ImguiBase {
+public:
+	virtual void newFrame() override {
+		ImGui::NewFrame();
+		ImGui::Begin("Some Text");
+		ImGui::End();
+		ImGui::Render();
+	}
+};
+
 class VulkanApp : public VulkanAppBase {
 public:
 	/** uniform buffer object */

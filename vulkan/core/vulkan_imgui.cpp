@@ -7,7 +7,7 @@
 * 
 * @param devices - abstracted vulkan device (physical / logical) pointer
 */
-void Imgui::init(VulkanDevice* devices, int width, int height,
+void ImguiBase::init(VulkanDevice* devices, int width, int height,
 	VkRenderPass renderPass, uint32_t MAX_FRAMES_IN_FLIGHT) {
 	this->devices = devices;
 	ImGui::CreateContext();
@@ -127,7 +127,7 @@ void Imgui::init(VulkanDevice* devices, int width, int height,
 /*
 * destroy all resources
 */
-void Imgui::cleanup() {
+void ImguiBase::cleanup() {
 	ImGui::DestroyContext();
 	//vertex & index buffer
 	devices->memoryAllocator.freeBufferMemory(vertexIndexBuffer, 
@@ -144,9 +144,9 @@ void Imgui::cleanup() {
 }
 
 /*
-* start  imgui frame
+* start imgui frame
 */
-void Imgui::newFrame() {
+void ImguiBase::newFrame() {
 	ImGui::NewFrame();
 	ImGui::ShowDemoWindow();
 	ImGui::Render();
@@ -157,7 +157,7 @@ void Imgui::newFrame() {
 * 
 * @return bool - is updated?
 */
-bool Imgui::updateBuffers() {
+bool ImguiBase::updateBuffers() {
 	bool isUpdate = false;
 	ImDrawData* imDrawData = ImGui::GetDrawData();
 
@@ -212,7 +212,7 @@ bool Imgui::updateBuffers() {
 * @param cmdBuf - command buffer to record
 * @param currentFrame - index of descriptor set (0 <= currentFrame < MAX_FRAMES_IN_FLIGHT)
 */
-void Imgui::drawFrame(VkCommandBuffer cmdBuf, size_t currentFrame) {
+void ImguiBase::drawFrame(VkCommandBuffer cmdBuf, size_t currentFrame) {
 	vkCmdBindDescriptorSets(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
 		pipelineLayout, 0, 1, &descriptorSets[currentFrame], 0, nullptr);
 	vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);

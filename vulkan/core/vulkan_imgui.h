@@ -5,7 +5,7 @@
 /*
 * Imgui & vulkan integration
 */
-class Imgui {
+class ImguiBase {
 private:
 	//UI params
 	struct PushConstBlock {
@@ -37,7 +37,7 @@ public:
 	/** @brief destroy all resources */
 	void cleanup();
 	/** @brief start imgui frame */
-	void newFrame();
+	virtual void newFrame();
 	/** @brief update vertex & index buffer */
 	bool updateBuffers();
 	/** @brief record imgui draw commands */

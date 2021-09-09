@@ -3,7 +3,7 @@
 #include "vulkan_swapchain.h"
 #include "GLFW/glfw3.h"
 
-class Imgui;
+class ImguiBase;
 class VulkanAppBase {
 public:
 	VulkanAppBase(int width, int height, const std::string& appName);
@@ -33,7 +33,7 @@ protected:
 	/** glfw mouse buton  */
 	bool left = false, right = false;
 	/** imgui vulkan integration */
-	Imgui* imgui = nullptr;
+	ImguiBase* imgui = nullptr;
 	/** window extent */
 	int width, height;
 	/** application title */
