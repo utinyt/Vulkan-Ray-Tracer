@@ -11,10 +11,11 @@
 class Imgui : public ImguiBase {
 public:
 	virtual void newFrame() override {
-		ImGui::NewFrame();
+		ImguiBase::newFrame();
+		/*ImGui::NewFrame();
 		ImGui::Begin("Some Text");
 		ImGui::End();
-		ImGui::Render();
+		ImGui::Render();*/
 	}
 };
 
@@ -98,8 +99,6 @@ public:
 		//imgui
 		if (imgui) {
 			imgui->init(&devices, swapchain.extent.width, swapchain.extent.height, renderPass, MAX_FRAMES_IN_FLIGHT);
-			imgui->newFrame();
-			imgui->updateBuffers();
 		}
 		//record command buffer
 		recordCommandBuffer();
@@ -139,7 +138,7 @@ private:
 		uint32_t imageIndex = prepareFrame();
 
 		updateUniformBuffer(currentFrame);
-		
+
 		//render
 		VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
 		VkSubmitInfo submitInfo{};

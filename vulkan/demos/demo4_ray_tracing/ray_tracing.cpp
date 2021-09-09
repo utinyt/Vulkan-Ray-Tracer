@@ -5,6 +5,13 @@
 #include "core/vulkan_mesh.h"
 #include "core/vulkan_imgui.h"
 
+class Imgui : public ImguiBase {
+public:
+	virtual void newFrame() override {
+		ImguiBase::newFrame();
+	}
+};
+
 class VulkanApp : public VulkanAppBase {
 public:
 	/*
@@ -15,12 +22,17 @@ public:
 		enabledDeviceExtensions.push_back(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME);
 		enabledDeviceExtensions.push_back(VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME);
 		enabledDeviceExtensions.push_back(VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME);
+		imgui = new Imgui;
 	}
 
 	/*
 	* destructor - destroy vulkan objects created in this level
 	*/
 	~VulkanApp() {
+		//imgui
+		imgui->cleanup();
+		delete imgui;
+
 		devices.memoryAllocator.freeBufferMemory(rtSBTBuffer,
 			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 		vkDestroyBuffer(devices.device, rtSBTBuffer, nullptr);
@@ -167,26 +179,41 @@ public:
 			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, sceneBuffer);
 
 		createOffscreenRender();
-
-		createRtDescriptorSet();
 		createDescriptorSet();
 
+		/*
+		* ray tracing
+		*/
+		//descriptor set
+		createRtDescriptorSet();
 		for (size_t i = 0; i < static_cast<int>(MAX_FRAMES_IN_FLIGHT); ++i) {
 			updateRtDescriptorSet(i);
 		}
-
+		//pipeline
 		createRtPipeline();
+		//SBT
 		createRtShaderBindingTable();
 
+		/*
+		* post
+		*/
+		//post descriptor set
 		createPostDescriptorSet();
 		for (size_t i = 0; i < static_cast<int>(MAX_FRAMES_IN_FLIGHT); ++i) {
 			updatePostDescriptorSet(i);
 		}
+		//render pass
 		postRenderPass = vktools::createRenderPass(devices.device,
 			{ swapchain.surfaceFormat.format }, depthFormat, 1, true, true);
+		//pipeline
 		createPostPipeline();
 
+		//imgui
+		imgui->init(&devices, swapchain.extent.width, swapchain.extent.height, postRenderPass, MAX_FRAMES_IN_FLIGHT);
+
+		//framebuffer
 		createFramebuffers();
+		//command buffer
 		recordCommandBuffer();
 	}
 
@@ -306,6 +333,9 @@ public:
 			vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, postPipelineLayout, 0, 1,
 				&postDescriptorSets[descriptorSetIndex], 0, nullptr);
 			vkCmdDraw(commandBuffers[i], 3, 1, 0, 0); //full screen triangle
+
+			imgui->drawFrame(commandBuffers[i], descriptorSetIndex);
+
 			vkCmdEndRenderPass(commandBuffers[i]);
 			VK_CHECK_RESULT(vkEndCommandBuffer(commandBuffers[i]));
 		}
@@ -322,6 +352,7 @@ public:
 			updatePostDescriptorSet(i);
 		}
 		recordCommandBuffer();
+		//LOG("Window resized");
 	}
 
 private:

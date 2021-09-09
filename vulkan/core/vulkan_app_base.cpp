@@ -86,15 +86,17 @@ void VulkanAppBase::update() {
 	right = (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS);
 
 	if (imgui) {
+
 		ImGuiIO& io = ImGui::GetIO();
 		io.MousePos = ImVec2(static_cast<float>(xpos), static_cast<float>(ypos));
 		io.MouseDown[0] = left;
 		io.MouseDown[1] = right;
 
 		imgui->newFrame();
-		if (imgui->updateBuffers()) {
+		if (imgui->updateBuffers() || (ImGui::IsMouseDown(ImGuiMouseButton(0)) && io.WantCaptureMouse)) {
 			resetCommandBuffer();
 			recordCommandBuffer();
+			//LOG("update()");
 		}
 	}
 }
@@ -210,16 +212,17 @@ void VulkanAppBase::resizeWindow(bool recordCmdBuf) {
 
 	vkDeviceWaitIdle(devices.device);
 
-	if (imgui) {
-		ImGuiIO& io = ImGui::GetIO();
-		io.DisplaySize = ImVec2(static_cast<float>(width), static_cast<float>(height));
-	}
-
 	swapchain.create();
 
 	destroyDepthStencilImage();
 	createDepthStencilImage();
 	createFramebuffers();
+
+	if (imgui) {
+		ImGuiIO& io = ImGui::GetIO();
+		io.DisplaySize = ImVec2(static_cast<float>(width), static_cast<float>(height));
+		imgui->updateBuffers();
+	}
 
 	destroyCommandBuffers();
 	createCommandBuffers();

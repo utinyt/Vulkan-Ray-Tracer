@@ -2,6 +2,8 @@
 #include <array>
 #include "vulkan_imgui.h"
 
+//TODO: imgui display size is not properly updated on windowResized()
+
 /*
 * init context & style & resources
 * 
@@ -122,6 +124,9 @@ void ImguiBase::init(VulkanDevice* devices, int width, int height,
 
 	vkDestroyShaderModule(devices->device, vertexShader, nullptr);
 	vkDestroyShaderModule(devices->device, fragmentShader, nullptr);
+
+	newFrame();
+	updateBuffers();
 }
 
 /*
