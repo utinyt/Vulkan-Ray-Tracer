@@ -19,7 +19,7 @@ struct Mesh {
 	/** @brief convert mesh to ray tracing geometry used to build the BLAS */
 	BlasInput getVkGeometryKHR(VkDevice device, VkBuffer vertexBuffer, VkBuffer indexBuffer) const;
 
-	VkVertexInputBindingDescription getBindingDescription() const;
+	std::vector<VkVertexInputBindingDescription> getBindingDescription() const;
 	std::vector<VkVertexInputAttributeDescription> getAttributeDescriptions() const;
 
 	struct Buffer {

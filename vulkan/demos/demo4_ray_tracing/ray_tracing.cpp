@@ -1,15 +1,34 @@
+#include <include/imgui/imgui.h>
 #include "core/vulkan_app_base.h"
 #define GLM_FORCE_RADIANS
 #include "glm/glm.hpp"
 #include "glm/gtc/matrix_transform.hpp"
 #include "core/vulkan_mesh.h"
 #include "core/vulkan_imgui.h"
+#include "core/vulkan_pipeline.h"
 
+/*
+* derived imgui class - define newFrame();
+*/
 class Imgui : public ImguiBase {
 public:
 	virtual void newFrame() override {
-		ImguiBase::newFrame();
+		ImGui::NewFrame();
+		ImGui::Begin("Settings");
+		static int renderMode = 0;
+		ImGui::RadioButton("raytrace", &renderMode, 0); ImGui::SameLine();
+		ImGui::RadioButton("rasterizer", &renderMode, 1);
+		if (renderMode != userInput.renderMode) {
+			userInput.renderMode = renderMode;
+			rerecordCommandBuffer = true;
+		}
+		ImGui::End();
+		ImGui::Render();
 	}
+
+	struct UserInput {
+		int renderMode = 0;
+	}userInput;
 };
 
 class VulkanApp : public VulkanAppBase {
@@ -36,6 +55,8 @@ public:
 		devices.memoryAllocator.freeBufferMemory(rtSBTBuffer,
 			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 		vkDestroyBuffer(devices.device, rtSBTBuffer, nullptr);
+		vkDestroyPipeline(devices.device, generalPipeline, nullptr);
+		vkDestroyPipelineLayout(devices.device, generalPipelineLayout, nullptr);
 		vkDestroyPipeline(devices.device, rtPipeline, nullptr);
 		vkDestroyPipelineLayout(devices.device, rtPipelineLayout, nullptr);
 		vkDestroyPipeline(devices.device, postPipeline, nullptr);
@@ -180,6 +201,7 @@ public:
 
 		createOffscreenRender();
 		createDescriptorSet();
+		createGeneralPipeline();
 
 		/*
 		* ray tracing
@@ -283,6 +305,13 @@ public:
 		rtPushConstants.clearColor = { 0.95f, 0.95f, 0.95f, 1.f };
 		rtPushConstants.lightPos = { 2.f, 2.f, 2.f };
 
+		//for rasterizer render pass
+		VkRenderPassBeginInfo offscreenRenderPassBeginInfo{ VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO };
+		offscreenRenderPassBeginInfo.clearValueCount = 2;
+		offscreenRenderPassBeginInfo.pClearValues = clearValues.data();
+		offscreenRenderPassBeginInfo.renderPass = offscreenRenderPass;
+		offscreenRenderPassBeginInfo.renderArea = { {0, 0},swapchain.extent };
+
 		//for #2 render pass
 		VkRenderPassBeginInfo postRenderPassBeginInfo{ VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO };
 		postRenderPassBeginInfo.clearValueCount = 2;
@@ -291,37 +320,19 @@ public:
 		postRenderPassBeginInfo.renderArea = { {0, 0},swapchain.extent };
 
 		for (size_t i = 0; i < framebuffers.size() * MAX_FRAMES_IN_FLIGHT; ++i) {
-			//offscreenRenderPassBeginInfo.framebuffer = framebuffers[framebufferIndex];
-
-			//#1 raytracing
 			VK_CHECK_RESULT(vkBeginCommandBuffer(commandBuffers[i], &cmdBufBeginInfo));
 
-			size_t descriptorSetIndex = i / framebuffers.size();
-			vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, rtPipeline);
-
-			std::vector<VkDescriptorSet> descSets{ rtDescriptorSets[descriptorSetIndex], descriptorSets[descriptorSetIndex] };
-			vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, rtPipelineLayout,
-				0, static_cast<uint32_t>(descSets.size()), descSets.data(), 0, nullptr);
-			vkCmdPushConstants(commandBuffers[i], rtPipelineLayout,
-				VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_MISS_BIT_KHR,
-				0, sizeof(RtPushConstant), &rtPushConstants);
-
-			//size of a program identifier
-			uint32_t groupSize = alignUp(rtProperties.shaderGroupHandleSize, rtProperties.shaderGroupBaseAlignment);
-			uint32_t groupStride = groupSize;
-
-			VkDeviceAddress sbtAddress = vktools::getBufferDeviceAddress(devices.device, rtSBTBuffer);
-
-			using Stride = VkStridedDeviceAddressRegionKHR;
-			std::array<Stride, 4> strideAddress{
-				Stride{sbtAddress + 0u * groupSize, groupStride, groupSize * 1},
-				Stride{sbtAddress + 1u * groupSize, groupStride, groupSize * 1},
-				Stride{sbtAddress + 2u * groupSize, groupStride, groupSize * 1},
-				Stride{0u, 0u, 0u}
-			};
-
-			vkfp::vkCmdTraceRaysKHR(commandBuffers[i], &strideAddress[0], &strideAddress[1],
-				&strideAddress[2], &strideAddress[3], swapchain.extent.width, swapchain.extent.height, 1);
+			//#1 raytracing
+			size_t resourceIndex = i / framebuffers.size();
+			if (static_cast<Imgui*>(imgui)->userInput.renderMode == RENDER_MODE::RAYRACE) {
+				raytrace(commandBuffers[i], resourceIndex);
+			}
+			else {
+				offscreenRenderPassBeginInfo.framebuffer = offscreenFramebuffers[resourceIndex];
+				vkCmdBeginRenderPass(commandBuffers[i], &offscreenRenderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+				rasterize(commandBuffers[i], resourceIndex);
+				vkCmdEndRenderPass(commandBuffers[i]);
+			}
 
 			//#2 full screen quad
 			size_t framebufferIndex = i % framebuffers.size();
@@ -331,10 +342,10 @@ public:
 			vktools::setViewportScissorDynamicStates(commandBuffers[i], swapchain.extent);
 			vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, postPipeline);
 			vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, postPipelineLayout, 0, 1,
-				&postDescriptorSets[descriptorSetIndex], 0, nullptr);
+				&postDescriptorSets[resourceIndex], 0, nullptr);
 			vkCmdDraw(commandBuffers[i], 3, 1, 0, 0); //full screen triangle
 
-			imgui->drawFrame(commandBuffers[i], descriptorSetIndex);
+			imgui->drawFrame(commandBuffers[i], resourceIndex);
 
 			vkCmdEndRenderPass(commandBuffers[i]);
 			VK_CHECK_RESULT(vkEndCommandBuffer(commandBuffers[i]));
@@ -352,33 +363,42 @@ public:
 			updatePostDescriptorSet(i);
 		}
 		recordCommandBuffer();
-		//LOG("Window resized");
 	}
 
 private:
-	struct AccelKHR {
-		VkAccelerationStructureKHR accel = VK_NULL_HANDLE;
-		VkBuffer buffer;
+	/** swapchain framebuffers */
+	std::vector<VkFramebuffer> framebuffers;
+	/** rt properties */
+	VkPhysicalDeviceRayTracingPipelinePropertiesKHR rtProperties{
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR };
+	/** vertex & index buffer */
+	VkBuffer vertexBuffer = VK_NULL_HANDLE, indexBuffer = VK_NULL_HANDLE;
+	/** bunny mesh */
+	Mesh mesh;
+
+	/*Imgui user input*/
+	enum RENDER_MODE {
+		RAYRACE,
+		RASTERIZER
 	};
 
+	/*
+	* acceleration structures
+	*/
+	/** acceleration structure handle & buffer */
+	struct AccelKHR {
+		/** as handle */
+		VkAccelerationStructureKHR accel = VK_NULL_HANDLE;
+		/** buffer storing vertex data */
+		VkBuffer buffer;
+	};
+	/** acceleration structure build info */
 	struct BuildAccelerationStructure {
 		VkAccelerationStructureBuildGeometryInfoKHR buildInfo{ VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR };
 		const VkAccelerationStructureBuildRangeInfoKHR* buildRangeInfo = nullptr;
 		VkAccelerationStructureBuildSizesInfoKHR buildSizesInfo{ VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR };
 		AccelKHR as{};
 	};
-
-	/** swapchain framebuffers */
-	std::vector<VkFramebuffer> framebuffers;
-
-	/** rt properties */
-	VkPhysicalDeviceRayTracingPipelinePropertiesKHR rtProperties{
-			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR };
-
-	/** vertex & index buffer */
-	VkBuffer vertexBuffer = VK_NULL_HANDLE, indexBuffer = VK_NULL_HANDLE;
-	/** bunny mesh */
-	Mesh mesh;
 	/** bottom-level acceleration structures */
 	std::vector<AccelKHR> blas;
 	/** top-level acceleration structure */
@@ -386,6 +406,42 @@ private:
 	/** instance buffer for tlas */
 	VkBuffer instanceBuffer = VK_NULL_HANDLE;
 
+
+	/*
+	* camera matrices - uniform buffer
+	*/
+	struct CameraMatrices {
+		glm::mat4 view;
+		glm::mat4 proj;
+		glm::mat4 viewInverse;
+		glm::mat4 projInverse;
+	} camera;
+	/** uniform buffers for camera matrices */
+	std::vector<VkBuffer> uniformBuffers;
+	/** uniform buffer memories */
+	std::vector<MemoryAllocator::HostVisibleMemory> uniformBufferMemories;
+
+
+	/*
+	* object instances - scene descriptor
+	*/
+	struct ObjInstance {
+		glm::mat4 transform;
+		glm::mat4 transformIT;
+		uint64_t vertexAddress;
+		uint64_t IndexAddress;
+	};
+	/** vector of obj instances */
+	std::vector<ObjInstance> objInstances;
+	/** obj instances buffer */
+	VkBuffer sceneBuffer = VK_NULL_HANDLE;
+
+
+	/*
+	* descriptors for rasterizaer & raytracer
+	* 1 uniform buffer for camera matrices
+	* 1 storage buffer for scene descriptions (obj info)
+	*/
 	/** descriptor set layout bindings */
 	DescriptorSetBindings descriptorSetBindings;
 	/** descriptor set layout */
@@ -395,6 +451,12 @@ private:
 	/** descriptor sets */
 	std::vector<VkDescriptorSet> descriptorSets;
 
+
+	/*
+	* descriptors for raytracer
+	* 1 acceleration structure - tlas
+	* 1 storage image - raytracing output image
+	*/
 	/** descriptor set layout bindings */
 	DescriptorSetBindings rtDescriptorSetBindings;
 	/** descriptor set layout */
@@ -404,13 +466,16 @@ private:
 	/** descriptor sets */
 	std::vector<VkDescriptorSet> rtDescriptorSets;
 
+
+	/*
+	* offscreen images - desctination images rt / rasterizer pipelines
+	*/
 	struct OffscreenImages {
 		/** offscreen depth image */
 		Texture2D offscreenDepthBuffer;
 		/** offscreen color image */
 		Texture2D offscreenColorBuffer;
 	};
-	
 	std::vector<OffscreenImages> offscreens;
 	/** offscreen depth format */
 	VkFormat offscreenDepthFormat{ VK_FORMAT_X8_D24_UNORM_PACK32 };
@@ -418,10 +483,21 @@ private:
 	VkFormat offscreenColorFormat{ VK_FORMAT_R32G32B32A32_SFLOAT };
 	/** offscreen renderpass */
 	VkRenderPass offscreenRenderPass = VK_NULL_HANDLE;
+
+	/*
+	* used for rasterizer
+	*/
 	/** offscreen framebuffers */
 	std::vector<VkFramebuffer> offscreenFramebuffers;
+	/** general pipeline */
+	VkPipeline generalPipeline = VK_NULL_HANDLE;
+	/** general pipeline layout */
+	VkPipelineLayout generalPipelineLayout = VK_NULL_HANDLE;
 
-	//ray trace pipeline
+
+	/*
+	* ray trace pipeline
+	*/
 	/** ray trace shader groups */
 	std::vector<VkRayTracingShaderGroupCreateInfoKHR> rtShaderGroups;
 	/** ray trace pipeline layout */
@@ -430,7 +506,7 @@ private:
 	VkPipeline rtPipeline = VK_NULL_HANDLE;
 	/** shader binding table buffer */
 	VkBuffer rtSBTBuffer = VK_NULL_HANDLE;
-
+	/* push constancts for rt pipeline*/
 	struct RtPushConstant {
 		glm::vec4 clearColor;
 		glm::vec3 lightPos;
@@ -438,7 +514,11 @@ private:
 		int lightType = 0;
 	} rtPushConstants;
 
-	/** post */
+
+	/*
+	* descriptor for full quad pipeline - post pipeline 
+	* 1 image sampler
+	*/
 	/** descriptor set layout bindings */
 	DescriptorSetBindings postDescriptorSetBindings;
 	/** descriptor set layout */
@@ -447,6 +527,11 @@ private:
 	VkDescriptorPool postDescriptorPool = VK_NULL_HANDLE;
 	/** descriptor sets */
 	std::vector<VkDescriptorSet> postDescriptorSets;
+
+
+	/*
+	* full quad render resources
+	*/
 	/** full quad pipeline */
 	VkPipeline postPipeline = VK_NULL_HANDLE;
 	/** full quad pipeline layout */
@@ -454,29 +539,6 @@ private:
 	/** normal render pass */
 	VkRenderPass postRenderPass = VK_NULL_HANDLE;
 
-	struct CameraMatrices {
-		glm::mat4 view;
-		glm::mat4 proj;
-		glm::mat4 viewInverse;
-		glm::mat4 projInverse;
-	} camera;
-
-	/** uniform buffers for camera matrices */
-	std::vector<VkBuffer> uniformBuffers;
-	/** uniform buffer memories */
-	std::vector<MemoryAllocator::HostVisibleMemory> uniformBufferMemories;
-
-	struct ObjInstance {
-		glm::mat4 transform;
-		glm::mat4 transformIT;
-		uint64_t vertexAddress;
-		uint64_t IndexAddress;
-	};
-
-	/** vector of obj instances */
-	std::vector<ObjInstance> objInstances;
-	/** obj instances buffer */
-	VkBuffer sceneBuffer = VK_NULL_HANDLE;
 
 	/** @brief build buffer - used to create vertex / index buffer */
 	/*
@@ -991,8 +1053,10 @@ private:
 		}
 		
 		for (size_t i = 0; i < nbImages; ++i) {
-			std::array<VkImageView, 2> attachments{ offscreens[i].offscreenColorBuffer.descriptor.imageView,
-				offscreens[i].offscreenDepthBuffer.descriptor.imageView };
+			std::array<VkImageView, 2> attachments{ 
+				offscreens[i].offscreenColorBuffer.descriptor.imageView,
+				offscreens[i].offscreenDepthBuffer.descriptor.imageView 
+			};
 
 			VkFramebufferCreateInfo framebufferInfo{};
 			framebufferInfo.sType			= VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
@@ -1004,6 +1068,25 @@ private:
 			framebufferInfo.layers = 1;
 			VK_CHECK_RESULT(vkCreateFramebuffer(devices.device, &framebufferInfo, nullptr, &offscreenFramebuffers[i]));
 		}
+	}
+
+	/*
+	* create general (rasterizer) pipeline
+	*/
+	void createGeneralPipeline() {
+		auto bindingDescription = mesh.getBindingDescription();
+		auto attributeDescription = mesh.getAttributeDescriptions();
+
+		PipelineGenerator gen(devices.device);
+		gen.addVertexInputBindingDescription(bindingDescription);
+		gen.addVertexInputAttributeDescription(attributeDescription);
+		gen.addDescriptorSetLayout({ descriptorSetLayout });
+		gen.addShader(vktools::createShaderModule(devices.device, vktools::readFile("shaders/rasterizer_vert.spv")),
+			VK_SHADER_STAGE_VERTEX_BIT);
+		gen.addShader(vktools::createShaderModule(devices.device, vktools::readFile("shaders/rasterizer_frag.spv")),
+			VK_SHADER_STAGE_FRAGMENT_BIT);
+
+		gen.generate(offscreenRenderPass, generalPipeline, generalPipelineLayout);
 	}
 
 	/*
@@ -1194,51 +1277,14 @@ private:
 	*/
 	void createPostPipeline() {
 		//fixed functions
-		auto vertexInputStateInfo = vktools::initializers::pipelineVertexInputStateCreateInfo(nullptr, 0, nullptr, 0);
-		auto inputAssemblyInfo = vktools::initializers::pipelineInputAssemblyStateCreateInfo();
-		auto viewportStateInfo = vktools::initializers::pipelineViewportStateCreateInfo();
-		VkDynamicState dynamicStates []= { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
-		auto dynamicStatesInfo = vktools::initializers::pipelineDynamicStateCreateInfo(dynamicStates, 2);
-		auto rasterizationInfo = vktools::initializers::pipelineRasterizationStateCreateInfo(
-			VK_POLYGON_MODE_FILL, VK_CULL_MODE_FRONT_BIT);
-		auto multisamplingInfo = vktools::initializers::pipelineMultisampleStateCreateInfo();
-		auto depthStencilInfo = vktools::initializers::pipelineDepthStencilStateCreateInfo();
-		auto blendAttachmentState = vktools::initializers::pipelineColorBlendAttachment(VK_FALSE);
-		auto colorBlendStateInfo = vktools::initializers::pipelineColorBlendStateCreateInfo(1, &blendAttachmentState);
-		auto pipelineLayoutInfo = vktools::initializers::pipelineLayoutCreateInfo(1, &postDescriptorSetLayout);
-		VK_CHECK_RESULT(vkCreatePipelineLayout(devices.device, &pipelineLayoutInfo, nullptr, &postPipelineLayout));
-
-		//shader modules
-		VkShaderModule vertModule = vktools::createShaderModule(devices.device, vktools::readFile("shaders/full_quad_vert.spv"));
-		auto vertShaderStageInfo = vktools::initializers::pipelineShaderStageCreateInfo(
-			VK_SHADER_STAGE_VERTEX_BIT, vertModule);
-
-		VkShaderModule fragModule = vktools::createShaderModule(devices.device, vktools::readFile("shaders/full_quad_frag.spv"));
-		auto fragShaderStageInfo = vktools::initializers::pipelineShaderStageCreateInfo(
-			VK_SHADER_STAGE_FRAGMENT_BIT, fragModule);
-
-		//create pipeline
-		VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
-		VkGraphicsPipelineCreateInfo pipelineInfo{};
-		pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-		pipelineInfo.stageCount = 2;
-		pipelineInfo.pStages = shaderStages;
-		pipelineInfo.pVertexInputState = &vertexInputStateInfo;
-		pipelineInfo.pInputAssemblyState = &inputAssemblyInfo;
-		pipelineInfo.pViewportState = &viewportStateInfo;
-		pipelineInfo.pRasterizationState = &rasterizationInfo;
-		pipelineInfo.pMultisampleState = &multisamplingInfo;
-		pipelineInfo.pDepthStencilState = &depthStencilInfo;
-		pipelineInfo.pColorBlendState = &colorBlendStateInfo;
-		pipelineInfo.pDynamicState = &dynamicStatesInfo;
-		pipelineInfo.layout = postPipelineLayout;
-		pipelineInfo.renderPass = postRenderPass;
-		pipelineInfo.subpass = 0;
-		VK_CHECK_RESULT(vkCreateGraphicsPipelines(devices.device, {}, 1, &pipelineInfo, nullptr, &postPipeline));
-
-		//destroy shader modules
-		vkDestroyShaderModule(devices.device, vertModule, nullptr);
-		vkDestroyShaderModule(devices.device, fragModule, nullptr);
+		PipelineGenerator gen(devices.device);
+		gen.setRasterizerInfo(VK_POLYGON_MODE_FILL, VK_CULL_MODE_FRONT_BIT);
+		gen.addDescriptorSetLayout({ postDescriptorSetLayout });
+		gen.addShader(vktools::createShaderModule(devices.device, vktools::readFile("shaders/full_quad_vert.spv")),
+			VK_SHADER_STAGE_VERTEX_BIT);
+		gen.addShader(vktools::createShaderModule(devices.device, vktools::readFile("shaders/full_quad_frag.spv")),
+			VK_SHADER_STAGE_FRAGMENT_BIT);
+		gen.generate(postRenderPass, postPipeline, postPipelineLayout);
 	}
 
 	/*
@@ -1283,12 +1329,65 @@ private:
 	}
 
 	/*
-	* update uniform buffer
+	* update uniform buffer - camera matrices
 	* 
 	* @param currentFrame - index of uniform buffer (0 <= currentFrame < MAX_FRAMES_IN_FLIGHT)
 	*/
 	void UpdateUniformBuffer(size_t currentFrame) {
 		uniformBufferMemories[currentFrame].mapData(devices.device, &camera);
+	}
+
+	/*
+	* record raytrace commands
+	* 
+	* @param cmdBuf
+	* @param descriptorSetIndex
+	*/
+	void raytrace(VkCommandBuffer cmdBuf, size_t descriptorSetIndex) {
+		vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, rtPipeline);
+
+		std::vector<VkDescriptorSet> descSets{ rtDescriptorSets[descriptorSetIndex], descriptorSets[descriptorSetIndex] };
+		vkCmdBindDescriptorSets(cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, rtPipelineLayout,
+			0, static_cast<uint32_t>(descSets.size()), descSets.data(), 0, nullptr);
+		vkCmdPushConstants(cmdBuf, rtPipelineLayout,
+			VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_MISS_BIT_KHR,
+			0, sizeof(RtPushConstant), &rtPushConstants);
+
+		//size of a program identifier
+		uint32_t groupSize = alignUp(rtProperties.shaderGroupHandleSize, rtProperties.shaderGroupBaseAlignment);
+		uint32_t groupStride = groupSize;
+
+		VkDeviceAddress sbtAddress = vktools::getBufferDeviceAddress(devices.device, rtSBTBuffer);
+
+		using Stride = VkStridedDeviceAddressRegionKHR;
+		std::array<Stride, 4> strideAddress{
+			Stride{sbtAddress + 0u * groupSize, groupStride, groupSize * 1},
+			Stride{sbtAddress + 1u * groupSize, groupStride, groupSize * 1},
+			Stride{sbtAddress + 2u * groupSize, groupStride, groupSize * 1},
+			Stride{0u, 0u, 0u}
+		};
+
+		vkfp::vkCmdTraceRaysKHR(cmdBuf, &strideAddress[0], &strideAddress[1],
+			&strideAddress[2], &strideAddress[3], swapchain.extent.width, swapchain.extent.height, 1);
+	}
+
+	/*
+	* rasterize
+	* 
+	* @param cmdBuf
+	*/
+	void rasterize(VkCommandBuffer cmdBuf, size_t resourceIndex) {
+		vktools::setViewportScissorDynamicStates(cmdBuf, swapchain.extent);
+		vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, generalPipeline);
+		vkCmdBindDescriptorSets(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, generalPipelineLayout,
+			0, 1, &descriptorSets[resourceIndex], 0, nullptr);
+
+		VkDeviceSize offsets[1] = { 0 };
+		for (auto& obj : objInstances) {
+			vkCmdBindVertexBuffers(cmdBuf, 0, 1, &vertexBuffer, offsets);
+			vkCmdBindIndexBuffer(cmdBuf, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+			vkCmdDrawIndexed(cmdBuf, static_cast<uint32_t>(mesh.indices.size()), 1, 0, 0, 0);
+		}
 	}
 };
 

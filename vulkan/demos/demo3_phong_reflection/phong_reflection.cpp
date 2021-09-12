@@ -7,6 +7,7 @@
 #include "glm/glm.hpp"
 #include "glm/gtc/matrix_transform.hpp"
 #include "core/vulkan_imgui.h"
+#include "core/vulkan_pipeline.h"
 
 class Imgui : public ImguiBase {
 public:
@@ -163,72 +164,16 @@ private:
 		auto bindingDescription = mesh.getBindingDescription();
 		auto attributeDescription = mesh.getAttributeDescriptions();
 		
-		VkPipelineVertexInputStateCreateInfo vertexInputInfo
-			= vktools::initializers::pipelineVertexInputStateCreateInfo(&bindingDescription, 1,
-				attributeDescription.data(), static_cast<uint32_t>(attributeDescription.size()));
+		PipelineGenerator gen(devices.device);
+		gen.addVertexInputBindingDescription(bindingDescription);
+		gen.addVertexInputAttributeDescription(attributeDescription);
+		gen.addDescriptorSetLayout({ descriptorSetLayout });
+		gen.addShader(vktools::createShaderModule(devices.device, vktools::readFile("shaders/phong_vert.spv")),
+			VK_SHADER_STAGE_VERTEX_BIT);
+		gen.addShader(vktools::createShaderModule(devices.device, vktools::readFile("shaders/phong_frag.spv")),
+			VK_SHADER_STAGE_FRAGMENT_BIT);
 
-		VkPipelineInputAssemblyStateCreateInfo inputAssemblyInfo =
-			vktools::initializers::pipelineInputAssemblyStateCreateInfo();
-
-		VkPipelineViewportStateCreateInfo viewportStateInfo =
-			vktools::initializers::pipelineViewportStateCreateInfo();
-
-		VkDynamicState dynamicStates[] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
-		VkPipelineDynamicStateCreateInfo dynamicStateInfo =
-			vktools::initializers::pipelineDynamicStateCreateInfo(dynamicStates, 2);
-
-		VkPipelineRasterizationStateCreateInfo rasterizationInfo =
-			vktools::initializers::pipelineRasterizationStateCreateInfo(VK_POLYGON_MODE_FILL, VK_CULL_MODE_BACK_BIT);
-
-		VkPipelineMultisampleStateCreateInfo multisampleStateInfo =
-			vktools::initializers::pipelineMultisampleStateCreateInfo();
-
-		VkPipelineDepthStencilStateCreateInfo depthStencilStateInfo =
-			vktools::initializers::pipelineDepthStencilStateCreateInfo(VK_TRUE, VK_TRUE, VK_COMPARE_OP_LESS);
-
-		VkPipelineColorBlendAttachmentState blendAttachmentState =
-			vktools::initializers::pipelineColorBlendAttachment(VK_FALSE);
-
-		VkPipelineColorBlendStateCreateInfo colorBlendInfo =
-			vktools::initializers::pipelineColorBlendStateCreateInfo(1, &blendAttachmentState);
-
-		VkPipelineLayoutCreateInfo pipelineLayoutInfo =
-			vktools::initializers::pipelineLayoutCreateInfo(1, &descriptorSetLayout);
-		VK_CHECK_RESULT(vkCreatePipelineLayout(devices.device, &pipelineLayoutInfo, nullptr, &pipelineLayout));
-
-		//shader
-		VkShaderModule vertexModule = vktools::createShaderModule(devices.device, vktools::readFile("shaders/phong_vert.spv"));
-		VkShaderModule fragmentModule = vktools::createShaderModule(devices.device, vktools::readFile("shaders/phong_frag.spv"));
-
-		VkPipelineShaderStageCreateInfo vertShaderStageInfo 
-			= vktools::initializers::pipelineShaderStageCreateInfo(VK_SHADER_STAGE_VERTEX_BIT, vertexModule);
-
-		VkPipelineShaderStageCreateInfo fragShaderStageInfo = 
-			vktools::initializers::pipelineShaderStageCreateInfo(VK_SHADER_STAGE_FRAGMENT_BIT, fragmentModule);
-
-		VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo , fragShaderStageInfo };
-
-		//pipeline
-		VkGraphicsPipelineCreateInfo pipelineInfo{};
-		pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-		pipelineInfo.stageCount = 2;
-		pipelineInfo.pStages = shaderStages;
-		pipelineInfo.pVertexInputState = &vertexInputInfo;
-		pipelineInfo.pInputAssemblyState = &inputAssemblyInfo;
-		pipelineInfo.pViewportState = &viewportStateInfo;
-		pipelineInfo.pRasterizationState = &rasterizationInfo;
-		pipelineInfo.pMultisampleState = &multisampleStateInfo;
-		pipelineInfo.pDepthStencilState = &depthStencilStateInfo;
-		pipelineInfo.pColorBlendState = &colorBlendInfo;
-		pipelineInfo.pDynamicState = &dynamicStateInfo;
-		pipelineInfo.layout = pipelineLayout;
-		pipelineInfo.renderPass = renderPass;
-		pipelineInfo.subpass = 0;
-		VK_CHECK_RESULT(vkCreateGraphicsPipelines(devices.device, pipelineCache, 1, &pipelineInfo, nullptr, &pipeline));
-		LOG("created:\tgraphics pipeline");
-		
-		vkDestroyShaderModule(devices.device, vertexModule, nullptr);
-		vkDestroyShaderModule(devices.device, fragmentModule, nullptr);
+		gen.generate(renderPass, pipeline, pipelineLayout);
 	}
 
 	/*
@@ -401,13 +346,3 @@ private:
 
 //entry point
 RUN_APPLICATION_MAIN(VulkanApp, 800, 600, "phong reflection");
-
-/*
-* constraint : 
-*	- avoid re-record command buffers per frame
-*	- need to support multiple frames in flight (mostly 2)
-*	- MAX_FRAMES_IN_FLIGHT uniform buffer & MAX_FRAMES_IN_FLIGHT descriptor sets
-* 
-* need : 
-*	- MAX_FRAMES_IN_FLIGHT * swapchainImageCount command buffers
-*/

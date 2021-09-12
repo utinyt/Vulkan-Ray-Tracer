@@ -44,5 +44,11 @@
     <None Include="shaders\wavefront.glsl">
       <Filter>Source Files\shaders</Filter>
     </None>
+    <None Include="shaders\rasterizer.frag">
+      <Filter>Source Files\shaders</Filter>
+    </None>
+    <None Include="shaders\rasterizer.vert">
+      <Filter>Source Files\shaders</Filter>
+    </None>
   </ItemGroup>
 </Project>

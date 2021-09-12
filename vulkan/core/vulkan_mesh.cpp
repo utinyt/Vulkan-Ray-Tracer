@@ -127,7 +127,7 @@ Mesh::BlasInput Mesh::getVkGeometryKHR(VkDevice device, VkBuffer vertexBuffer, V
 	return input;
 }
 
-VkVertexInputBindingDescription Mesh::getBindingDescription() const{
+std::vector<VkVertexInputBindingDescription> Mesh::getBindingDescription() const{
 	if (vertices.buffer == nullptr) {
 		throw std::runtime_error("Mesh::getBindingDescription(): current mesh is empty");
 	}
@@ -140,7 +140,7 @@ VkVertexInputBindingDescription Mesh::getBindingDescription() const{
 		stride += sizeof(glm::vec2); //texcoord
 	}
 
-	return vktools::initializers::vertexInputBindingDescription(0, stride);
+	return { vktools::initializers::vertexInputBindingDescription(0, stride) };
 }
 
 std::vector<VkVertexInputAttributeDescription> Mesh::getAttributeDescriptions() const{

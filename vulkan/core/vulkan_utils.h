@@ -256,16 +256,18 @@ namespace vktools {
 		*/
 
 		inline VkPipelineVertexInputStateCreateInfo pipelineVertexInputStateCreateInfo(
-			VkVertexInputBindingDescription* pVertexBindingDescriptions,
-			uint32_t vertexBindingDescriptionCount,
-			VkVertexInputAttributeDescription* pVertexAttributeDescriptions,
-			uint32_t vertexAttributeDescriptionCount) {
+			std::vector<VkVertexInputBindingDescription>& vertexBindingDescriptions,
+			std::vector<VkVertexInputAttributeDescription>& vertexAttributeDescriptions) {
+			//shrink
+			vertexBindingDescriptions.shrink_to_fit();
+			vertexAttributeDescriptions.shrink_to_fit();
+
 			VkPipelineVertexInputStateCreateInfo info{};
 			info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-			info.vertexBindingDescriptionCount = vertexBindingDescriptionCount;
-			info.pVertexBindingDescriptions = pVertexBindingDescriptions;
-			info.vertexAttributeDescriptionCount = vertexAttributeDescriptionCount;
-			info.pVertexAttributeDescriptions = pVertexAttributeDescriptions;
+			info.vertexBindingDescriptionCount = static_cast<uint32_t>(vertexBindingDescriptions.size());
+			info.pVertexBindingDescriptions = vertexBindingDescriptions.data();
+			info.vertexAttributeDescriptionCount = static_cast<uint32_t>(vertexAttributeDescriptions.size());
+			info.pVertexAttributeDescriptions = vertexAttributeDescriptions.data();
 			return info;
 		}
 
@@ -369,11 +371,25 @@ namespace vktools {
 		}
 
 		inline VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo(
-			uint32_t layoutCount, VkDescriptorSetLayout* pSetLayouts) {
+			VkDescriptorSetLayout* setLayouts, uint32_t setLayoutsSize) {
 			VkPipelineLayoutCreateInfo info{};
 			info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-			info.setLayoutCount = layoutCount;
-			info.pSetLayouts = pSetLayouts;
+			info.setLayoutCount = setLayoutsSize;
+			info.pSetLayouts = setLayouts;
+			return info;
+		}
+
+		inline VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo(
+			std::vector<VkDescriptorSetLayout>& setLayouts,
+			std::vector<VkPushConstantRange>& pushConstantRanges) {
+			//shrink
+			setLayouts.shrink_to_fit();
+			pushConstantRanges.shrink_to_fit();
+
+			VkPipelineLayoutCreateInfo info =
+				pipelineLayoutCreateInfo(setLayouts.data(), static_cast<uint32_t>(setLayouts.size()));
+			info.pushConstantRangeCount = static_cast<uint32_t>(pushConstantRanges.size());
+			info.pPushConstantRanges = pushConstantRanges.data();
 			return info;
 		}
 

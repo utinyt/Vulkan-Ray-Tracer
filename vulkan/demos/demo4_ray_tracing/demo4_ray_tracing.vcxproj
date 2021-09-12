@@ -85,6 +85,8 @@
   <ItemGroup>
     <None Include="shaders\full_quad.frag" />
     <None Include="shaders\full_quad.vert" />
+    <None Include="shaders\rasterizer.frag" />
+    <None Include="shaders\rasterizer.vert" />
     <None Include="shaders\raytrace.rchit" />
     <None Include="shaders\raytrace.rgen" />
     <None Include="shaders\raytrace.rmiss" />

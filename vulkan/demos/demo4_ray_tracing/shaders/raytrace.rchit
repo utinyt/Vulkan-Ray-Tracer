@@ -9,7 +9,7 @@
 #include "wavefront.glsl"
 
 layout(location = 0) rayPayloadInEXT hitPayload prd;
-hitAttributeEXT vec3 attrib;
+hitAttributeEXT vec2 attrib;
 
 layout(buffer_reference, scalar) buffer Vertices {
 	Vertex v[]; //position
@@ -43,7 +43,7 @@ void main() {
 	Vertex v2 = vertices.v[ind.z];
 
 	//interpolate normal using barycentric coordinates
-	const vec3 barycentrics = vec3(1.0 - attrib.x, attrib.y, attrib.z);
+	const vec3 barycentrics = vec3(1.0 - attrib.x - attrib.y, attrib.x, attrib.y);
 	vec3 normal = v0.normal * barycentrics.x + v1.normal * barycentrics.y + v2.normal * barycentrics.z;
 	normal = normalize(vec3(objInstance.transformIT * vec4(normal, 0.0)));
 

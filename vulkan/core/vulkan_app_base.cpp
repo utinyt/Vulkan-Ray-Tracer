@@ -1,5 +1,6 @@
 #include <fstream>
 #include <imgui/imgui.h>
+#include <algorithm>
 #include "vulkan_imgui.h"
 #include "vulkan_app_base.h"
 #include "vulkan_debug.h"
@@ -86,14 +87,16 @@ void VulkanAppBase::update() {
 	right = (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS);
 
 	if (imgui) {
-
 		ImGuiIO& io = ImGui::GetIO();
 		io.MousePos = ImVec2(static_cast<float>(xpos), static_cast<float>(ypos));
 		io.MouseDown[0] = left;
 		io.MouseDown[1] = right;
 
 		imgui->newFrame();
-		if (imgui->updateBuffers() || (ImGui::IsMouseDown(ImGuiMouseButton(0)) && io.WantCaptureMouse)) {
+		if (imgui->updateBuffers() || 
+			(ImGui::IsMouseDown(ImGuiMouseButton(0)) && io.WantCaptureMouse) ||
+			imgui->rerecordCommandBuffer) {
+			imgui->rerecordCommandBuffer = false;
 			resetCommandBuffer();
 			recordCommandBuffer();
 			//LOG("update()");
