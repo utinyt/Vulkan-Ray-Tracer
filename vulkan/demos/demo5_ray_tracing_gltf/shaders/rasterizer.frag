@@ -26,6 +26,7 @@ layout(push_constant) uniform RasterPushConstant_{
 layout(buffer_reference, scalar) buffer GltfMaterial {
 	GltfShadeMaterial m[];
 };
+
 layout(set = 0, binding = 1) readonly buffer SceneDesc_ {
 	SceneDesc sceneDesc;
 };

@@ -112,7 +112,7 @@ void VulkanDevice::createLogicalDevice() {
 	VkPhysicalDeviceVulkan12Features device12Features{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES };
 	VkPhysicalDeviceAccelerationStructureFeaturesKHR deviceAsFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR };
 	VkMemoryAllocateFlags memflags = 0;
-
+	
 	//add buffer device address feature
 	if (std::find(requiredExtensions.begin(), requiredExtensions.end(),
 		VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME) != requiredExtensions.end()) {

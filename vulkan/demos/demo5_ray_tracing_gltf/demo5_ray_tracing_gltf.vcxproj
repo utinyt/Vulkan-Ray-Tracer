@@ -90,6 +90,7 @@
     <None Include="shaders\raytrace.rchit" />
     <None Include="shaders\raytrace.rgen" />
     <None Include="shaders\raytrace.rmiss" />
+    <None Include="shaders\raytrace_shadow.rmiss" />
     <None Include="shaders\ray_common.glsl" />
     <None Include="shaders\wavefront.glsl" />
   </ItemGroup>

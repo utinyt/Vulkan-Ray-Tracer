@@ -17,7 +17,7 @@ public:
 		ImGui::Begin("Settings");
 
 		//toggle render mode
-		static int renderMode = 1;
+		static int renderMode = 0;
 		ImGui::RadioButton("raytrace", &renderMode, 0); ImGui::SameLine();
 		ImGui::RadioButton("rasterizer", &renderMode, 1);
 		if (renderMode != userInput.renderMode) {
@@ -41,7 +41,7 @@ public:
 
 	/** imgui user input collection */
 	struct UserInput {
-		int renderMode = 1;
+		int renderMode = 0;
 		glm::vec3 lightPos{ 0, 1.5, 0.1 };
 	}userInput;
 };
@@ -302,9 +302,6 @@ public:
 		clearValues[0].color = { 0.1f, 0.1f, 0.1f, 1.f };
 		clearValues[1].depthStencil = { 1.f, 0 };
 
-		rtPushConstants.clearColor = { 0.95f, 0.95f, 0.95f, 1.f };
-		rtPushConstants.lightPos = { 0.f, 4.5f, 0.f };
-
 		//for rasterizer render pass
 		VkRenderPassBeginInfo offscreenRenderPassBeginInfo{ VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO };
 		offscreenRenderPassBeginInfo.clearValueCount = 2;
@@ -512,7 +509,7 @@ private:
 		glm::mat4 modelMatrix{ 1.f };
 		glm::vec3 lightPos{ 0.f, 1.f, .1f };
 		uint32_t objIndex = 0;
-		float lightIntensity = 10.f;
+		float lightIntensity = 1.f;
 		uint32_t lightType = 0;
 		uint32_t materialId = 0;
 	}rasterPushConstants;
@@ -532,7 +529,7 @@ private:
 	struct RtPushConstant {
 		glm::vec4 clearColor;
 		glm::vec3 lightPos;
-		float lightIntensity = 100.f;
+		float lightIntensity = 1.f;
 		int lightType = 0;
 	} rtPushConstants;
 
@@ -1021,11 +1018,15 @@ private:
 		rtDescriptorSetBindings.addBinding(0,
 			VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,
 			1,
-			VK_SHADER_STAGE_RAYGEN_BIT_KHR); //tlas
+			VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR); //tlas
 		rtDescriptorSetBindings.addBinding(1,
 			VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
 			1,
 			VK_SHADER_STAGE_RAYGEN_BIT_KHR); //output image
+		rtDescriptorSetBindings.addBinding(2,
+			VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+			1,
+			VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_ANY_HIT_BIT_KHR); //primitive mesh info
 
 		//create rt descriptor pool & layout
 		uint32_t nbRtDescriptorSet = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
@@ -1042,17 +1043,23 @@ private:
 		descInfo.pSetLayouts = layout.data();
 		VK_CHECK_RESULT(vkAllocateDescriptorSets(devices.device, &descInfo, rtDescriptorSets.data()));
 
+		//tlas info
+		VkWriteDescriptorSetAccelerationStructureKHR descAsInfo{};
+		descAsInfo.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR;
+		descAsInfo.accelerationStructureCount = 1;
+		descAsInfo.pAccelerationStructures = &tlas.accel;
+
+		//primitive info
+		VkDescriptorBufferInfo primitiveInfo{ primInfoBuffer, 0, VK_WHOLE_SIZE };
+
 		//update raytrace descriptor sets
 		for (uint32_t i = 0; i < nbRtDescriptorSet; ++i) {
-			VkWriteDescriptorSetAccelerationStructureKHR descAsInfo{};
-			descAsInfo.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR;
-			descAsInfo.accelerationStructureCount = 1;
-			descAsInfo.pAccelerationStructures = &tlas.accel;
 			VkDescriptorImageInfo imageInfo{ {}, offscreens[i].offscreenColorBuffer.descriptor.imageView, VK_IMAGE_LAYOUT_GENERAL};
 
 			std::vector<VkWriteDescriptorSet> writes;
 			writes.emplace_back(rtDescriptorSetBindings.makeWrite(rtDescriptorSets[i], 0, &descAsInfo));
 			writes.emplace_back(rtDescriptorSetBindings.makeWrite(rtDescriptorSets[i], 1, &imageInfo));
+			writes.emplace_back(rtDescriptorSetBindings.makeWrite(rtDescriptorSets[i], 2, &primitiveInfo));
 			vkUpdateDescriptorSets(devices.device, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
 		}
 	}
@@ -1246,6 +1253,7 @@ private:
 		enum StageIndices {
 			STAGE_RAYGEN,
 			STAGE_MISS,
+			STAGE_SHADOW_MISS,
 			STAGE_CLOSEST_HIT,
 			SHADER_GROUP_COUNT
 		};
@@ -1262,6 +1270,10 @@ private:
 		stage.module = vktools::createShaderModule(devices.device, vktools::readFile("shaders/raytrace_rmiss.spv"));
 		stage.stage = VK_SHADER_STAGE_MISS_BIT_KHR;
 		stages[STAGE_MISS] = stage;
+		//shadow miss
+		stage.module = vktools::createShaderModule(devices.device, vktools::readFile("shaders/raytrace_shadow_rmiss.spv"));
+		stage.stage = VK_SHADER_STAGE_MISS_BIT_KHR;
+		stages[STAGE_SHADOW_MISS] = stage;
 		//closest hit
 		stage.module = vktools::createShaderModule(devices.device, vktools::readFile("shaders/raytrace_rchit.spv"));
 		stage.stage = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
@@ -1277,12 +1289,17 @@ private:
 
 		//raygen
 		group.type					= VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
-		group.generalShader = STAGE_RAYGEN;
+		group.generalShader			= STAGE_RAYGEN;
 		rtShaderGroups.push_back(group);
 
 		//miss
 		group.type					= VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
-		group.generalShader = STAGE_MISS;
+		group.generalShader			= STAGE_MISS;
+		rtShaderGroups.push_back(group);
+
+		//miss
+		group.type					= VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
+		group.generalShader			= STAGE_SHADOW_MISS;
 		rtShaderGroups.push_back(group);
 
 		//closest hit
@@ -1321,7 +1338,7 @@ private:
 		rayPipelineInfo.groupCount = static_cast<uint32_t>(rtShaderGroups.size());
 		rayPipelineInfo.pGroups = rtShaderGroups.data();
 
-		rayPipelineInfo.maxPipelineRayRecursionDepth = 1; //ray depth
+		rayPipelineInfo.maxPipelineRayRecursionDepth = 2; //ray depth
 		rayPipelineInfo.layout = rtPipelineLayout;
 
 		VK_CHECK_RESULT(vkfp::vkCreateRayTracingPipelinesKHR(devices.device, {}, {}, 1, & rayPipelineInfo, nullptr, & rtPipeline));
@@ -1331,6 +1348,7 @@ private:
 		}
 	}
 
+	//TODO: implement sbtwrapper
 	/*
 	* shader binding table (SBT)
 	* 
@@ -1446,6 +1464,10 @@ private:
 		std::vector<VkDescriptorSet> descSets{ rtDescriptorSets[descriptorSetIndex], descriptorSets[descriptorSetIndex] };
 		vkCmdBindDescriptorSets(cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, rtPipelineLayout,
 			0, static_cast<uint32_t>(descSets.size()), descSets.data(), 0, nullptr);
+
+		rtPushConstants.clearColor = { 0.95f, 0.95f, 0.95f, 1.f };
+		rtPushConstants.lightPos = static_cast<Imgui*>(imgui)->userInput.lightPos;
+
 		vkCmdPushConstants(cmdBuf, rtPipelineLayout,
 			VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_MISS_BIT_KHR,
 			0, sizeof(RtPushConstant), &rtPushConstants);
@@ -1459,8 +1481,8 @@ private:
 		using Stride = VkStridedDeviceAddressRegionKHR;
 		std::array<Stride, 4> strideAddress{
 			Stride{sbtAddress + 0u * groupSize, groupStride, groupSize * 1},
-			Stride{sbtAddress + 1u * groupSize, groupStride, groupSize * 1},
-			Stride{sbtAddress + 2u * groupSize, groupStride, groupSize * 1},
+			Stride{sbtAddress + 1u * groupSize, groupStride, groupSize * 2},
+			Stride{sbtAddress + 3u * groupSize, groupStride, groupSize * 1},
 			Stride{0u, 0u, 0u}
 		};
 
