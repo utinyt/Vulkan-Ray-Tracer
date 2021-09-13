@@ -78,6 +78,12 @@
     <ClCompile Include="core\vulkan_pipeline.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="core\tiny_headers.cpp">
+      <Filter>Source Files\external</Filter>
+    </ClCompile>
+    <ClCompile Include="core\gltf_scene.cpp">
+      <Filter>Source Files\external</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="core\vulkan_app_base.h">
@@ -130,6 +136,9 @@
     </ClInclude>
     <ClInclude Include="core\vulkan_pipeline.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="core\gltf_scene.h">
+      <Filter>Header Files\external</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

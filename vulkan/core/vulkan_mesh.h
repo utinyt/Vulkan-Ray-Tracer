@@ -2,11 +2,14 @@
 #include <array>
 #include "vulkan_utils.h"
 #include "glm/glm.hpp"
+#include "gltf_scene.h"
 
 struct Mesh {
-	Mesh(){}
+	Mesh() {}
 	Mesh(const std::string& path);
-	void load(const std::string& path);
+	/** @brief load obj from a file */
+	void loadObj(const std::string& path);
+	static GltfScene loadGltf(const std::string& path);
 
 	/*
 	* input used to build bottom-level acceleration structure
@@ -18,10 +21,16 @@ struct Mesh {
 
 	/** @brief convert mesh to ray tracing geometry used to build the BLAS */
 	BlasInput getVkGeometryKHR(VkDevice device, VkBuffer vertexBuffer, VkBuffer indexBuffer) const;
+	/** @brief convert gltf primitive to rt geometry used for BLAS */
+	static BlasInput getVkGeometryKHR(VkDevice device, const GltfPrimMesh& primMesh,
+		VkBuffer vertexBuffer, VkBuffer indexBuffer);
 
+	/** @brief return binding description */
 	std::vector<VkVertexInputBindingDescription> getBindingDescription() const;
+	/** @brief return attribute description */
 	std::vector<VkVertexInputAttributeDescription> getAttributeDescriptions() const;
 
+	/** storage buffer for vertex & index data */
 	struct Buffer {
 		Buffer() {};
 		~Buffer() {

@@ -1,3 +1,7 @@
+/*
+* reference : https://github.com/nvpro-samples/nvpro_core/blob/master/nvvk/descriptorsets_vk.hpp
+*/
+
 #pragma once
 #include "vulkan_utils.h"
 

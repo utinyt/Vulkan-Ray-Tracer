@@ -1,5 +1,5 @@
-#define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader.h>
+#include <tiny_gltf.h>
 #include "vulkan_mesh.h"
 
 /*
@@ -8,15 +8,15 @@
 * @param path - path to the mesh file
 */
 Mesh::Mesh(const std::string& path) {
-	load(path);
+	loadObj(path);
 }
 
 /*
-* parse vertex data
+* parse vertex data froma a obj file
 *
 * @param path - path to the mesh file
 */
-void Mesh::load(const std::string& path) {
+void Mesh::loadObj(const std::string& path) {
 	vertices.cleanup();
 	indices.clear();
 
@@ -81,6 +81,37 @@ void Mesh::load(const std::string& path) {
 	}
 }
 
+
+/*
+* parse vertex data froma a gltf file
+*
+* @param path - path to the mesh file
+*/
+GltfScene Mesh::loadGltf(const std::string& path) {
+	tinygltf::Model tmodel;
+	tinygltf::TinyGLTF loader;
+	std::string err, warn;
+
+	//load gltf file
+	bool result = loader.LoadASCIIFromFile(&tmodel, &err, &warn, path);
+	std::string str = "Mesh::loadGltf(): ";
+	if (!warn.empty()) {
+		throw std::runtime_error(str + warn);
+	}
+	if (!err.empty()) {
+		throw std::runtime_error(str + err);
+	}
+	if (!result) {
+		throw std::runtime_error("failed to parse glTF\n");
+	}
+
+	GltfScene scene;
+	scene.importMaterials(tmodel);
+	scene.importDrawableNodes(tmodel, GltfAttributes::Normal | GltfAttributes::Texcoord_0);
+	return scene;
+}
+
+
 /*
 * convert mesh to ray tracing geometry used to build the BLAS 
 * 
@@ -119,6 +150,55 @@ Mesh::BlasInput Mesh::getVkGeometryKHR(VkDevice device, VkBuffer vertexBuffer, V
 	offset.firstVertex = 0;
 	offset.primitiveCount = maxPrimitiveCount;
 	offset.primitiveOffset = 0;
+	offset.transformOffset = 0;
+
+	BlasInput input{};
+	input.asGeometry.push_back(asGeo);
+	input.asBuildOffsetInfo.push_back(offset);
+	return input;
+}
+
+/*
+* convert gltf primitive to rt geometry used for BLAS
+* 
+* @param device
+* @param primMesh
+* @param vertexBuffer
+* @param indexBuffer
+* 
+* @return BlasInput
+*/
+Mesh::BlasInput Mesh::getVkGeometryKHR(VkDevice device, const GltfPrimMesh& primMesh,
+	VkBuffer vertexBuffer, VkBuffer indexBuffer) {
+	//get addresses
+	VkDeviceAddress vertexAddress = vktools::getBufferDeviceAddress(device, vertexBuffer);
+	VkDeviceAddress indexAddress = vktools::getBufferDeviceAddress(device, indexBuffer);
+
+	uint32_t maxPrimitiveCount = primMesh.indexCount / 3;
+
+	VkAccelerationStructureGeometryTrianglesDataKHR triangles{};
+	triangles.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
+	//describe vertex info
+	triangles.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT;
+	triangles.vertexData.deviceAddress = vertexAddress;
+	triangles.vertexStride = sizeof(glm::vec3);
+	//describe index info
+	triangles.indexType = VK_INDEX_TYPE_UINT32;
+	triangles.indexData.deviceAddress = indexAddress;
+	triangles.maxVertex = primMesh.vertexCount;
+
+	//identify above data as containing opaque triangles
+	VkAccelerationStructureGeometryKHR asGeo{};
+	asGeo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
+	asGeo.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
+	asGeo.flags = VK_GEOMETRY_NO_DUPLICATE_ANY_HIT_INVOCATION_BIT_KHR;
+	asGeo.geometry.triangles = triangles;
+
+	//BLAS
+	VkAccelerationStructureBuildRangeInfoKHR offset{};
+	offset.firstVertex = primMesh.vertexOffset;
+	offset.primitiveCount = maxPrimitiveCount;
+	offset.primitiveOffset = primMesh.firstIndex * sizeof(uint32_t);
 	offset.transformOffset = 0;
 
 	BlasInput input{};

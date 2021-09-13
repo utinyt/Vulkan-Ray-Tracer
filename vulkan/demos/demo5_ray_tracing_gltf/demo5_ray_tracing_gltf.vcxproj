@@ -13,8 +13,8 @@
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
-    <ProjectGuid>{6f20f32f-0032-4817-ad67-2fb583078c38}</ProjectGuid>
-    <RootNamespace>demo1triangle</RootNamespace>
+    <ProjectGuid>{0b6baf56-102c-428a-9a2a-e1f7c4df278a}</ProjectGuid>
+    <RootNamespace>demo5raytracinggltf</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -57,7 +57,6 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -72,7 +71,6 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -82,11 +80,18 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="triangle.cpp" />
+    <ClCompile Include="ray_tracing_gltf.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="shaders\shader.frag" />
-    <None Include="shaders\shader.vert" />
+    <None Include="shaders\full_quad.frag" />
+    <None Include="shaders\full_quad.vert" />
+    <None Include="shaders\rasterizer.frag" />
+    <None Include="shaders\rasterizer.vert" />
+    <None Include="shaders\raytrace.rchit" />
+    <None Include="shaders\raytrace.rgen" />
+    <None Include="shaders\raytrace.rmiss" />
+    <None Include="shaders\ray_common.glsl" />
+    <None Include="shaders\wavefront.glsl" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

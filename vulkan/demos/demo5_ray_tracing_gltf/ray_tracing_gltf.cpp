@@ -17,11 +17,21 @@ public:
 		ImGui::Begin("Settings");
 
 		//toggle render mode
-		static int renderMode = 0;
+		static int renderMode = 1;
 		ImGui::RadioButton("raytrace", &renderMode, 0); ImGui::SameLine();
 		ImGui::RadioButton("rasterizer", &renderMode, 1);
 		if (renderMode != userInput.renderMode) {
 			userInput.renderMode = renderMode;
+			rerecordCommandBuffer = true;
+		}
+
+		//
+		ImGui::SliderFloat("Light position X", &userInput.lightPos.x, -3.0f, 3.0f);
+		ImGui::SliderFloat("Light position Y", &userInput.lightPos.y, -3.0f, 3.0f);
+		ImGui::SliderFloat("Light position Z", &userInput.lightPos.z, -3.0f, 3.0f);
+		static glm::vec3 lightPos;
+		if (lightPos != userInput.lightPos) {
+			lightPos = userInput.lightPos;
 			rerecordCommandBuffer = true;
 		}
 
@@ -31,7 +41,8 @@ public:
 
 	/** imgui user input collection */
 	struct UserInput {
-		int renderMode = 0;
+		int renderMode = 1;
+		glm::vec3 lightPos{ 0, 1.5, 0.1 };
 	}userInput;
 };
 
@@ -67,9 +78,6 @@ public:
 		vkDestroyPipelineLayout(devices.device, postPipelineLayout, nullptr);
 		vkDestroyRenderPass(devices.device, postRenderPass, nullptr);
 
-		devices.memoryAllocator.freeBufferMemory(sceneBuffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-		vkDestroyBuffer(devices.device, sceneBuffer, nullptr);
-
 		//BLAS
 		for (auto& as : blas) {
 			vkfp::vkDestroyAccelerationStructureKHR(devices.device, as.accel, nullptr);
@@ -86,11 +94,21 @@ public:
 		devices.memoryAllocator.freeBufferMemory(tlas.buffer);
 		vkDestroyBuffer(devices.device, tlas.buffer, nullptr);
 
-		//vertex & index buffers
+		//gltf buffers
 		devices.memoryAllocator.freeBufferMemory(vertexBuffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 		vkDestroyBuffer(devices.device, vertexBuffer, nullptr);
 		devices.memoryAllocator.freeBufferMemory(indexBuffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 		vkDestroyBuffer(devices.device, indexBuffer, nullptr);
+		devices.memoryAllocator.freeBufferMemory(normalBuffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		vkDestroyBuffer(devices.device, normalBuffer, nullptr);
+		devices.memoryAllocator.freeBufferMemory(uvBuffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		vkDestroyBuffer(devices.device, uvBuffer, nullptr);
+		devices.memoryAllocator.freeBufferMemory(primInfoBuffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		vkDestroyBuffer(devices.device, primInfoBuffer, nullptr);
+		devices.memoryAllocator.freeBufferMemory(sceneDescBuffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		vkDestroyBuffer(devices.device, sceneDescBuffer, nullptr);
+		devices.memoryAllocator.freeBufferMemory(materialBuffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		vkDestroyBuffer(devices.device, materialBuffer, nullptr);
 
 		//swapchain framebuffers
 		for (auto& framebuffer : framebuffers) {
@@ -134,10 +152,10 @@ public:
 		VulkanAppBase::initApp();
 
 		//camera
-		glm::vec3 camPos = glm::vec3(0, 0, 4);
-		glm::vec3 camFront = glm::vec3(0, 0.5, -4);
+		glm::vec3 camPos = glm::vec3(0, 1, 3.5);
+		glm::vec3 center = glm::vec3(0, 1, 0);
 		glm::vec3 camUp = glm::vec3(0, 1, 0);
-		camera.view = glm::lookAt(camPos, camPos + camFront, camUp);
+		camera.view = glm::lookAt(camPos, center, camUp);
 		camera.viewInverse = glm::inverse(camera.view);
 		camera.proj = glm::perspective(glm::radians(45.f),
 			swapchain.extent.width / static_cast<float>(swapchain.extent.height), 0.1f, 10.f);
@@ -150,42 +168,24 @@ public:
 		properties2.pNext = &rtProperties;
 		vkGetPhysicalDeviceProperties2(devices.physicalDevice, &properties2);
 
-		//load bunny mesh
-		mesh.loadObj("../../meshes/bunny.obj");
-
-		//create vertex & index buffers
-		VkBufferUsageFlags rtFlags = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | 
-			VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | 
-			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-
-		createBuffer(mesh.vertices.data(), mesh.vertices.bufferSize,
-			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | rtFlags,
-			vertexBuffer);
-		createBuffer(mesh.indices.data(), sizeof(mesh.indices[0]) * mesh.indices.size(),
-			VK_BUFFER_USAGE_INDEX_BUFFER_BIT | rtFlags,
-			indexBuffer);
-
-		//push bunny obj instance
-		objInstances.push_back({ glm::mat4(1.f), glm::mat4(1.f),
-			vktools::getBufferDeviceAddress(devices.device, vertexBuffer),
-			vktools::getBufferDeviceAddress(devices.device, indexBuffer) }
-		);
+		//load cornell box gltf
+		loadScene();
 
 		//BLAS
 		std::vector<Mesh::BlasInput> allBlas;
-		allBlas.push_back(mesh.getVkGeometryKHR(devices.device, vertexBuffer, indexBuffer));
+		allBlas.reserve(cornellBox.m_primMeshes.size());
+		for (auto& primMesh : cornellBox.m_primMeshes) {
+			allBlas.push_back(Mesh::getVkGeometryKHR(devices.device, primMesh, vertexBuffer, indexBuffer));
+		}
 		buildBlas(allBlas, VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR);
-
-		size_t meshSize = 1;
 
 		//TLAS
 		std::vector<VkAccelerationStructureInstanceKHR> tlas;
-		tlas.reserve(meshSize);
-		for (uint32_t i = 0; i < static_cast<uint32_t>(meshSize); ++i) {
+		for (auto& node : cornellBox.m_nodes) {
 			VkAccelerationStructureInstanceKHR rayInst;
-			rayInst.transform = vktools::toTransformMatrixKHR(glm::mat4(1.f));
-			rayInst.instanceCustomIndex = i;
-			rayInst.accelerationStructureReference = getBlasDeviceAddress(i);
+			rayInst.transform = vktools::toTransformMatrixKHR(node.worldMatrix);
+			rayInst.instanceCustomIndex = node.primMesh;
+			rayInst.accelerationStructureReference = getBlasDeviceAddress(node.primMesh);
 			rayInst.instanceShaderBindingTableRecordOffset = 0; // we will use the same hit group for all object
 			rayInst.flags = VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR;
 			rayInst.mask = 0xFF;
@@ -198,10 +198,6 @@ public:
 		for (size_t i = 0; i < static_cast<int>(MAX_FRAMES_IN_FLIGHT); ++i) {
 			updateUniformBuffer(i);
 		}
-
-		//scene description buffer
-		createBuffer(objInstances.data(), static_cast<VkDeviceSize>(objInstances.size() * sizeof(ObjInstance)),
-			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, sceneBuffer);
 
 		createOffscreenRender();
 		createDescriptorSet();
@@ -249,7 +245,7 @@ public:
 	virtual void draw() override {
 		uint32_t imageIndex = prepareFrame();
 
-		//updateUniformBuffer(currentFrame);
+		updateUniformBuffer(currentFrame);
 
 		//render
 		VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT };
@@ -303,11 +299,11 @@ public:
 		cmdBufBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
 		std::array<VkClearValue, 2> clearValues{};
-		clearValues[0].color = { 0.2f, 0.0f, 0.f, 1.f };
+		clearValues[0].color = { 0.1f, 0.1f, 0.1f, 1.f };
 		clearValues[1].depthStencil = { 1.f, 0 };
 
 		rtPushConstants.clearColor = { 0.95f, 0.95f, 0.95f, 1.f };
-		rtPushConstants.lightPos = { 2.f, 2.f, 2.f };
+		rtPushConstants.lightPos = { 0.f, 4.5f, 0.f };
 
 		//for rasterizer render pass
 		VkRenderPassBeginInfo offscreenRenderPassBeginInfo{ VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO };
@@ -375,10 +371,40 @@ private:
 	/** rt properties */
 	VkPhysicalDeviceRayTracingPipelinePropertiesKHR rtProperties{
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR };
-	/** vertex & index buffer */
-	VkBuffer vertexBuffer = VK_NULL_HANDLE, indexBuffer = VK_NULL_HANDLE;
-	/** bunny mesh */
-	Mesh mesh;
+
+	//for retrieving primitive info in chit
+	struct PrimMeshInfo {
+		unsigned int indexOffset;
+		unsigned int vertexOffset;
+		int materialIndex;
+	};
+
+	//scene buffer address
+	struct SceneDesc {
+		uint64_t vertexAddress;
+		uint64_t normalAddress;
+		uint64_t uvAddress;
+		uint64_t indexAddress;
+		uint64_t materialAddress;
+		uint64_t primInfoAddress;
+	};
+
+	struct GltfShadeMaterial {
+		glm::vec4 pbtBaseColorFactor;
+		glm::vec3 emissiveFactor;
+		int pbtBaseColorTexture;
+	};
+
+	/** gltf buffers */
+	VkBuffer vertexBuffer = VK_NULL_HANDLE;
+	VkBuffer indexBuffer = VK_NULL_HANDLE;
+	VkBuffer normalBuffer = VK_NULL_HANDLE;
+	VkBuffer uvBuffer = VK_NULL_HANDLE;
+	VkBuffer materialBuffer = VK_NULL_HANDLE;
+	VkBuffer primInfoBuffer = VK_NULL_HANDLE;
+	VkBuffer sceneDescBuffer = VK_NULL_HANDLE;
+	/** cornell box gltf */
+	GltfScene cornellBox;
 
 	/*Imgui user input*/
 	enum RENDER_MODE {
@@ -424,21 +450,6 @@ private:
 	std::vector<VkBuffer> uniformBuffers;
 	/** uniform buffer memories */
 	std::vector<MemoryAllocator::HostVisibleMemory> uniformBufferMemories;
-
-
-	/*
-	* object instances - scene descriptor
-	*/
-	struct ObjInstance {
-		glm::mat4 transform;
-		glm::mat4 transformIT;
-		uint64_t vertexAddress;
-		uint64_t IndexAddress;
-	};
-	/** vector of obj instances */
-	std::vector<ObjInstance> objInstances;
-	/** obj instances buffer */
-	VkBuffer sceneBuffer = VK_NULL_HANDLE;
 
 
 	/*
@@ -497,7 +508,14 @@ private:
 	VkPipeline generalPipeline = VK_NULL_HANDLE;
 	/** general pipeline layout */
 	VkPipelineLayout generalPipelineLayout = VK_NULL_HANDLE;
-
+	struct RasterPushConstant {
+		glm::mat4 modelMatrix{ 1.f };
+		glm::vec3 lightPos{ 0.f, 1.f, .1f };
+		uint32_t objIndex = 0;
+		float lightIntensity = 10.f;
+		uint32_t lightType = 0;
+		uint32_t materialId = 0;
+	}rasterPushConstants;
 
 	/*
 	* ray trace pipeline
@@ -543,6 +561,72 @@ private:
 	/** normal render pass */
 	VkRenderPass postRenderPass = VK_NULL_HANDLE;
 
+	void loadScene() {
+		//load cornell box
+		cornellBox = Mesh::loadGltf("../../meshes/scene.gltf");
+
+		VkBufferUsageFlags rtFlags = 
+			VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
+			VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR |
+			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+
+		createBuffer(cornellBox.m_positions.data(), 
+			static_cast<VkDeviceSize>(sizeof(cornellBox.m_positions[0]) * cornellBox.m_positions.size()),
+			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | rtFlags,
+			vertexBuffer);
+		createBuffer(cornellBox.m_indices.data(),
+			static_cast<VkDeviceSize>(sizeof(cornellBox.m_indices[0]) * cornellBox.m_indices.size()),
+			VK_BUFFER_USAGE_INDEX_BUFFER_BIT | rtFlags,
+			indexBuffer);
+		createBuffer(cornellBox.m_normals.data(),
+			static_cast<VkDeviceSize>(sizeof(cornellBox.m_normals[0]) * cornellBox.m_normals.size()),
+			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
+			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | 
+			VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+			normalBuffer);
+		createBuffer(cornellBox.m_texcoords0.data(),
+			static_cast<VkDeviceSize>(sizeof(cornellBox.m_texcoords0[0]) * cornellBox.m_texcoords0.size()),
+			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
+			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | 
+			VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+			uvBuffer);
+
+		//copy materials we need
+		std::vector<GltfShadeMaterial> shadeMaterials;
+		for (auto& m : cornellBox.m_materials) {
+			shadeMaterials.emplace_back(GltfShadeMaterial{m.baseColorFactor, m.emissiveFactor, m.baseColorTexture});
+		}
+		createBuffer(shadeMaterials.data(),
+			static_cast<VkDeviceSize>(sizeof(shadeMaterials[0]) * shadeMaterials.size()),
+			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+			VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+			materialBuffer);
+
+		//used to find the primitive mesh info in chit
+		std::vector<PrimMeshInfo> primLookup;
+		for (auto& primMesh : cornellBox.m_primMeshes) {
+			primLookup.push_back({primMesh.firstIndex, primMesh.vertexOffset, primMesh.materialIndex});
+		}
+		createBuffer(primLookup.data(),
+			static_cast<VkDeviceSize>(sizeof(primLookup[0]) * primLookup.size()),
+			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+			VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+			primInfoBuffer);
+
+		SceneDesc sceneDesc;
+		sceneDesc.vertexAddress = vktools::getBufferDeviceAddress(devices.device, vertexBuffer);
+		sceneDesc.indexAddress = vktools::getBufferDeviceAddress(devices.device, indexBuffer);
+		sceneDesc.normalAddress = vktools::getBufferDeviceAddress(devices.device, normalBuffer);
+		sceneDesc.uvAddress = vktools::getBufferDeviceAddress(devices.device, uvBuffer);
+		sceneDesc.materialAddress = vktools::getBufferDeviceAddress(devices.device, materialBuffer);
+		sceneDesc.primInfoAddress = vktools::getBufferDeviceAddress(devices.device, primInfoBuffer);
+		createBuffer(&sceneDesc,
+			static_cast<VkDeviceSize>(sizeof(sceneDesc)),
+			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+			VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+			sceneDescBuffer);
+
+	}
 
 	/** @brief build buffer - used to create vertex / index buffer */
 	/*
@@ -1078,13 +1162,19 @@ private:
 	* create general (rasterizer) pipeline
 	*/
 	void createGeneralPipeline() {
-		auto bindingDescription = mesh.getBindingDescription();
-		auto attributeDescription = mesh.getAttributeDescriptions();
-
 		PipelineGenerator gen(devices.device);
-		gen.addVertexInputBindingDescription(bindingDescription);
-		gen.addVertexInputAttributeDescription(attributeDescription);
+		gen.addVertexInputBindingDescription({ 
+			{0, sizeof(glm::vec3)},
+			{1, sizeof(glm::vec3)},
+			{2, sizeof(glm::vec2)}
+		});
+		gen.addVertexInputAttributeDescription({ 
+			{0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0}, //pos
+			{1, 1, VK_FORMAT_R32G32B32_SFLOAT, 0}, //normal
+			{2, 2, VK_FORMAT_R32G32_SFLOAT, 0}, //texcoord0
+		});
 		gen.addDescriptorSetLayout({ descriptorSetLayout });
+		gen.addPushConstantRange({ {VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(RasterPushConstant)} });
 		gen.addShader(vktools::createShaderModule(devices.device, vktools::readFile("shaders/rasterizer_vert.spv")),
 			VK_SHADER_STAGE_VERTEX_BIT);
 		gen.addShader(vktools::createShaderModule(devices.device, vktools::readFile("shaders/rasterizer_frag.spv")),
@@ -1104,7 +1194,10 @@ private:
 			VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_RAYGEN_BIT_KHR);
 		//scene description
 		descriptorSetBindings.addBinding(1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1,
-			VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR);
+			VK_SHADER_STAGE_VERTEX_BIT |
+			VK_SHADER_STAGE_FRAGMENT_BIT | 
+			VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR |
+			VK_SHADER_STAGE_ANY_HIT_BIT_KHR);
 		//textures
 		/*descriptorSetBindings.addBinding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, nbTexture,
 			VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR);*/
@@ -1124,7 +1217,7 @@ private:
 
 		for (size_t i = 0; i < static_cast<size_t>(MAX_FRAMES_IN_FLIGHT); ++i) {
 			VkDescriptorBufferInfo camMatricesInfo{ uniformBuffers[i], 0, sizeof(CameraMatrices) };
-			VkDescriptorBufferInfo sceneBufferInfo{ sceneBuffer, 0, sizeof(ObjInstance) };
+			VkDescriptorBufferInfo sceneBufferInfo{ sceneDescBuffer, 0, sizeof(SceneDesc) };
 
 			std::vector<VkWriteDescriptorSet> writes;
 			writes.emplace_back(descriptorSetBindings.makeWrite(descriptorSets[i], 0, &camMatricesInfo));
@@ -1386,11 +1479,22 @@ private:
 		vkCmdBindDescriptorSets(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, generalPipelineLayout,
 			0, 1, &descriptorSets[resourceIndex], 0, nullptr);
 
-		VkDeviceSize offsets[1] = { 0 };
-		for (auto& obj : objInstances) {
-			vkCmdBindVertexBuffers(cmdBuf, 0, 1, &vertexBuffer, offsets);
-			vkCmdBindIndexBuffer(cmdBuf, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-			vkCmdDrawIndexed(cmdBuf, static_cast<uint32_t>(mesh.indices.size()), 1, 0, 0, 0);
+		std::vector<VkDeviceSize> offsets = { 0, 0, 0 };
+		std::vector<VkBuffer> vertexBuffers = { vertexBuffer , normalBuffer, uvBuffer };
+		vkCmdBindVertexBuffers(cmdBuf, 0, static_cast<uint32_t>(vertexBuffers.size()),
+			vertexBuffers.data(), offsets.data());
+		vkCmdBindIndexBuffer(cmdBuf, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+
+		for (GltfNode& node : cornellBox.m_nodes) {
+			GltfPrimMesh& primitive = cornellBox.m_primMeshes[node.primMesh];
+			rasterPushConstants.modelMatrix = node.worldMatrix;
+			rasterPushConstants.objIndex = node.primMesh;
+			rasterPushConstants.materialId = primitive.materialIndex;
+			rasterPushConstants.lightPos = static_cast<Imgui*>(imgui)->userInput.lightPos;
+			vkCmdPushConstants(cmdBuf, generalPipelineLayout,
+				VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+				0, sizeof(RasterPushConstant), &rasterPushConstants);
+			vkCmdDrawIndexed(cmdBuf, primitive.indexCount, 1, primitive.firstIndex, primitive.vertexOffset, 0);
 		}
 	}
 };

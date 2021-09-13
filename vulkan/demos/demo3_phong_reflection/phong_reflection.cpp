@@ -77,7 +77,7 @@ public:
 		descriptorSets = vktools::allocateDescriptorSets(devices.device, descriptorSetLayout, descriptorPool, MAX_FRAMES_IN_FLIGHT);
 
 		//mesh loading & buffer creation
-		mesh.load("../../meshes/bunny.obj");
+		mesh.loadObj("../../meshes/bunny.obj");
 		VkDeviceSize vertexBufferSize = mesh.vertices.bufferSize;
 		VkDeviceSize indexBufferSize = sizeof(mesh.indices[0]) * mesh.indices.size();
 		Mesh::Buffer buffer;
