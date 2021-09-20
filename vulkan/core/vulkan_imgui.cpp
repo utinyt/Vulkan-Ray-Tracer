@@ -89,6 +89,9 @@ void ImguiBase::init(VulkanDevice* devices, int width, int height,
 * destroy all resources
 */
 void ImguiBase::cleanup() {
+	if (devices == nullptr) {
+		return;
+	}
 	ImGui::DestroyContext();
 	//vertex & index buffer
 	devices->memoryAllocator.freeBufferMemory(vertexIndexBuffer, 

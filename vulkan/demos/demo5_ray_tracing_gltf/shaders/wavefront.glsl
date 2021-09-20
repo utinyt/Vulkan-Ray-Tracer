@@ -7,6 +7,7 @@ struct CameraMatrices{
     mat4 proj;
     mat4 viewInverse;
     mat4 projInverse;
+	int frame;
 };
 
 struct SceneDesc{
@@ -29,7 +30,7 @@ struct RasterPushConstant{
 
 struct GltfShadeMaterial{
 	vec4 pbrBaseColorFactor;
-	vec3 emiisiveColor;
+	vec3 emissiveFactor;
 	int pbrBaseColorTexture;
 };
 

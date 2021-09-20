@@ -25,7 +25,7 @@ public:
 			rerecordCommandBuffer = true;
 		}
 
-		//
+		//light position
 		ImGui::SliderFloat("Light position X", &userInput.lightPos.x, -3.0f, 3.0f);
 		ImGui::SliderFloat("Light position Y", &userInput.lightPos.y, -3.0f, 3.0f);
 		ImGui::SliderFloat("Light position Z", &userInput.lightPos.z, -3.0f, 3.0f);
@@ -56,7 +56,13 @@ public:
 		enabledDeviceExtensions.push_back(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME);
 		enabledDeviceExtensions.push_back(VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME);
 		enabledDeviceExtensions.push_back(VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME);
+		enabledDeviceExtensions.push_back(VK_KHR_SHADER_CLOCK_EXTENSION_NAME);
+		
+		//Imgui
 		imgui = new Imgui;
+
+		//path-tracing noise flickering when MAX_FRAMES_IN_FLIGHT > 1
+		MAX_FRAMES_IN_FLIGHT = 1;
 	}
 
 	/*
@@ -150,6 +156,9 @@ public:
 	*/
 	virtual void initApp() override {
 		VulkanAppBase::initApp();
+
+		//number of frame drawn
+		frameDrawn = std::vector<int>(MAX_FRAMES_IN_FLIGHT, -1);
 
 		//camera
 		glm::vec3 camPos = glm::vec3(0, 1, 3.5);
@@ -354,6 +363,11 @@ public:
 	*/
 	virtual void resizeWindow(bool /*recordCmdBuf*/) override {
 		VulkanAppBase::resizeWindow(false);
+
+		for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+			frameDrawn[i] = -1;
+		}
+
 		createOffscreenRender();
 		for (size_t i = 0; i < static_cast<int>(MAX_FRAMES_IN_FLIGHT); ++i) {
 			updateRtDescriptorSet(i);
@@ -442,12 +456,14 @@ private:
 		glm::mat4 proj;
 		glm::mat4 viewInverse;
 		glm::mat4 projInverse;
+		int frame = -1;
 	} camera;
 	/** uniform buffers for camera matrices */
 	std::vector<VkBuffer> uniformBuffers;
 	/** uniform buffer memories */
 	std::vector<MemoryAllocator::HostVisibleMemory> uniformBufferMemories;
-
+	/** number of frame rendered */
+	std::vector<int> frameDrawn;
 
 	/*
 	* descriptors for rasterizaer & raytracer
@@ -1263,11 +1279,11 @@ private:
 		stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
 		stage.pName = "main";
 		//raygen
-		stage.module = vktools::createShaderModule(devices.device, vktools::readFile("shaders/raytrace_rgen.spv"));
+		stage.module = vktools::createShaderModule(devices.device, vktools::readFile("shaders/pathtrace_rgen.spv"));
 		stage.stage = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
 		stages[STAGE_RAYGEN] = stage;
 		//miss
-		stage.module = vktools::createShaderModule(devices.device, vktools::readFile("shaders/raytrace_rmiss.spv"));
+		stage.module = vktools::createShaderModule(devices.device, vktools::readFile("shaders/pathtrace_rmiss.spv"));
 		stage.stage = VK_SHADER_STAGE_MISS_BIT_KHR;
 		stages[STAGE_MISS] = stage;
 		//shadow miss
@@ -1275,7 +1291,7 @@ private:
 		stage.stage = VK_SHADER_STAGE_MISS_BIT_KHR;
 		stages[STAGE_SHADOW_MISS] = stage;
 		//closest hit
-		stage.module = vktools::createShaderModule(devices.device, vktools::readFile("shaders/raytrace_rchit.spv"));
+		stage.module = vktools::createShaderModule(devices.device, vktools::readFile("shaders/pathtrace_rchit.spv"));
 		stage.stage = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
 		stages[STAGE_CLOSEST_HIT] = stage;
 
@@ -1338,7 +1354,7 @@ private:
 		rayPipelineInfo.groupCount = static_cast<uint32_t>(rtShaderGroups.size());
 		rayPipelineInfo.pGroups = rtShaderGroups.data();
 
-		rayPipelineInfo.maxPipelineRayRecursionDepth = 2; //ray depth
+		rayPipelineInfo.maxPipelineRayRecursionDepth = 1; //ray depth
 		rayPipelineInfo.layout = rtPipelineLayout;
 
 		VK_CHECK_RESULT(vkfp::vkCreateRayTracingPipelinesKHR(devices.device, {}, {}, 1, & rayPipelineInfo, nullptr, & rtPipeline));
@@ -1449,6 +1465,7 @@ private:
 	* @param currentFrame - index of uniform buffer (0 <= currentFrame < MAX_FRAMES_IN_FLIGHT)
 	*/
 	void updateUniformBuffer(size_t currentFrame) {
+		camera.frame = ++frameDrawn[currentFrame];
 		uniformBufferMemories[currentFrame].mapData(devices.device, &camera);
 	}
 
@@ -1522,4 +1539,4 @@ private:
 };
 
 //entry point
-RUN_APPLICATION_MAIN(VulkanApp, 800, 600, "ray tracing");
+RUN_APPLICATION_MAIN(VulkanApp, 1200, 800, "ray tracing glTF");

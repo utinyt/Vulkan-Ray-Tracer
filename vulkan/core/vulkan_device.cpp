@@ -41,6 +41,7 @@ void VulkanDevice::pickPhysicalDevice(VkInstance instance, VkSurfaceKHR surface,
 
 	vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memProperties);
 	vkGetPhysicalDeviceProperties(physicalDevice, &properties);
+	asFeatures.pNext = &shaderClockFeatures;
 	rtFeatures.pNext = &asFeatures;
 	vk12Features.pNext = &rtFeatures;
 	availableFeatures.pNext = &vk12Features;
@@ -127,15 +128,24 @@ void VulkanDevice::createLogicalDevice() {
 
 	//add rat tracing pipeline feature
 	VkPhysicalDeviceRayTracingPipelineFeaturesKHR deviceRtFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR };
+	VkPhysicalDeviceShaderClockFeaturesKHR clockFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_CLOCK_FEATURES_KHR };
 	if (std::find(requiredExtensions.begin(), requiredExtensions.end(),
 		VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME) != requiredExtensions.end()) {
 		if (rtFeatures.rayTracingPipeline == VK_TRUE) {
 			deviceRtFeatures.rayTracingPipeline = VK_TRUE;
 			if (device12Features.pNext == &deviceAsFeatures) {
 				deviceAsFeatures.pNext = &deviceRtFeatures;
+				if (shaderClockFeatures.shaderSubgroupClock == VK_TRUE) {
+					clockFeatures.shaderSubgroupClock = VK_TRUE;
+					deviceRtFeatures.pNext = &clockFeatures;
+				}
 			}
 			else {
 				deviceFeatures.pNext = &rtFeatures;
+				if (shaderClockFeatures.shaderSubgroupClock == VK_TRUE) {
+					clockFeatures.shaderSubgroupClock = VK_TRUE;
+					rtFeatures.pNext = &clockFeatures;
+				}
 			}
 
 			if (availableFeatures.features.shaderInt64 == VK_TRUE) {

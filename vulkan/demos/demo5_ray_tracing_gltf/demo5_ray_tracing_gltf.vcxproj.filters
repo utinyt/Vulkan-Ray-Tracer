@@ -53,5 +53,14 @@
     <None Include="shaders\raytrace_shadow.rmiss">
       <Filter>Source Files\shaders</Filter>
     </None>
+    <None Include="shaders\pathtrace.rchit">
+      <Filter>Source Files\shaders</Filter>
+    </None>
+    <None Include="shaders\pathtrace.rgen">
+      <Filter>Source Files\shaders</Filter>
+    </None>
+    <None Include="shaders\pathtrace.rmiss">
+      <Filter>Source Files\shaders</Filter>
+    </None>
   </ItemGroup>
 </Project>

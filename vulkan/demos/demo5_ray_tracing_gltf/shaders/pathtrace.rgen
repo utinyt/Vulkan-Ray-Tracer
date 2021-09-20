@@ -1,0 +1,88 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+#extension GL_GOOGLE_include_directive : enable
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+#extension GL_ARB_shader_clock : enable
+#include "ray_common.glsl"
+#include "wavefront.glsl"
+
+layout(binding = 0, set = 0) uniform accelerationStructureEXT topLevelAS;
+layout(binding = 1, set = 0, rgba32f) uniform image2D image;
+
+layout(binding = 0, set = 1) uniform CameraMatrices_{
+    CameraMatrices cam;
+};
+
+layout(location = 0) rayPayloadEXT hitPayload prd;
+
+/*
+https://github.com/nvpro-samples/vk_raytracing_tutorial_KHR/blob/master/ray_tracing_gltf/shaders/sampling.glsl
+*/
+uint tea(uint val0, uint val1)
+{
+  uint v0 = val0;
+  uint v1 = val1;
+  uint s0 = 0;
+
+  for(uint n = 0; n < 16; n++)
+  {
+    s0 += 0x9e3779b9;
+    v0 += ((v1 << 4) + 0xa341316c) ^ (v1 + s0) ^ ((v1 >> 5) + 0xc8013ea4);
+    v1 += ((v0 << 4) + 0xad90777d) ^ (v0 + s0) ^ ((v0 >> 5) + 0x7e95761e);
+  }
+
+  return v0;
+}
+
+void main() {
+    uint seed = tea(gl_LaunchIDEXT.y * gl_LaunchSizeEXT.x + gl_LaunchIDEXT.x, int(clockARB()));
+
+    const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5); //gl_LaunchIDEXT - integer coordinate of current pixel
+    const vec2 inUV = pixelCenter / vec2(gl_LaunchSizeEXT.xy); //gl_LaunchSizeEXT - image size
+    vec2 d = inUV * 2.0 - 1.0;
+
+    vec4 origin = cam.viewInverse * vec4(0, 0, 0, 1);
+    vec4 target = cam.projInverse * vec4(d.x, d.y, 1, 1);
+    vec4 direction = cam.viewInverse * vec4(normalize(target.xyz), 0);
+
+    uint rayFlags = gl_RayFlagsOpaqueEXT;
+    float tMin = 0.001;
+    float tMax = 10000.0;
+
+    prd.hitValue = vec3(0.0);
+    prd.seed = seed;
+    prd.depth = 0;
+    prd.rayOrigin = origin.xyz;
+    prd.rayDirection= direction.xyz;
+    prd.weight = vec3(0);
+
+    vec3 curWeight = vec3(1.0);
+    vec3 hitValue = vec3(0);
+
+    for(; prd.depth < 10; prd.depth++){
+        traceRayEXT(topLevelAS, //acceleration structure
+            rayFlags,           //rayFlags
+            0xFF,               //cullMask
+            0,                  //sbtRecordOffset
+            0,                  //sbtRecordStride
+            0,                  //missIndex
+            prd.rayOrigin,         //ray origin
+            tMin,               //ray minRange
+            prd.rayDirection,      //ray direction
+            tMax,               //ray maxRange
+            0                   //payload (location = 0)
+        );
+
+        hitValue += prd.hitValue * curWeight;
+        curWeight *= prd.weight;
+    }
+
+    if(cam.frame > 0){
+        float a = 1.f / float(cam.frame + 1);
+        vec3 oldColor = imageLoad(image, ivec2(gl_LaunchIDEXT.xy)).xyz;
+        imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(mix(oldColor, hitValue, a), 1.0));    
+    }else{
+        imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(hitValue, 1.0));    
+    }
+    
+}

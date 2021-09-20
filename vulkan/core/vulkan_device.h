@@ -65,6 +65,8 @@ struct VulkanDevice {
 	VkPhysicalDeviceRayTracingPipelineFeaturesKHR rtFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR };
 	/** acceleration features */
 	VkPhysicalDeviceAccelerationStructureFeaturesKHR asFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR };
+	/** shader clock features */
+	VkPhysicalDeviceShaderClockFeaturesKHR shaderClockFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_CLOCK_FEATURES_KHR };
 
 	/** swapchain support details - used for swapchain creation*/
 	struct SwapchainSupportDetails {
