@@ -1,3 +1,4 @@
+#include <chrono>
 #include <include/imgui/imgui.h>
 #include "core/vulkan_app_base.h"
 #define GLM_FORCE_RADIANS
@@ -23,16 +24,19 @@ public:
 		if (renderMode != userInput.renderMode) {
 			userInput.renderMode = renderMode;
 			rerecordCommandBuffer = true;
+			userInput.renderModeChanged = true;
 		}
 
 		//light position
-		ImGui::SliderFloat("Light position X", &userInput.lightPos.x, -3.0f, 3.0f);
-		ImGui::SliderFloat("Light position Y", &userInput.lightPos.y, -3.0f, 3.0f);
-		ImGui::SliderFloat("Light position Z", &userInput.lightPos.z, -3.0f, 3.0f);
-		static glm::vec3 lightPos;
-		if (lightPos != userInput.lightPos) {
-			lightPos = userInput.lightPos;
-			rerecordCommandBuffer = true;
+		if (renderMode == 1) {
+			ImGui::SliderFloat("Light position X", &userInput.lightPos.x, -3.0f, 3.0f);
+			ImGui::SliderFloat("Light position Y", &userInput.lightPos.y, -3.0f, 3.0f);
+			ImGui::SliderFloat("Light position Z", &userInput.lightPos.z, -3.0f, 3.0f);
+			static glm::vec3 lightPos;
+			if (lightPos != userInput.lightPos) {
+				lightPos = userInput.lightPos;
+				rerecordCommandBuffer = true;
+			}
 		}
 
 		ImGui::End();
@@ -43,6 +47,7 @@ public:
 	struct UserInput {
 		int renderMode = 0;
 		glm::vec3 lightPos{ 0, 1.5, 0.1 };
+		bool renderModeChanged = false;
 	}userInput;
 };
 
@@ -1465,7 +1470,31 @@ private:
 	* @param currentFrame - index of uniform buffer (0 <= currentFrame < MAX_FRAMES_IN_FLIGHT)
 	*/
 	void updateUniformBuffer(size_t currentFrame) {
+		Imgui* gui = static_cast<Imgui*>(imgui);
+		if (gui->userInput.renderModeChanged) {
+			for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+				frameDrawn[i] = -1;
+			}
+			gui->userInput.renderModeChanged = false;
+		}
 		camera.frame = ++frameDrawn[currentFrame];
+
+		////move camera back and forth
+		//if (camera.frame > 20) {
+		//	frameDrawn[currentFrame] = 1;
+		//	camera.frame = ++frameDrawn[currentFrame];
+		//}
+		//
+		//static auto startTime = std::chrono::high_resolution_clock::now();
+		//auto currentTime = std::chrono::high_resolution_clock::now();
+		//float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+
+		//glm::vec3 camPos = glm::vec3(0, 1, 3.5 + std::sin(time));
+		//glm::vec3 center = glm::vec3(0, 1, 0);
+		//glm::vec3 camUp = glm::vec3(0, 1, 0);
+		//camera.view = glm::lookAt(camPos, center, camUp);
+		//camera.viewInverse = glm::inverse(camera.view);
+
 		uniformBufferMemories[currentFrame].mapData(devices.device, &camera);
 	}
 

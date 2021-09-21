@@ -15,9 +15,9 @@ layout(binding = 0, set = 1) uniform CameraMatrices_{
 
 layout(location = 0) rayPayloadEXT hitPayload prd;
 
-/*
-https://github.com/nvpro-samples/vk_raytracing_tutorial_KHR/blob/master/ray_tracing_gltf/shaders/sampling.glsl
-*/
+/***************************************************************************************************************
+* https://github.com/nvpro-samples/vk_raytracing_tutorial_KHR/blob/master/ray_tracing_gltf/shaders/sampling.glsl
+***************************************************************************************************************/
 uint tea(uint val0, uint val1)
 {
   uint v0 = val0;
@@ -34,10 +34,30 @@ uint tea(uint val0, uint val1)
   return v0;
 }
 
+uint lcg(inout uint prev)
+{
+  uint LCG_A = 1664525u;
+  uint LCG_C = 1013904223u;
+  prev       = (LCG_A * prev + LCG_C);
+  return prev & 0x00FFFFFF;
+}
+
+float rnd(inout uint prev)
+{
+  return (float(lcg(prev)) / float(0x01000000));
+}
+
+/***************************************************************************************************************
+***************************************************************************************************************/
+
 void main() {
     uint seed = tea(gl_LaunchIDEXT.y * gl_LaunchSizeEXT.x + gl_LaunchIDEXT.x, int(clockARB()));
 
-    const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5); //gl_LaunchIDEXT - integer coordinate of current pixel
+    float r1 = rnd(seed);
+    float r2 = rnd(seed);
+    vec2 subpixelJitter = cam.frame == 0 ? vec2(0.5f, 0.5f) : vec2(r1, r2);
+
+    const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + subpixelJitter; //gl_LaunchIDEXT - integer coordinate of current pixel
     const vec2 inUV = pixelCenter / vec2(gl_LaunchSizeEXT.xy); //gl_LaunchSizeEXT - image size
     vec2 d = inUV * 2.0 - 1.0;
 
