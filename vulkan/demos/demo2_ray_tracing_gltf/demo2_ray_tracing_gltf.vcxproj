@@ -10,11 +10,29 @@
       <Platform>x64</Platform>
     </ProjectConfiguration>
   </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="ray_tracing_gltf.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="shaders\full_quad.frag" />
+    <None Include="shaders\full_quad.vert" />
+    <None Include="shaders\pathtrace.rchit" />
+    <None Include="shaders\pathtrace.rgen" />
+    <None Include="shaders\pathtrace.rmiss" />
+    <None Include="shaders\rasterizer.frag" />
+    <None Include="shaders\rasterizer.vert" />
+    <None Include="shaders\raytrace.rchit" />
+    <None Include="shaders\raytrace.rgen" />
+    <None Include="shaders\raytrace.rmiss" />
+    <None Include="shaders\raytrace_shadow.rmiss" />
+    <None Include="shaders\ray_common.glsl" />
+    <None Include="shaders\wavefront.glsl" />
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
-    <ProjectGuid>{94f962cd-733d-4f10-9804-1e4ce61dfb43}</ProjectGuid>
-    <RootNamespace>demo2texture</RootNamespace>
+    <ProjectGuid>{c4cc7b86-32fd-4a22-b879-0dd9a594ea42}</ProjectGuid>
+    <RootNamespace>demo2raytracinggltf</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -79,13 +97,6 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
   </ItemDefinitionGroup>
-  <ItemGroup>
-    <None Include="shaders\shader.frag" />
-    <None Include="shaders\shader.vert" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="texture.cpp" />
-  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

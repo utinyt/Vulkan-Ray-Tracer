@@ -13,8 +13,8 @@
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
-    <ProjectGuid>{0b6baf56-102c-428a-9a2a-e1f7c4df278a}</ProjectGuid>
-    <RootNamespace>demo5raytracinggltf</RootNamespace>
+    <ProjectGuid>{345dbfc5-37c0-49fc-aaf2-70835b36d3e0}</ProjectGuid>
+    <RootNamespace>demo1raytracing</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -80,20 +80,16 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="ray_tracing_gltf.cpp" />
+    <ClCompile Include="ray_tracing.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="shaders\full_quad.frag" />
     <None Include="shaders\full_quad.vert" />
-    <None Include="shaders\pathtrace.rchit" />
-    <None Include="shaders\pathtrace.rgen" />
-    <None Include="shaders\pathtrace.rmiss" />
     <None Include="shaders\rasterizer.frag" />
     <None Include="shaders\rasterizer.vert" />
     <None Include="shaders\raytrace.rchit" />
     <None Include="shaders\raytrace.rgen" />
     <None Include="shaders\raytrace.rmiss" />
-    <None Include="shaders\raytrace_shadow.rmiss" />
     <None Include="shaders\ray_common.glsl" />
     <None Include="shaders\wavefront.glsl" />
   </ItemGroup>

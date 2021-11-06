@@ -5,27 +5,12 @@ VisualStudioVersion = 16.0.31005.135
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "vulkan", "vulkan.vcxproj", "{83C8C429-9DB3-4D21-B3DE-6EEDD8428BBD}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "demo1_triangle", "demos\demo1_triangle\demo1_triangle.vcxproj", "{6F20F32F-0032-4817-AD67-2FB583078C38}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "demo1_ray_tracing", "demos\demo1_ray_tracing\demo1_ray_tracing.vcxproj", "{345DBFC5-37C0-49FC-AAF2-70835B36D3E0}"
 	ProjectSection(ProjectDependencies) = postProject
 		{83C8C429-9DB3-4D21-B3DE-6EEDD8428BBD} = {83C8C429-9DB3-4D21-B3DE-6EEDD8428BBD}
 	EndProjectSection
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "demo2_texture", "demos\demo2_texture\demo2_texture.vcxproj", "{94F962CD-733D-4F10-9804-1E4CE61DFB43}"
-	ProjectSection(ProjectDependencies) = postProject
-		{83C8C429-9DB3-4D21-B3DE-6EEDD8428BBD} = {83C8C429-9DB3-4D21-B3DE-6EEDD8428BBD}
-	EndProjectSection
-EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "demo3_phong_reflection", "demos\demo3_phong_reflection\demo3_phong_reflection.vcxproj", "{85A5B4A7-CF05-44AC-AAD7-9EC52D50F201}"
-	ProjectSection(ProjectDependencies) = postProject
-		{83C8C429-9DB3-4D21-B3DE-6EEDD8428BBD} = {83C8C429-9DB3-4D21-B3DE-6EEDD8428BBD}
-	EndProjectSection
-EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "demo4_ray_tracing", "demos\demo4_ray_tracing\demo4_ray_tracing.vcxproj", "{33B0D241-0971-4A8D-89DB-477D473B1798}"
-	ProjectSection(ProjectDependencies) = postProject
-		{83C8C429-9DB3-4D21-B3DE-6EEDD8428BBD} = {83C8C429-9DB3-4D21-B3DE-6EEDD8428BBD}
-	EndProjectSection
-EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "demo5_ray_tracing_gltf", "demos\demo5_ray_tracing_gltf\demo5_ray_tracing_gltf.vcxproj", "{0B6BAF56-102C-428A-9A2A-E1F7C4DF278A}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "demo2_ray_tracing_gltf", "demos\demo2_ray_tracing_gltf\demo2_ray_tracing_gltf.vcxproj", "{C4CC7B86-32FD-4A22-B879-0DD9A594EA42}"
 	ProjectSection(ProjectDependencies) = postProject
 		{83C8C429-9DB3-4D21-B3DE-6EEDD8428BBD} = {83C8C429-9DB3-4D21-B3DE-6EEDD8428BBD}
 	EndProjectSection
@@ -40,26 +25,14 @@ Global
 		{83C8C429-9DB3-4D21-B3DE-6EEDD8428BBD}.Debug|x64.Build.0 = Debug|x64
 		{83C8C429-9DB3-4D21-B3DE-6EEDD8428BBD}.Release|x64.ActiveCfg = Release|x64
 		{83C8C429-9DB3-4D21-B3DE-6EEDD8428BBD}.Release|x64.Build.0 = Release|x64
-		{6F20F32F-0032-4817-AD67-2FB583078C38}.Debug|x64.ActiveCfg = Debug|x64
-		{6F20F32F-0032-4817-AD67-2FB583078C38}.Debug|x64.Build.0 = Debug|x64
-		{6F20F32F-0032-4817-AD67-2FB583078C38}.Release|x64.ActiveCfg = Release|x64
-		{6F20F32F-0032-4817-AD67-2FB583078C38}.Release|x64.Build.0 = Release|x64
-		{94F962CD-733D-4F10-9804-1E4CE61DFB43}.Debug|x64.ActiveCfg = Debug|x64
-		{94F962CD-733D-4F10-9804-1E4CE61DFB43}.Debug|x64.Build.0 = Debug|x64
-		{94F962CD-733D-4F10-9804-1E4CE61DFB43}.Release|x64.ActiveCfg = Release|x64
-		{94F962CD-733D-4F10-9804-1E4CE61DFB43}.Release|x64.Build.0 = Release|x64
-		{85A5B4A7-CF05-44AC-AAD7-9EC52D50F201}.Debug|x64.ActiveCfg = Debug|x64
-		{85A5B4A7-CF05-44AC-AAD7-9EC52D50F201}.Debug|x64.Build.0 = Debug|x64
-		{85A5B4A7-CF05-44AC-AAD7-9EC52D50F201}.Release|x64.ActiveCfg = Release|x64
-		{85A5B4A7-CF05-44AC-AAD7-9EC52D50F201}.Release|x64.Build.0 = Release|x64
-		{33B0D241-0971-4A8D-89DB-477D473B1798}.Debug|x64.ActiveCfg = Debug|x64
-		{33B0D241-0971-4A8D-89DB-477D473B1798}.Debug|x64.Build.0 = Debug|x64
-		{33B0D241-0971-4A8D-89DB-477D473B1798}.Release|x64.ActiveCfg = Release|x64
-		{33B0D241-0971-4A8D-89DB-477D473B1798}.Release|x64.Build.0 = Release|x64
-		{0B6BAF56-102C-428A-9A2A-E1F7C4DF278A}.Debug|x64.ActiveCfg = Debug|x64
-		{0B6BAF56-102C-428A-9A2A-E1F7C4DF278A}.Debug|x64.Build.0 = Debug|x64
-		{0B6BAF56-102C-428A-9A2A-E1F7C4DF278A}.Release|x64.ActiveCfg = Debug|x64
-		{0B6BAF56-102C-428A-9A2A-E1F7C4DF278A}.Release|x64.Build.0 = Debug|x64
+		{345DBFC5-37C0-49FC-AAF2-70835B36D3E0}.Debug|x64.ActiveCfg = Debug|x64
+		{345DBFC5-37C0-49FC-AAF2-70835B36D3E0}.Debug|x64.Build.0 = Debug|x64
+		{345DBFC5-37C0-49FC-AAF2-70835B36D3E0}.Release|x64.ActiveCfg = Release|x64
+		{345DBFC5-37C0-49FC-AAF2-70835B36D3E0}.Release|x64.Build.0 = Release|x64
+		{C4CC7B86-32FD-4A22-B879-0DD9A594EA42}.Debug|x64.ActiveCfg = Debug|x64
+		{C4CC7B86-32FD-4A22-B879-0DD9A594EA42}.Debug|x64.Build.0 = Debug|x64
+		{C4CC7B86-32FD-4A22-B879-0DD9A594EA42}.Release|x64.ActiveCfg = Release|x64
+		{C4CC7B86-32FD-4A22-B879-0DD9A594EA42}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

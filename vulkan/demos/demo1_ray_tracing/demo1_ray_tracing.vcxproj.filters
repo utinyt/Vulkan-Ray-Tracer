@@ -14,7 +14,7 @@
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
     <Filter Include="Source Files\shaders">
-      <UniqueIdentifier>{4503a282-4c80-4dea-bf5d-56b644a175bc}</UniqueIdentifier>
+      <UniqueIdentifier>{8376213a-84d6-405e-aaca-b11fe87dcc86}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -29,6 +29,15 @@
     <None Include="shaders\full_quad.vert">
       <Filter>Source Files\shaders</Filter>
     </None>
+    <None Include="shaders\rasterizer.frag">
+      <Filter>Source Files\shaders</Filter>
+    </None>
+    <None Include="shaders\rasterizer.vert">
+      <Filter>Source Files\shaders</Filter>
+    </None>
+    <None Include="shaders\ray_common.glsl">
+      <Filter>Source Files\shaders</Filter>
+    </None>
     <None Include="shaders\raytrace.rchit">
       <Filter>Source Files\shaders</Filter>
     </None>
@@ -38,16 +47,7 @@
     <None Include="shaders\raytrace.rmiss">
       <Filter>Source Files\shaders</Filter>
     </None>
-    <None Include="shaders\ray_common.glsl">
-      <Filter>Source Files\shaders</Filter>
-    </None>
     <None Include="shaders\wavefront.glsl">
-      <Filter>Source Files\shaders</Filter>
-    </None>
-    <None Include="shaders\rasterizer.frag">
-      <Filter>Source Files\shaders</Filter>
-    </None>
-    <None Include="shaders\rasterizer.vert">
       <Filter>Source Files\shaders</Filter>
     </None>
   </ItemGroup>

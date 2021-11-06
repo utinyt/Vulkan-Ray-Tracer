@@ -14,7 +14,7 @@
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
     <Filter Include="Source Files\shaders">
-      <UniqueIdentifier>{07a4297c-5117-4e50-8ee2-05c27db5b275}</UniqueIdentifier>
+      <UniqueIdentifier>{bf9122ab-2e4e-4c77-b929-1a6e867d2138}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -23,10 +23,13 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <None Include="shaders\full_quad.frag">
+    <None Include="shaders\pathtrace.rchit">
       <Filter>Source Files\shaders</Filter>
     </None>
-    <None Include="shaders\full_quad.vert">
+    <None Include="shaders\pathtrace.rgen">
+      <Filter>Source Files\shaders</Filter>
+    </None>
+    <None Include="shaders\pathtrace.rmiss">
       <Filter>Source Files\shaders</Filter>
     </None>
     <None Include="shaders\rasterizer.frag">
@@ -47,19 +50,16 @@
     <None Include="shaders\raytrace.rmiss">
       <Filter>Source Files\shaders</Filter>
     </None>
-    <None Include="shaders\wavefront.glsl">
-      <Filter>Source Files\shaders</Filter>
-    </None>
     <None Include="shaders\raytrace_shadow.rmiss">
       <Filter>Source Files\shaders</Filter>
     </None>
-    <None Include="shaders\pathtrace.rchit">
+    <None Include="shaders\wavefront.glsl">
       <Filter>Source Files\shaders</Filter>
     </None>
-    <None Include="shaders\pathtrace.rgen">
+    <None Include="shaders\full_quad.frag">
       <Filter>Source Files\shaders</Filter>
     </None>
-    <None Include="shaders\pathtrace.rmiss">
+    <None Include="shaders\full_quad.vert">
       <Filter>Source Files\shaders</Filter>
     </None>
   </ItemGroup>
