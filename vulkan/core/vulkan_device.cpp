@@ -1,5 +1,6 @@
 #include <set>
 #include <algorithm>
+#include <string>
 #include "vulkan_device.h"
 
 /*
@@ -39,6 +40,7 @@ void VulkanDevice::pickPhysicalDevice(VkInstance instance, VkSurfaceKHR surface,
 		throw std::runtime_error("failed to find suitable GPU");
 	}
 
+	//properties & features
 	vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memProperties);
 	vkGetPhysicalDeviceProperties(physicalDevice, &properties);
 	asFeatures.pNext = &shaderClockFeatures;
@@ -46,6 +48,18 @@ void VulkanDevice::pickPhysicalDevice(VkInstance instance, VkSurfaceKHR surface,
 	vk12Features.pNext = &rtFeatures;
 	availableFeatures.pNext = &vk12Features;
 	vkGetPhysicalDeviceFeatures2(physicalDevice, &availableFeatures);
+
+	//for anti-aliasing
+	maxSampleCount = getMaxSampleCount();
+	LOG("maximum sample count:\t" + std::to_string(maxSampleCount));
+
+	//check if current device support VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT memory type
+	for (uint32_t memoryTypeIndex = 0; memoryTypeIndex < memProperties.memoryTypeCount; ++memoryTypeIndex) {
+		if (memProperties.memoryTypes[memoryTypeIndex].propertyFlags & VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT) {
+			lazilyAllocatedMemoryTypeExist = true;
+			break;
+		}
+	}
 
 	LOG("initialized:\tphysical device");
 }
@@ -84,8 +98,11 @@ void VulkanDevice::createLogicalDevice() {
 	}
 
 	QueueFamilyIndices indices = findQueueFamilyIndices(physicalDevice, surface);
-	std::set<uint32_t> uniqueQueueFamilies = { indices.graphicsFamily.value(),
-		indices.presentFamily.value() };
+	std::set<uint32_t> uniqueQueueFamilies = { 
+		indices.graphicsFamily.value(),
+		indices.presentFamily.value(),
+		indices.computeFamily.value()
+	};
 
 	std::vector<VkDeviceQueueCreateInfo> queueInfos;
 	float queuePriority = 1.f;
@@ -107,9 +124,12 @@ void VulkanDevice::createLogicalDevice() {
 	if (availableFeatures.features.samplerAnisotropy == VK_TRUE) {
 		deviceFeatures.features.samplerAnisotropy = VK_TRUE;
 	}
+	if (availableFeatures.features.sampleRateShading == VK_TRUE) {
+		deviceFeatures.features.sampleRateShading = VK_TRUE;
+	}
 	deviceInfo.pNext = &deviceFeatures;
 
-	//add device features
+		//add device features
 	VkPhysicalDeviceVulkan12Features device12Features{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES };
 	VkPhysicalDeviceAccelerationStructureFeaturesKHR deviceAsFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR };
 	VkMemoryAllocateFlags memflags = 0;
@@ -126,7 +146,7 @@ void VulkanDevice::createLogicalDevice() {
 		}
 	}
 
-	//add rat tracing pipeline feature
+	//add ray tracing pipeline feature
 	VkPhysicalDeviceRayTracingPipelineFeaturesKHR deviceRtFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR };
 	VkPhysicalDeviceShaderClockFeaturesKHR clockFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_CLOCK_FEATURES_KHR };
 	if (std::find(requiredExtensions.begin(), requiredExtensions.end(),
@@ -165,6 +185,7 @@ void VulkanDevice::createLogicalDevice() {
 	//get queue handles
 	vkGetDeviceQueue(device, indices.graphicsFamily.value(), 0, &graphicsQueue);
 	vkGetDeviceQueue(device, indices.presentFamily.value(), 0, &presentQueue);
+	vkGetDeviceQueue(device, indices.computeFamily.value(), 0, &computeQueue);
 
 	LOG("created:\tlogical device");
 
@@ -245,10 +266,15 @@ VulkanDevice::QueueFamilyIndices VulkanDevice::findQueueFamilyIndices(VkPhysical
 			indices.graphicsFamily = i;
 		}
 
+		//compute family
+		if ((queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT)) {
+			indices.computeFamily = i;
+		}
+
 		//present family
 		VkBool32 presentSupport = false;
 		vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, i, surface, &presentSupport);
-		if (presentSupport) {
+		if (presentSupport && !indices.presentFamily.has_value()) {
 			indices.presentFamily = i;
 		}
 
@@ -316,7 +342,7 @@ MemoryAllocator::HostVisibleMemory VulkanDevice::createBuffer(VkBuffer& buffer, 
 
 void VulkanDevice::copyBuffer(VkCommandPool commandPool, VkBuffer srcBuffer, VkBuffer dstBuffer,
 	VkDeviceSize size) const {
-	VkCommandBuffer commandBuffer = beginOneTimeSubmitCommandBuffer();
+	VkCommandBuffer commandBuffer = beginCommandBuffer();
 
 	//copy buffer
 	VkBufferCopy copyRegion{};
@@ -325,7 +351,7 @@ void VulkanDevice::copyBuffer(VkCommandPool commandPool, VkBuffer srcBuffer, VkB
 	copyRegion.size = size;
 	vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
 
-	endOneTimeSubmitCommandBuffer(commandBuffer);
+	endCommandBuffer(commandBuffer);
 }
 
 /*
@@ -339,18 +365,23 @@ void VulkanDevice::copyBuffer(VkCommandPool commandPool, VkBuffer srcBuffer, VkB
 * @param image - return image handle
 * @param imageMemory - return image memory handle
 */
-MemoryAllocator::HostVisibleMemory VulkanDevice::createImage(VkImage& image, VkExtent3D extent,
-	VkFormat format, VkImageTiling tiling,
-	VkImageUsageFlags usage, VkMemoryPropertyFlags properties) {
+MemoryAllocator::HostVisibleMemory VulkanDevice::createImage(VkImage& image,
+	VkExtent3D extent,
+	VkFormat format,
+	VkImageTiling tiling,
+	VkImageUsageFlags usage,
+	VkMemoryPropertyFlags properties,
+	VkSampleCountFlagBits numSamples) {
 	//image creation
-	VkImageCreateInfo imageInfo = vktools::initializers::imageCreateInfo(extent, format, tiling, usage);
+	VkImageCreateInfo imageInfo = 
+		vktools::initializers::imageCreateInfo(extent, format, tiling, usage, numSamples);
 	VK_CHECK_RESULT(vkCreateImage(device, &imageInfo, nullptr, &image));
 	return memoryAllocator.allocateImageMemory(image, properties);
 }
 
 void VulkanDevice::copyBufferToImage(VkBuffer buffer, VkImage image,
 	VkOffset3D offset, VkExtent3D extent) const {
-	VkCommandBuffer commandBuffer = beginOneTimeSubmitCommandBuffer();
+	VkCommandBuffer commandBuffer = beginCommandBuffer();
 	
 	VkBufferImageCopy region{};
 	region.bufferOffset = 0;
@@ -372,7 +403,7 @@ void VulkanDevice::copyBufferToImage(VkBuffer buffer, VkImage image,
 		&region
 	);
 
-	endOneTimeSubmitCommandBuffer(commandBuffer);
+	endCommandBuffer(commandBuffer);
 }
 
 /*
@@ -380,7 +411,7 @@ void VulkanDevice::copyBufferToImage(VkBuffer buffer, VkImage image,
 * 
 * @return command buffer ready to be recorded
 */
-VkCommandBuffer VulkanDevice::beginOneTimeSubmitCommandBuffer() const {
+VkCommandBuffer VulkanDevice::beginCommandBuffer(VkCommandBufferUsageFlagBits flag) const {
 	VkCommandBufferAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
@@ -392,7 +423,7 @@ VkCommandBuffer VulkanDevice::beginOneTimeSubmitCommandBuffer() const {
 
 	VkCommandBufferBeginInfo beginInfo{};
 	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-	beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+	beginInfo.flags = flag;
 	VK_CHECK_RESULT(vkBeginCommandBuffer(commandBuffer, &beginInfo));
 
 	return commandBuffer;
@@ -404,7 +435,7 @@ VkCommandBuffer VulkanDevice::beginOneTimeSubmitCommandBuffer() const {
 * 
 * @param commandBuffer - recorded command buffer to submit
 */
-void VulkanDevice::endOneTimeSubmitCommandBuffer(VkCommandBuffer commandBuffer) const {
+void VulkanDevice::endCommandBuffer(VkCommandBuffer commandBuffer) const {
 	vkEndCommandBuffer(commandBuffer);
 
 	VkSubmitInfo submitInfo{};
@@ -415,4 +446,23 @@ void VulkanDevice::endOneTimeSubmitCommandBuffer(VkCommandBuffer commandBuffer) 
 	VK_CHECK_RESULT(vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE));
 	VK_CHECK_RESULT(vkQueueWaitIdle(graphicsQueue));
 	vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
+}
+/*
+* get max sample count from the device
+* 
+* @return VkSampleCountFlagBits - max sample count
+*/
+VkSampleCountFlagBits VulkanDevice::getMaxSampleCount() const {
+	VkSampleCountFlags counts =
+		properties.limits.framebufferColorSampleCounts & 
+		properties.limits.framebufferDepthSampleCounts;
+
+	if (counts & VK_SAMPLE_COUNT_64_BIT) { return VK_SAMPLE_COUNT_64_BIT; }
+	if (counts & VK_SAMPLE_COUNT_32_BIT) { return VK_SAMPLE_COUNT_32_BIT; }
+	if (counts & VK_SAMPLE_COUNT_16_BIT) { return VK_SAMPLE_COUNT_16_BIT; }
+	if (counts & VK_SAMPLE_COUNT_8_BIT) { return VK_SAMPLE_COUNT_8_BIT; }
+	if (counts & VK_SAMPLE_COUNT_4_BIT) { return VK_SAMPLE_COUNT_4_BIT; }
+	if (counts & VK_SAMPLE_COUNT_2_BIT) { return VK_SAMPLE_COUNT_2_BIT; }
+
+	return VK_SAMPLE_COUNT_1_BIT;
 }

@@ -5,13 +5,13 @@
 */
 PipelineGenerator::PipelineGenerator(VkDevice device) {
 	this->device = device;
-	reset();
+	resetAll();
 }
 
 /*
 * set all create info to default settings
 */
-void PipelineGenerator::reset() {
+void PipelineGenerator::resetAll() {
 	if (device == VK_NULL_HANDLE) {
 		throw std::runtime_error("PipelineGenerator::destroyShaderModule(): device handle is null");
 	}
@@ -31,8 +31,7 @@ void PipelineGenerator::reset() {
 
 	setRasterizerInfo();
 
-	multisampleStateCreateInfo =
-		vktools::initializers::pipelineMultisampleStateCreateInfo();
+	setMultisampleInfo();
 
 	setDepthStencilInfo();
 
@@ -46,6 +45,17 @@ void PipelineGenerator::reset() {
 			dynamicStates.data(),
 			static_cast<uint32_t>(dynamicStates.size())
 		);
+}
+
+/*
+* only reset shader & vertex binding & attribute descriptions
+* 
+* used to reuse pipeline generator
+*/
+void PipelineGenerator::resetShaderVertexDescriptions() {
+	vertexInputBindingDescs.clear();
+	vertexInputAttributeDescs.clear();
+	destroyShaderModule();
 }
 
 /*
@@ -97,6 +107,15 @@ void PipelineGenerator::addDescriptorSetLayout(const std::vector<VkDescriptorSet
 }
 
 /*
+* set input topology in VkPipelineVertexInputStateCreateInfo
+* 
+* @param topology
+*/
+void PipelineGenerator::setInputTopology(VkPrimitiveTopology topology) {
+	inputAssemblyStateCreateInfo.topology = topology;
+}
+
+/*
 * (re)set rasterizer info 
 * 
 * @param polygonMode
@@ -114,8 +133,34 @@ void PipelineGenerator::setRasterizerInfo(VkPolygonMode polygonMode,
 * 
 * @param blendEnable
 */
-void PipelineGenerator::setColorBlendInfo(VkBool32 blendEnable) {
-	colorBlendAttachmentStates = { vktools::initializers::pipelineColorBlendAttachment(blendEnable) };
+void PipelineGenerator::setColorBlendInfo(VkBool32 blendEnable, uint32_t nbColorAttachment) {
+	colorBlendAttachmentStates.clear();
+	for (uint32_t i = 0; i < nbColorAttachment; ++i) {
+		colorBlendAttachmentStates.push_back(vktools::initializers::pipelineColorBlendAttachment(blendEnable));
+	}
+	
+	colorBlendAttachmentStates.shrink_to_fit();
+
+	colorBlendStateCreateInfo =
+		vktools::initializers::pipelineColorBlendStateCreateInfo(
+			static_cast<uint32_t>(colorBlendAttachmentStates.size()),
+			colorBlendAttachmentStates.data()
+		);
+}
+
+/*
+* (re)set color blend attachment state
+* 
+* @param attachmentState
+*/
+void PipelineGenerator::setColorBlendAttachmentState(
+	const VkPipelineColorBlendAttachmentState& attachmentState, 
+	uint32_t nbColorAttachment) {
+	colorBlendAttachmentStates.clear();
+	for (uint32_t i = 0; i < nbColorAttachment; ++i) {
+		colorBlendAttachmentStates.push_back(attachmentState);
+	}
+
 	colorBlendAttachmentStates.shrink_to_fit();
 
 	colorBlendStateCreateInfo =
@@ -139,16 +184,25 @@ void PipelineGenerator::setDepthStencilInfo(VkBool32 depthTest, VkBool32 depthWr
 }
 
 /*
+* set sample count (msaa)
+*/
+void PipelineGenerator::setMultisampleInfo(VkSampleCountFlagBits sampleCount,
+	VkBool32 enableSampleShading, float minSampleShading) {
+	multisampleStateCreateInfo =
+		vktools::initializers::pipelineMultisampleStateCreateInfo(sampleCount);
+}
+
+/*
 * generate pipeline & pipeline layour
 * 
 * @param renderPass
 * @param descriptorSetLayout
 * @param outPipeline
-* @param outPipelineLayout
+* @param outPipelineLayout - if null, it will reuse ipelineLayout already created
 */
 void PipelineGenerator::generate(VkRenderPass renderPass,
-	VkPipeline& outPipeline,
-	VkPipelineLayout& outPipelineLayout) {
+	VkPipeline* outPipeline,
+	VkPipelineLayout* outPipelineLayout) {
 	//check minimal info were provided
 	if (device == VK_NULL_HANDLE) {
 		throw std::runtime_error("PipelineGenerator::destroyShaderModule(): device handle is null");
@@ -176,7 +230,10 @@ void PipelineGenerator::generate(VkRenderPass renderPass,
 			descriptorSetLayouts,
 			pushConstantRanges
 		);
-	VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, nullptr, &outPipelineLayout));
+
+	if (*outPipelineLayout == VK_NULL_HANDLE) {
+		VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, nullptr, outPipelineLayout));
+	}
 
 	//create pipeline
 	VkGraphicsPipelineCreateInfo pipelineInfo{};
@@ -191,13 +248,12 @@ void PipelineGenerator::generate(VkRenderPass renderPass,
 	pipelineInfo.pDepthStencilState = &depthStencilStateCreateInfo;
 	pipelineInfo.pColorBlendState = &colorBlendStateCreateInfo;
 	pipelineInfo.pDynamicState = &dynamicStateCreateInfo;
-	pipelineInfo.layout = outPipelineLayout;
+	pipelineInfo.layout = *outPipelineLayout;
 	pipelineInfo.renderPass = renderPass;
 	pipelineInfo.subpass = 0;
-	VK_CHECK_RESULT(vkCreateGraphicsPipelines(device, {}, 1, &pipelineInfo, nullptr, &outPipeline));
+	VK_CHECK_RESULT(vkCreateGraphicsPipelines(device, {}, 1, &pipelineInfo, nullptr, outPipeline));
 
-	//reset all setting
-	reset();
+	//resetShaderVertexDescriptions();
 }
 
 /*

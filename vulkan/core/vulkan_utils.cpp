@@ -162,7 +162,7 @@ namespace vktools {
 	* @param aspect
 	*/
 	void setImageLayout(VkCommandBuffer commandBuffer, VkImage image,
-		VkImageLayout oldLayout, VkImageLayout newLayout, VkImageAspectFlags aspect) {
+		VkImageLayout oldLayout, VkImageLayout newLayout, VkImageSubresourceRange subresourceRange) {
 		VkImageMemoryBarrier imageBarrier{};
 		imageBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
 		imageBarrier.oldLayout = oldLayout;
@@ -170,11 +170,7 @@ namespace vktools {
 		imageBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 		imageBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 		imageBarrier.image = image;
-		imageBarrier.subresourceRange.aspectMask = aspect;
-		imageBarrier.subresourceRange.baseMipLevel = 0;
-		imageBarrier.subresourceRange.levelCount = 1;
-		imageBarrier.subresourceRange.baseArrayLayer = 0;
-		imageBarrier.subresourceRange.layerCount = 1;
+		imageBarrier.subresourceRange = subresourceRange;
 
 		VkPipelineStageFlags srcStage;
 		VkPipelineStageFlags dstStage;
@@ -207,8 +203,15 @@ namespace vktools {
 			srcStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 			dstStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
 		}
+		else if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED &&
+			newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+			imageBarrier.srcAccessMask = 0;
+			imageBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+			srcStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+			dstStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+		}
 		else {
-			std::invalid_argument("VulkanTextureBase::setImageLayout(): unsupported layout transition");
+			throw std::invalid_argument("VulkanTextureBase::setImageLayout(): unsupported layout transition");
 		}
 
 		vkCmdPipelineBarrier(commandBuffer,
@@ -229,17 +232,8 @@ namespace vktools {
 	*/
 	VkImageView createImageView(VkDevice device, VkImage image, VkImageViewType viewType,
 		VkFormat format, VkImageAspectFlags aspectFlags) {
-		VkImageViewCreateInfo viewInfo{};
-		viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-		viewInfo.image = image;
-		viewInfo.viewType = viewType;
-		viewInfo.format = format;
-		viewInfo.subresourceRange.aspectMask = aspectFlags;
-		viewInfo.subresourceRange.baseMipLevel = 0;
-		viewInfo.subresourceRange.levelCount = 1;
-		viewInfo.subresourceRange.baseArrayLayer = 0;
-		viewInfo.subresourceRange.layerCount = 1;
-
+		VkImageViewCreateInfo viewInfo = initializers::imageViewCreateInfo(image,
+			viewType, format, { aspectFlags, 0, 1, 0, 1 });
 		VkImageView imageView;
 		VK_CHECK_RESULT(vkCreateImageView(device, &viewInfo, nullptr, &imageView));
 		return imageView;
@@ -273,14 +267,34 @@ namespace vktools {
 	}
 
 	/*
-	* check if the format has stencil component
+	* check if the format has depth component (D)
+	* 
+	* @param format
+	* @return bool
+	*/
+	bool hasDepthComponent(VkFormat format) {
+		return
+			format == VK_FORMAT_D16_UNORM ||
+			format == VK_FORMAT_X8_D24_UNORM_PACK32 ||
+			format == VK_FORMAT_D32_SFLOAT ||
+			format == VK_FORMAT_D16_UNORM_S8_UINT ||
+			format == VK_FORMAT_D24_UNORM_S8_UINT ||
+			format == VK_FORMAT_D32_SFLOAT_S8_UINT;
+		
+	}
+
+	/*
+	* check if the format has stencil component (S)
 	* 
 	* @param format
 	* @return bool
 	*/
 	bool hasStencilComponent(VkFormat format) {
-		return format == VK_FORMAT_D32_SFLOAT_S8_UINT ||
-			format == VK_FORMAT_D24_UNORM_S8_UINT;
+		return
+			format == VK_FORMAT_S8_UINT				||
+			format == VK_FORMAT_D16_UNORM_S8_UINT	||
+			format == VK_FORMAT_D24_UNORM_S8_UINT	||
+			format == VK_FORMAT_D32_SFLOAT_S8_UINT;
 	}
 
 	/*
@@ -311,7 +325,7 @@ namespace vktools {
 		memcpy(&vkMat, &transposed, sizeof(VkTransformMatrixKHR));
 		return vkMat;
 	}
-
+	
 	/*
 	* create render pass
 	* 
@@ -327,6 +341,7 @@ namespace vktools {
 	VkRenderPass createRenderPass(VkDevice	device,
 		const std::vector<VkFormat>&		colorAttachmentFormats, 
 		VkFormat							depthAttachmentFormat,
+		VkSampleCountFlagBits				sampleCount,
 		uint32_t							subpassCount, 
 		bool								clearColor, 
 		bool								clearDepth, 
@@ -334,15 +349,18 @@ namespace vktools {
 		VkImageLayout						finalLayout,
 		VkPipelineStageFlags				stageFlags,
 		VkAccessFlags						dstAccessMask) {
+
 		std::vector<VkAttachmentDescription> allAttachments;
 		std::vector<VkAttachmentReference> colorAttachmentsRef;
 		bool hasDepth = (depthAttachmentFormat != VK_FORMAT_UNDEFINED);
+		bool hasStencil = vktools::hasStencilComponent(depthAttachmentFormat);
+		bool multisampling = sampleCount != VK_SAMPLE_COUNT_1_BIT;
 
 		//color attachments
 		for (const auto& format : colorAttachmentFormats) {
 			VkAttachmentDescription colorAttachment{};
 			colorAttachment.format			= format;
-			colorAttachment.samples			= VK_SAMPLE_COUNT_1_BIT;
+			colorAttachment.samples			= sampleCount;
 			colorAttachment.loadOp			= clearColor ?
 												VK_ATTACHMENT_LOAD_OP_CLEAR : (initialLayout == VK_IMAGE_LAYOUT_UNDEFINED ?
 													VK_ATTACHMENT_LOAD_OP_DONT_CARE : VK_ATTACHMENT_LOAD_OP_LOAD);
@@ -365,11 +383,11 @@ namespace vktools {
 		if (hasDepth) {
 			VkAttachmentDescription depthAttachment{};
 			depthAttachment.format			= depthAttachmentFormat;
-			depthAttachment.samples			= VK_SAMPLE_COUNT_1_BIT;
+			depthAttachment.samples			= sampleCount;
 			depthAttachment.loadOp			= clearDepth ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
 			depthAttachment.storeOp			= VK_ATTACHMENT_STORE_OP_STORE;
-			depthAttachment.stencilLoadOp	= VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-			depthAttachment.stencilStoreOp	= VK_ATTACHMENT_STORE_OP_DONT_CARE;
+			depthAttachment.stencilLoadOp	= hasStencil ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+			depthAttachment.stencilStoreOp	= hasStencil ? VK_ATTACHMENT_STORE_OP_STORE : VK_ATTACHMENT_STORE_OP_DONT_CARE;
 			depthAttachment.initialLayout	= VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 			depthAttachment.finalLayout		= VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
@@ -377,6 +395,22 @@ namespace vktools {
 			depthAttachmentRef.layout		= VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 			 
 			allAttachments.push_back(depthAttachment);
+		}
+
+		//multisample color attachment
+		VkAttachmentReference multisampleColorRef{};
+		if (multisampling) {
+			VkAttachmentDescription multisampleAttachment{};
+			multisampleAttachment.format;
+			multisampleAttachment.samples			= sampleCount;
+			multisampleAttachment.loadOp			= VK_ATTACHMENT_LOAD_OP_CLEAR;
+			multisampleAttachment.storeOp			= VK_ATTACHMENT_STORE_OP_DONT_CARE;
+			multisampleAttachment.stencilLoadOp		= VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+			multisampleAttachment.stencilStoreOp	= VK_ATTACHMENT_STORE_OP_DONT_CARE;
+			multisampleAttachment.initialLayout		= VK_IMAGE_LAYOUT_UNDEFINED;
+			multisampleAttachment.finalLayout		= VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+			multisampleColorRef.attachment			= static_cast<uint32_t>(allAttachments.size());
+			multisampleColorRef.layout				= VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 		}
 
 		//subpass dependency
@@ -397,6 +431,7 @@ namespace vktools {
 			dependency.dstStageMask			= stageFlags;
 			dependency.srcAccessMask		= 0;
 			dependency.dstAccessMask		= dstAccessMask;
+			dependency.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
 
 			subpasses.push_back(subpass);
 			subpassDependencies.push_back(dependency);
@@ -430,7 +465,7 @@ namespace vktools {
 	std::vector<VkDescriptorSet> allocateDescriptorSets(VkDevice device, VkDescriptorSetLayout layout,
 		VkDescriptorPool pool, uint32_t nbDescriptorSets) {
 		std::vector<VkDescriptorSet> descriptorSets;
-		descriptorSets.assign(nbDescriptorSets, {});
+		descriptorSets.resize(nbDescriptorSets);
 
 		std::vector<VkDescriptorSetLayout> layouts(nbDescriptorSets, layout);
 		VkDescriptorSetAllocateInfo descInfo{};

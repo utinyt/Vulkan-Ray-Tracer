@@ -22,7 +22,7 @@ public:
 		ImGui::RadioButton("rasterizer", &renderMode, 1);
 		if (renderMode != userInput.renderMode) {
 			userInput.renderMode = renderMode;
-			rerecordCommandBuffer = true;
+			rerecordcommandBuffer = true;
 		}
 
 		ImGui::End();
@@ -45,7 +45,7 @@ public:
 		enabledDeviceExtensions.push_back(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME);
 		enabledDeviceExtensions.push_back(VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME);
 		enabledDeviceExtensions.push_back(VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME);
-		imgui = new Imgui;
+		imguiBase = new Imgui;
 	}
 
 	/*
@@ -53,8 +53,8 @@ public:
 	*/
 	~VulkanApp() {
 		//imgui
-		imgui->cleanup();
-		delete imgui;
+		imguiBase->cleanup();
+		delete imguiBase;
 
 		devices.memoryAllocator.freeBufferMemory(rtSBTBuffer,
 			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
@@ -230,12 +230,20 @@ public:
 		}
 		//render pass
 		postRenderPass = vktools::createRenderPass(devices.device,
-			{ swapchain.surfaceFormat.format }, depthFormat, 1, true, true);
+			{ swapchain.surfaceFormat.format },
+			depthFormat,
+			VK_SAMPLE_COUNT_1_BIT, 1, true, true,
+			VK_IMAGE_LAYOUT_UNDEFINED,
+			VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
+			VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+			VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
+			VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
 		//pipeline
 		createPostPipeline();
 
 		//imgui
-		imgui->init(&devices, swapchain.extent.width, swapchain.extent.height, postRenderPass, MAX_FRAMES_IN_FLIGHT);
+		imguiBase->init(&devices, swapchain.extent.width, swapchain.extent.height, postRenderPass, MAX_FRAMES_IN_FLIGHT, VK_SAMPLE_COUNT_1_BIT);
 
 		//framebuffer
 		createFramebuffers();
@@ -328,7 +336,7 @@ public:
 
 			//#1 raytracing
 			size_t resourceIndex = i / framebuffers.size();
-			if (static_cast<Imgui*>(imgui)->userInput.renderMode == RENDER_MODE::RAYRACE) {
+			if (static_cast<Imgui*>(imguiBase)->userInput.renderMode == RENDER_MODE::RAYRACE) {
 				raytrace(commandBuffers[i], resourceIndex);
 			}
 			else {
@@ -349,7 +357,7 @@ public:
 				&postDescriptorSets[resourceIndex], 0, nullptr);
 			vkCmdDraw(commandBuffers[i], 3, 1, 0, 0); //full screen triangle
 
-			imgui->drawFrame(commandBuffers[i], resourceIndex);
+			imguiBase->drawFrame(commandBuffers[i], resourceIndex);
 
 			vkCmdEndRenderPass(commandBuffers[i]);
 			VK_CHECK_RESULT(vkEndCommandBuffer(commandBuffers[i]));
@@ -671,14 +679,14 @@ private:
 
 			//over the limit or last blas element
 			if (batchSize >= batchLimit || blasIndex == nbBlas - 1) {
-				VkCommandBuffer cmdBuf = devices.beginOneTimeSubmitCommandBuffer();
+				VkCommandBuffer cmdBuf = devices.beginCommandBuffer();
 				cmdCreateBlas(cmdBuf, indices, buildAs, scratchAddress, queryPool);
-				devices.endOneTimeSubmitCommandBuffer(cmdBuf);
+				devices.endCommandBuffer(cmdBuf);
 
 				if (queryPool) {
-					VkCommandBuffer cmdBuf = devices.beginOneTimeSubmitCommandBuffer();
+					VkCommandBuffer cmdBuf = devices.beginCommandBuffer();
 					cmdCompactBlas(cmdBuf, indices, buildAs, queryPool);
-					devices.endOneTimeSubmitCommandBuffer(cmdBuf);
+					devices.endCommandBuffer(cmdBuf);
 				}
 
 				//reset
@@ -847,7 +855,7 @@ private:
 
 		//suballocation
 		devices.memoryAllocator.allocateBufferMemory(instanceBuffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-		VkCommandBuffer cmdBuf= devices.beginOneTimeSubmitCommandBuffer();
+		VkCommandBuffer cmdBuf= devices.beginCommandBuffer();
 
 		//copy buffer
 		VkBufferCopy copyRegion{};
@@ -923,7 +931,7 @@ private:
 		//build the tlas
 		vkfp::vkCmdBuildAccelerationStructuresKHR(cmdBuf, 1, &buildInfo, &pBuildOffsetInfo);
 
-		devices.endOneTimeSubmitCommandBuffer(cmdBuf);
+		devices.endCommandBuffer(cmdBuf);
 		devices.memoryAllocator.freeBufferMemory(stagingBuffer, properties);
 		vkDestroyBuffer(devices.device, stagingBuffer, nullptr);
 		devices.memoryAllocator.freeBufferMemory(scratchBuffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
@@ -1009,12 +1017,12 @@ private:
 			VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 
 		//setting image layout
-		VkCommandBuffer cmdBuf = devices.beginOneTimeSubmitCommandBuffer();
+		VkCommandBuffer cmdBuf = devices.beginCommandBuffer();
 		vktools::setImageLayout(cmdBuf, images.offscreenColorBuffer.image,
 			VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 		vktools::setImageLayout(cmdBuf, images.offscreenDepthBuffer.image,
-			VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT);
-		devices.endOneTimeSubmitCommandBuffer(cmdBuf);
+			VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, { VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1});
+		devices.endCommandBuffer(cmdBuf);
 
 		return images;
 	}
@@ -1039,11 +1047,16 @@ private:
 			offscreenRenderPass = vktools::createRenderPass(devices.device,
 				{ offscreenColorFormat },
 				offscreenDepthFormat,
+				VK_SAMPLE_COUNT_1_BIT,
 				1,
 				true,
 				true,
 				VK_IMAGE_LAYOUT_GENERAL,
-				VK_IMAGE_LAYOUT_GENERAL);
+				VK_IMAGE_LAYOUT_GENERAL,
+				VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
+				VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+				VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
+				VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
 		}
 
 		//create framebuffers for the offscreen
@@ -1090,7 +1103,7 @@ private:
 		gen.addShader(vktools::createShaderModule(devices.device, vktools::readFile("shaders/rasterizer_frag.spv")),
 			VK_SHADER_STAGE_FRAGMENT_BIT);
 
-		gen.generate(offscreenRenderPass, generalPipeline, generalPipelineLayout);
+		gen.generate(offscreenRenderPass, &generalPipeline, &generalPipelineLayout);
 	}
 
 	/*
@@ -1288,7 +1301,7 @@ private:
 			VK_SHADER_STAGE_VERTEX_BIT);
 		gen.addShader(vktools::createShaderModule(devices.device, vktools::readFile("shaders/full_quad_frag.spv")),
 			VK_SHADER_STAGE_FRAGMENT_BIT);
-		gen.generate(postRenderPass, postPipeline, postPipelineLayout);
+		gen.generate(postRenderPass, &postPipeline, &postPipelineLayout);
 	}
 
 	/*

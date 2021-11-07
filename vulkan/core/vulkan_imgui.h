@@ -1,16 +1,12 @@
-/*
-* reference : https://github.com/SaschaWillems/Vulkan/blob/master/examples/imgui/main.cpp
-*/
-
 #pragma once
 #include "vulkan_texture.h"
 #include "vulkan_descriptor_set_bindings.h"
 
-/*
+/* 
 * Imgui & vulkan integration
-*/
+*/ 
 class ImguiBase {
-private:
+protected:
 	//UI params
 	struct PushConstBlock {
 		glm::vec2 scale;
@@ -35,9 +31,12 @@ private:
 	VulkanDevice* devices								= nullptr;
 
 public:
+	/** @brief destructor */
+	virtual ~ImguiBase(){}
 	/** @brief init context & style & resources */
 	void init(VulkanDevice* devices, int width, int height,
-		VkRenderPass renderPass, uint32_t MAX_FRAMES_IN_FLIGHT);
+		VkRenderPass renderPass, uint32_t MAX_FRAMES_IN_FLIGHT,
+		VkSampleCountFlagBits sampleCount);
 	/** @brief destroy all resources */
 	void cleanup();
 	/** @brief start imgui frame */
@@ -46,7 +45,9 @@ public:
 	bool updateBuffers();
 	/** @brief record imgui draw commands */
 	void drawFrame(VkCommandBuffer cmdBuf, size_t currentFrame);
+	/** @brief create pipeline */
+	void createPipeline(VkRenderPass renderPass, VkSampleCountFlagBits sampleCount);
 
-	/** indicate app-side update */
-	bool rerecordCommandBuffer = false;
+	/** for application update */
+	bool rerecordcommandBuffer = false;
 };

@@ -11,6 +11,7 @@
 * @param maxSets - maximum number of descriptor sets allocated from the pool
 * @param flags
 */
+//TODO: take this out of this class since descriptor pool per instance is inefficient
 VkDescriptorPool DescriptorSetBindings::createDescriptorPool(VkDevice device, uint32_t maxSets,
 	VkDescriptorPoolCreateFlags flags) const {
 	std::vector<VkDescriptorPoolSize> poolSizes = getRequiredPoolSizes(maxSets);
@@ -125,7 +126,7 @@ std::vector<VkDescriptorPoolSize> DescriptorSetBindings::getRequiredPoolSizes(ui
 		//check if same type of VkDescriptorPoolSize struct is already built
 		bool typeFound = false;
 		for (auto poolSizeIt = poolSizes.begin(); poolSizeIt != poolSizes.end(); ++poolSizeIt) {
-			if (poolSizeIt->type == bindingIt->descriptorCount) {
+			if (poolSizeIt->type == bindingIt->descriptorType) {
 				poolSizeIt->descriptorCount += bindingIt->descriptorCount * numSets;
 				typeFound = true;
 				break;

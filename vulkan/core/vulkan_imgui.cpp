@@ -1,13 +1,9 @@
-/*
-* reference : https://github.com/SaschaWillems/Vulkan/blob/master/examples/imgui/main.cpp
-*/
-
-#include <imgui/imgui.h>
 #include <array>
+#include <imgui/imgui.h>
+#include <string>
+#include <filesystem>
 #include "vulkan_imgui.h"
 #include "vulkan_pipeline.h"
-
-//TODO: imgui display size is not properly updated on windowResized()
 
 /*
 * init context & style & resources
@@ -15,7 +11,7 @@
 * @param devices - abstracted vulkan device (physical / logical) pointer
 */
 void ImguiBase::init(VulkanDevice* devices, int width, int height,
-	VkRenderPass renderPass, uint32_t MAX_FRAMES_IN_FLIGHT) {
+	VkRenderPass renderPass, uint32_t MAX_FRAMES_IN_FLIGHT, VkSampleCountFlagBits sampleCount) {
 	this->devices = devices;
 	ImGui::CreateContext();
 
@@ -56,31 +52,10 @@ void ImguiBase::init(VulkanDevice* devices, int width, int height,
 	}
 	vkUpdateDescriptorSets(devices->device, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
 
-	//pipeline
-	std::vector<VkVertexInputBindingDescription> vertexInputBinding = {
-		vktools::initializers::vertexInputBindingDescription(0, sizeof(ImDrawVert))
-	};
+	//create render pass
+	createPipeline(renderPass, sampleCount);
 
-	std::vector<VkVertexInputAttributeDescription> vertexInputAttributes = {
-		vktools::initializers::vertexInputAttributeDescription(0, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(ImDrawVert, pos)),
-		vktools::initializers::vertexInputAttributeDescription(0, 1, VK_FORMAT_R32G32_SFLOAT, offsetof(ImDrawVert, uv)),
-		vktools::initializers::vertexInputAttributeDescription(0, 2, VK_FORMAT_R8G8B8A8_UNORM, offsetof(ImDrawVert, col))
-	};
-
-	PipelineGenerator gen(devices->device);
-	gen.setRasterizerInfo(VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE);
-	gen.setColorBlendInfo(VK_TRUE);
-	gen.setDepthStencilInfo(VK_FALSE, VK_FALSE, VK_COMPARE_OP_LESS_OR_EQUAL);
-	gen.addDescriptorSetLayout({ descriptorSetLayout });
-	gen.addPushConstantRange({ { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstBlock) } });
-	gen.addVertexInputBindingDescription(vertexInputBinding);
-	gen.addVertexInputAttributeDescription(vertexInputAttributes);
-	gen.addShader(vktools::createShaderModule(devices->device, vktools::readFile("../../core/shaders/imgui_vert.spv")),
-		VK_SHADER_STAGE_VERTEX_BIT);
-	gen.addShader(vktools::createShaderModule(devices->device, vktools::readFile("../../core/shaders/imgui_frag.spv")),
-		VK_SHADER_STAGE_FRAGMENT_BIT);
-	gen.generate(renderPass, pipeline, pipelineLayout);
-
+	//build first frame
 	newFrame();
 	updateBuffers();
 }
@@ -108,46 +83,46 @@ void ImguiBase::cleanup() {
 }
 
 /*
-* start imgui frame
+* start  imgui frame
 */
 void ImguiBase::newFrame() {
 	ImGui::NewFrame();
-	ImGui::ShowDemoWindow();
+	ImGui::Begin("Setting");
+	ImGui::End();
 	ImGui::Render();
 }
 
 /*
 * update vertex & index buffer
 * 
-* @return bool - is updated?
+* @return bool - buffer recreated?
 */
 bool ImguiBase::updateBuffers() {
-	bool isUpdate = false;
+	bool bufferRecreated= false;
 	ImDrawData* imDrawData = ImGui::GetDrawData();
 
 	VkDeviceSize vertexBufferSize = imDrawData->TotalVtxCount * sizeof(ImDrawVert);
 	VkDeviceSize indexBufferSize = imDrawData->TotalIdxCount* sizeof(ImDrawIdx);
 
 	if (vertexBufferSize == 0 || indexBufferSize == 0) {
-		return isUpdate;
+		return bufferRecreated;
 	}
 
+	//finish all command before deleting the buffer
 	vkDeviceWaitIdle(devices->device);
 
 	//update buffers only if vertex or index count has been changed
-	//vertex buffer
-	if (vertexIndexBuffer == VK_NULL_HANDLE || vertexCount != imDrawData->TotalVtxCount || 
-		indexCount != imDrawData->TotalIdxCount) {
+	if (vertexIndexBuffer == VK_NULL_HANDLE || vertexCount != imDrawData->TotalVtxCount 
+		|| indexCount != imDrawData->TotalIdxCount) {
 		devices->memoryAllocator.freeBufferMemory(vertexIndexBuffer,
 			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 		vkDestroyBuffer(devices->device, vertexIndexBuffer, nullptr);
-		vertexIndexMem = devices->createBuffer(vertexIndexBuffer,
-			vertexBufferSize + indexBufferSize,
+		vertexIndexMem = devices->createBuffer(vertexIndexBuffer, vertexBufferSize + indexBufferSize,
 			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
 			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 		vertexCount = imDrawData->TotalVtxCount;
 		indexCount = imDrawData->TotalIdxCount;
-		isUpdate = true;
+		bufferRecreated = true;
 	}
 
 	//memcpy vertex data
@@ -167,7 +142,7 @@ bool ImguiBase::updateBuffers() {
 	}
 	
 	vertexIndexMem.unmap(devices->device);
-	return isUpdate;
+	return bufferRecreated;
 }
 
 /*
@@ -197,8 +172,8 @@ void ImguiBase::drawFrame(VkCommandBuffer cmdBuf, size_t currentFrame) {
 	if (imDrawData->CmdListsCount > 0) {
 		VkDeviceSize offsets[1] = { 0 };
 		vkCmdBindVertexBuffers(cmdBuf, 0, 1, &vertexIndexBuffer, offsets);
-		vkCmdBindIndexBuffer(cmdBuf, vertexIndexBuffer,
-			imDrawData->TotalVtxCount * sizeof(ImDrawVert), VK_INDEX_TYPE_UINT16);
+		VkDeviceSize vertexBufferSize = imDrawData->TotalVtxCount * sizeof(ImDrawVert);
+		vkCmdBindIndexBuffer(cmdBuf, vertexIndexBuffer, vertexBufferSize, VK_INDEX_TYPE_UINT16);
 
 		for (int32_t i = 0; i < imDrawData->CmdListsCount; ++i) {
 			const ImDrawList* cmd_list = imDrawData->CmdLists[i];
@@ -216,4 +191,42 @@ void ImguiBase::drawFrame(VkCommandBuffer cmdBuf, size_t currentFrame) {
 			vertexOffset += cmd_list->VtxBuffer.Size;
 		}
 	}
+}
+
+/*
+* create graphics pipeline for imgui 
+*/
+void ImguiBase::createPipeline(VkRenderPass renderPass, VkSampleCountFlagBits sampleCount) {
+	if (pipeline != VK_NULL_HANDLE) {
+		vkDestroyPipeline(devices->device, pipeline, nullptr);
+		vkDestroyPipelineLayout(devices->device, pipelineLayout, nullptr);
+		pipeline = VK_NULL_HANDLE;
+		pipelineLayout = VK_NULL_HANDLE;
+	}
+
+	//pipeline 
+	std::vector<VkVertexInputBindingDescription> vertexInputBinding = {
+		vktools::initializers::vertexInputBindingDescription(0, sizeof(ImDrawVert))
+	};
+
+	std::vector<VkVertexInputAttributeDescription> vertexInputAttributes = {
+		vktools::initializers::vertexInputAttributeDescription(0, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(ImDrawVert, pos)),
+		vktools::initializers::vertexInputAttributeDescription(0, 1, VK_FORMAT_R32G32_SFLOAT, offsetof(ImDrawVert, uv)),
+		vktools::initializers::vertexInputAttributeDescription(0, 2, VK_FORMAT_R8G8B8A8_UNORM, offsetof(ImDrawVert, col))
+	};
+
+	PipelineGenerator gen(devices->device);
+	gen.setRasterizerInfo(VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE);
+	gen.setColorBlendInfo(VK_TRUE);
+	gen.setDepthStencilInfo(VK_FALSE, VK_FALSE, VK_COMPARE_OP_LESS_OR_EQUAL);
+	gen.setMultisampleInfo(sampleCount);
+	gen.addDescriptorSetLayout({ descriptorSetLayout });
+	gen.addPushConstantRange({ { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstBlock) } });
+	gen.addVertexInputBindingDescription(vertexInputBinding);
+	gen.addVertexInputAttributeDescription(vertexInputAttributes);
+	gen.addShader(vktools::createShaderModule(devices->device, vktools::readFile("../../core/shaders/imgui_vert.spv")),
+		VK_SHADER_STAGE_VERTEX_BIT);
+	gen.addShader(vktools::createShaderModule(devices->device, vktools::readFile("../../core/shaders/imgui_frag.spv")),
+		VK_SHADER_STAGE_FRAGMENT_BIT);
+	gen.generate(renderPass, &pipeline, &pipelineLayout);
 }

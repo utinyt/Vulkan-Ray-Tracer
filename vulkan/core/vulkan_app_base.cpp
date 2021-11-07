@@ -1,16 +1,18 @@
 #include <fstream>
-#include <imgui/imgui.h>
 #include <algorithm>
-#include "vulkan_imgui.h"
+#include <chrono>
+#include <imgui/imgui.h>
+#include <glm/glm.hpp>
+#include "glm/gtc/matrix_transform.hpp"
 #include "vulkan_app_base.h"
 #include "vulkan_debug.h"
 
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 
 #ifdef NDEBUG
-const bool enableValidationLayer = false;
+bool enableValidationLayer = false;
 #else
-const bool enableValidationLayer = true;
+bool enableValidationLayer = true;
 #endif
 
 /*
@@ -20,8 +22,9 @@ const bool enableValidationLayer = true;
 * @param height - window height
 * @param appName - application title
 */
-VulkanAppBase::VulkanAppBase(int width, int height, const std::string& appName)
-	: width(width), height(height), appName(appName) {
+VulkanAppBase::VulkanAppBase(int width, int height, const std::string& appName,
+	VkSampleCountFlagBits sampleCount)
+	: width(width), height(height), appName(appName), sampleCount(sampleCount) {
 	enabledDeviceExtensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
 }
 
@@ -29,6 +32,11 @@ VulkanAppBase::VulkanAppBase(int width, int height, const std::string& appName)
 * app destructor
 */
 VulkanAppBase::~VulkanAppBase() {
+	if (devices.device == VK_NULL_HANDLE) {
+		return;
+	}
+
+	destroyMultisampleColorBuffer();
 	destroyDepthStencilImage();
 	devices.memoryAllocator.cleanup();
 
@@ -63,45 +71,21 @@ void VulkanAppBase::init() {
 	initVulkan();
 	LOG("vulkan initialization completed\n");
 	initApp();
+	updateCamera();
 	LOG("application initialization completed\n");
 }
 
 /*
-* called every frame - contain draw functions
+* called every frame - contain update & draw functions
 */
 void VulkanAppBase::run() {
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
 		update();
 		draw();
+		currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 	}
 	vkDeviceWaitIdle(devices.device);
-}
-
-/*
-* called every frame - update application
-*/
-void VulkanAppBase::update() {
-	glfwGetCursorPos(window, &xpos, &ypos);
-	left = (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS);
-	right = (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS);
-
-	if (imgui) {
-		ImGuiIO& io = ImGui::GetIO();
-		io.MousePos = ImVec2(static_cast<float>(xpos), static_cast<float>(ypos));
-		io.MouseDown[0] = left;
-		io.MouseDown[1] = right;
-
-		imgui->newFrame();
-		if (imgui->updateBuffers() || 
-			(ImGui::IsMouseDown(ImGuiMouseButton(0)) && io.WantCaptureMouse) ||
-			imgui->rerecordCommandBuffer) {
-			imgui->rerecordCommandBuffer = false;
-			resetCommandBuffer();
-			recordCommandBuffer();
-			//LOG("update()");
-		}
-	}
 }
 
 /*
@@ -117,6 +101,7 @@ void VulkanAppBase::initWindow() {
 	window = glfwCreateWindow(width, height, appName.c_str(), nullptr, nullptr);
 	glfwSetWindowUserPointer(window, this);
 	glfwSetFramebufferSizeCallback(window, windowResizeCallbck);
+	//glfwSetKeyCallback();
 	LOG("initialized:\tglfw");
 }
 
@@ -150,13 +135,118 @@ void VulkanAppBase::initVulkan() {
 }
 
 /*
+* update camera position & front vector
+*/
+void VulkanAppBase::updateCamera() {
+	//camera keyboard input
+	float cameraSpeed = 2.5f * dt; // adjust accordingly
+	if(glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS)
+		cameraSpeed = 35.0f * dt;
+
+	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+		camera.camPos += cameraSpeed * camera.camFront;
+	if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+		camera.camPos -= cameraSpeed * camera.camFront;
+	if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+		camera.camPos -= glm::normalize(glm::cross(camera.camFront, camera.camUp)) * cameraSpeed;
+	if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+		camera.camPos += glm::normalize(glm::cross(camera.camFront, camera.camUp)) * cameraSpeed;
+
+	//camera mouse input
+	static bool firstCam = true;
+	if (firstCam) {
+		oldXPos = xpos;
+		oldYPos = ypos;
+		firstCam = false;
+	}
+
+	float xoffset = static_cast<float>(xpos - oldXPos);
+	float yoffset = static_cast<float>(oldYPos - ypos);
+	oldXPos = xpos;
+	oldYPos = ypos;
+
+	float sensitivity = 0.1f;
+	xoffset *= sensitivity;
+	yoffset *= sensitivity;
+
+	yaw += xoffset;
+	pitch += yoffset;
+
+	if (pitch > 89.f) {
+		pitch = 89.f;
+	}
+	if (pitch < -89.f) {
+		pitch = -89.f;
+	}
+
+	glm::vec3 dir;
+	dir.x = std::cos(glm::radians(yaw)) * std::cos(glm::radians(pitch));
+	dir.y = std::sin(glm::radians(pitch));
+	dir.z = std::sin(glm::radians(yaw)) * std::cos(glm::radians(pitch));
+	camera.camFront = glm::normalize(dir);
+
+	cameraMatrices.view = glm::lookAt(camera.camPos, camera.camPos + camera.camFront, camera.camUp);
+	cameraMatrices.proj = glm::perspective(glm::radians(45.f),
+		swapchain.extent.width / (float)swapchain.extent.height, 0.1f, 1000.f);
+	cameraMatrices.proj[1][1] *= -1;
+}
+
+/*
 * basic application setup
 */
 void VulkanAppBase::initApp() {
 	createCommandBuffers();
 	createSyncObjects();
 	createPipelineCache();
-	createDepthStencilImage();
+	createDepthStencilImage(sampleCount);
+	createMultisampleColorBuffer(sampleCount);
+}
+
+/*
+* called every frame - update application
+*/
+void VulkanAppBase::update() {
+	//update dt
+	static auto startTime = std::chrono::high_resolution_clock::now();
+	auto currentTime = std::chrono::high_resolution_clock::now();
+	float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+	dt = time - oldTime;
+	oldTime = time;
+
+	//mouse info update
+	glfwGetCursorPos(window, &xpos, &ypos);
+	leftPressed		= (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS);
+	rightPressed	= (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS);
+
+	//update camera only when mouse is captured
+	static int oldState = GLFW_RELEASE;
+	if (glfwGetKey(window, GLFW_KEY_GRAVE_ACCENT) == GLFW_PRESS && oldState == GLFW_RELEASE) {
+		captureMouse = !captureMouse;
+		glfwSetInputMode(window, GLFW_CURSOR, captureMouse ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL);
+		oldState = GLFW_PRESS;
+	}
+	if (glfwGetKey(window, GLFW_KEY_GRAVE_ACCENT) == GLFW_RELEASE && oldState == GLFW_PRESS) {
+		oldState = GLFW_RELEASE;
+	}
+	if (captureMouse == true) {
+		updateCamera();
+	}
+
+	//imgui mouse info update
+	ImGuiIO& io = ImGui::GetIO();
+	io.MousePos = ImVec2(static_cast<float>(xpos), static_cast<float>(ypos));
+	io.MouseDown[0] = leftPressed;
+	io.MouseDown[1] = rightPressed;
+
+	imguiBase->newFrame();
+	//imgui buffer updated || (mouse hovering imgui window && clicked)
+	if (imguiBase->updateBuffers() || (ImGui::IsMouseDown(ImGuiMouseButton(0)) && io.WantCaptureKeyboard) || imguiBase->rerecordcommandBuffer) {
+		if (imguiBase->rerecordcommandBuffer) {
+			imguiBase->rerecordcommandBuffer = false;
+		}
+		resetCommandBuffer();
+		recordCommandBuffer();
+	}
 }
 
 /*
@@ -169,7 +259,7 @@ uint32_t VulkanAppBase::prepareFrame() {
 	uint32_t imageIndex;
 	VkResult result = swapchain.acquireImage(presentCompleteSemaphores[currentFrame], imageIndex);
 	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
-		resizeWindow();
+		resizeWindow(sampleCount);
 	}
 	else {
 		VK_CHECK_RESULT(result);
@@ -194,18 +284,18 @@ void VulkanAppBase::submitFrame(uint32_t imageIndex) {
 	VkResult result = swapchain.queuePresent(imageIndex, renderCompleteSemaphores[currentFrame]);
 	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || windowResized) {
 		windowResized = false;
-		resizeWindow();
+		resizeWindow(sampleCount);
 	}
 	else {
 		VK_CHECK_RESULT(result);
 	}
-	currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
 /*
 * handle window resize event - recreate swapchain and swaochain-dependent objects
 */
 void VulkanAppBase::resizeWindow(bool recordCmdBuf) {
+	//update window size
 	int width = 0, height = 0;
 	glfwGetFramebufferSize(window, &width, &height);
 	while (width == 0 || height == 0) {
@@ -213,20 +303,28 @@ void VulkanAppBase::resizeWindow(bool recordCmdBuf) {
 		glfwWaitEvents();
 	}
 
+	//finish all command before destroy vk resources
 	vkDeviceWaitIdle(devices.device);
 
+	//swapchain
 	swapchain.create();
 
+	//depth stencil image
 	destroyDepthStencilImage();
-	createDepthStencilImage();
+	createDepthStencilImage(sampleCount);
+	//multisample color buffer
+	destroyMultisampleColorBuffer();
+	createMultisampleColorBuffer(sampleCount);
+
+	//framebuffer
 	createFramebuffers();
 
-	if (imgui) {
-		ImGuiIO& io = ImGui::GetIO();
-		io.DisplaySize = ImVec2(static_cast<float>(width), static_cast<float>(height));
-		imgui->updateBuffers();
-	}
+	//imgui displat size update
+	ImGuiIO& io = ImGui::GetIO();
+	io.DisplaySize = ImVec2(static_cast<float>(width), static_cast<float>(height));
+	imguiBase->updateBuffers();
 
+	//command buffers
 	destroyCommandBuffers();
 	createCommandBuffers();
 	if (recordCmdBuf) {
@@ -246,8 +344,10 @@ void VulkanAppBase::windowResizeCallbck(GLFWwindow* window, int width, int heigh
 	app->windowResized = true;
 }
 
+/*
+* destroy & recreate command buffer
+*/
 void VulkanAppBase::resetCommandBuffer() {
-	vkDeviceWaitIdle(devices.device);
 	destroyCommandBuffers();
 	createCommandBuffers();
 }
@@ -268,14 +368,18 @@ void VulkanAppBase::createInstance() {
 	instanceInfo.enabledLayerCount = 0;
 	instanceInfo.ppEnabledLayerNames = nullptr;
 
+	//layer setting
+	uint32_t layerCount;
+	vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
+	std::vector<VkLayerProperties> availableLayers(layerCount);
+	vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
+	
+	uint32_t enabledLayerCount = 0;
+	std::vector<const char*> enabledLayerNames{};
+
 	//vailidation layer settings
 	VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo{};
 	if (enableValidationLayer) {
-		uint32_t layerCount;
-		vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
-		std::vector<VkLayerProperties> availableLayers(layerCount);
-		vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
-
 		const char* requiredValidationLayer = "VK_LAYER_KHRONOS_validation";
 
 		// -- support check --
@@ -285,14 +389,35 @@ void VulkanAppBase::createInstance() {
 			});
 
 		if (layerIt == availableLayers.end()) {
-			throw std::runtime_error("valiation layer is not supported");
+			LOG("VK_LAYER_KHRONOS_validation is not supported - continue without debug utils");
+			enableValidationLayer = false;
 		}
-
-		instanceInfo.enabledLayerCount = 1;
-		instanceInfo.ppEnabledLayerNames = &requiredValidationLayer;
-		setupDebugMessengerCreateInfo(debugCreateInfo);
-		instanceInfo.pNext = &debugCreateInfo;
+		else {
+			enabledLayerCount++;
+			enabledLayerNames.push_back(requiredValidationLayer);
+			setupDebugMessengerCreateInfo(debugCreateInfo);
+			instanceInfo.pNext = &debugCreateInfo;
+		}
 	}
+
+	//fps counter
+	/*const char* lunargMonitor = "VK_LAYER_LUNARG_monitor";
+
+	auto layerIt = std::find_if(availableLayers.begin(), availableLayers.end(),
+		[&lunargMonitor](const VkLayerProperties& properties) {
+			return strcmp(properties.layerName, lunargMonitor) == 0;
+		});
+
+	if (layerIt == availableLayers.end()) {
+		LOG("VK_LAYER_LUNARG_monitor is not supported - continue without fps counter");
+	}
+	else {
+		enabledLayerCount++;
+		enabledLayerNames.push_back(lunargMonitor);
+	}*/
+
+	instanceInfo.enabledLayerCount = enabledLayerCount;
+	instanceInfo.ppEnabledLayerNames = enabledLayerNames.data();
 
 	//instance extension settings
 	// -- GLFW extensions --
@@ -393,9 +518,9 @@ void VulkanAppBase::createPipelineCache() {
 /*
 * setup depth & stencil buffers
 */
-void VulkanAppBase::createDepthStencilImage() {
+void VulkanAppBase::createDepthStencilImage(VkSampleCountFlagBits sampleCount) {
 	depthFormat = vktools::findSupportedFormat(devices.physicalDevice,
-		{VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT},
+		{ VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D32_SFLOAT, VK_FORMAT_D24_UNORM_S8_UINT},
 		VK_IMAGE_TILING_OPTIMAL,
 		VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT
 	);
@@ -403,16 +528,26 @@ void VulkanAppBase::createDepthStencilImage() {
 	devices.createImage(depthImage, { swapchain.extent.width,swapchain.extent.height, 1 },
 		depthFormat,
 		VK_IMAGE_TILING_OPTIMAL,
-		VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+		devices.lazilyAllocatedMemoryTypeExist ? VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT : VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+		sampleCount
+	);
+
+	VkImageAspectFlags aspectMask = 0;
+	if (vktools::hasDepthComponent(depthFormat)) {
+		aspectMask |= VK_IMAGE_ASPECT_DEPTH_BIT;
+	}
+	if (vktools::hasStencilComponent(depthFormat)) {
+		aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
+	}
 
 	depthImageView = vktools::createImageView(devices.device, depthImage,
-		VK_IMAGE_VIEW_TYPE_2D, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT);
+		VK_IMAGE_VIEW_TYPE_2D, depthFormat, aspectMask);
 
-	VkCommandBuffer cmdBuf = devices.beginOneTimeSubmitCommandBuffer();
+	VkCommandBuffer cmdBuf = devices.beginCommandBuffer();
 	vktools::setImageLayout(cmdBuf, depthImage, VK_IMAGE_LAYOUT_UNDEFINED,
-		VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT);
-	devices.endOneTimeSubmitCommandBuffer(cmdBuf);
+		VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, { aspectMask, 0, 1, 0, 1});
+	devices.endCommandBuffer(cmdBuf);
 
 	LOG("created:\tdepth stencil image");
 }
@@ -422,6 +557,46 @@ void VulkanAppBase::createDepthStencilImage() {
 */
 void VulkanAppBase::destroyDepthStencilImage() {
 	vkDestroyImageView(devices.device, depthImageView, nullptr);
-	devices.memoryAllocator.freeImageMemory(depthImage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+	devices.memoryAllocator.freeImageMemory(depthImage,
+		devices.lazilyAllocatedMemoryTypeExist ? VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT : VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 	vkDestroyImage(devices.device, depthImage, nullptr);
+}
+
+/*
+* create multisample buffers for color / depth images
+*/
+void VulkanAppBase::createMultisampleColorBuffer(VkSampleCountFlagBits sampleCount) {	
+	if (sampleCount == VK_SAMPLE_COUNT_1_BIT) {
+		return;
+	}
+
+	//create multisample color buffer
+	devices.createImage(multisampleColorImage,
+		{ swapchain.extent.width,swapchain.extent.height, 1 },
+		swapchain.surfaceFormat.format,
+		VK_IMAGE_TILING_OPTIMAL,
+		VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+		devices.lazilyAllocatedMemoryTypeExist ? VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT : VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+		sampleCount
+	);
+
+	multisampleColorImageView = vktools::createImageView(devices.device,
+		multisampleColorImage,
+		VK_IMAGE_VIEW_TYPE_2D,
+		swapchain.surfaceFormat.format,
+		VK_IMAGE_ASPECT_COLOR_BIT
+	);
+}
+
+/*
+* destroy multisample (color buffer) resources
+*/
+void VulkanAppBase::destroyMultisampleColorBuffer() {
+	vkDestroyImageView(devices.device, multisampleColorImageView, nullptr);
+	devices.memoryAllocator.freeImageMemory(multisampleColorImage,
+		devices.lazilyAllocatedMemoryTypeExist ? VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT : VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+	vkDestroyImage(devices.device, multisampleColorImage, nullptr);
+
+	multisampleColorImageView = VK_NULL_HANDLE;
+	multisampleColorImage = VK_NULL_HANDLE;
 }

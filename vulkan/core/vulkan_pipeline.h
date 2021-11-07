@@ -8,8 +8,13 @@ class PipelineGenerator {
 public:
 	/** ctor */
 	PipelineGenerator(VkDevice device);
+	~PipelineGenerator() {
+		resetAll();
+	}
 	/** @brief init / reset all create info */
-	void reset();
+	void resetAll();
+	/** @brief only reset shader & vertex binding & attribute descriptions */
+	void resetShaderVertexDescriptions();
 
 	/** @brief add vertex input binding description */
 	void addVertexInputBindingDescription(const std::vector<VkVertexInputBindingDescription>& bindings);
@@ -22,20 +27,35 @@ public:
 	/** @brief add descriptor set layout */
 	void addDescriptorSetLayout(const std::vector<VkDescriptorSetLayout>& layouts);
 
+	/** @brief set input topology */
+	void setInputTopology(VkPrimitiveTopology topology);
 	/** @brief (re)set rasterizer info */
 	void setRasterizerInfo(
 		VkPolygonMode polygonMode = VK_POLYGON_MODE_FILL,
 		VkCullModeFlags cullMode = VK_CULL_MODE_BACK_BIT,
 		VkFrontFace frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE);
 	/** @brief (re)set color blend info */
-	void setColorBlendInfo(VkBool32 blendEnable);
+	void setColorBlendInfo(VkBool32 blendEnable, uint32_t nbColorAttachment = 1);
+	/** @brief (re)set color blend attachment state */
+	void setColorBlendAttachmentState(const VkPipelineColorBlendAttachmentState& attachmentState, uint32_t nbColorAttachment = 1);
 	/** @brief (re)set depth stencil state info */
 	void setDepthStencilInfo(VkBool32 depthTest = VK_TRUE, VkBool32 depthWrite = VK_TRUE,
 		VkCompareOp depthCompareOp = VK_COMPARE_OP_LESS);
+	/** @brief set sample count */
+	void setMultisampleInfo(VkSampleCountFlagBits sampleCount = VK_SAMPLE_COUNT_1_BIT,
+		VkBool32 enableSampleShading = VK_FALSE, float minSampleShading = 0.f);
 
 	/** @brief generate pipeline & pipeline layout */
 	void generate(VkRenderPass renderPass,
-		VkPipeline& outPipeline, VkPipelineLayout& outPipelineLayout);
+		VkPipeline* outPipeline, VkPipelineLayout* outPipelineLayout);
+
+	/** @brief struct getters */
+	VkPipelineDepthStencilStateCreateInfo& getPipelineDepthStencilStateCreateInfo() {
+		return depthStencilStateCreateInfo;
+	}
+	std::vector<VkPipelineShaderStageCreateInfo>& getShaderStageCreateInfo() {
+		return shaderStages;
+	}
 
 private:
 	/** logical device handle */

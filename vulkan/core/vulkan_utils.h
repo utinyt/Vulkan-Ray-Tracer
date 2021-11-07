@@ -119,39 +119,39 @@ namespace vktools {
 	VkShaderModule createShaderModule(VkDevice device, const std::vector<char>& code);
 	/** @brief transit image layout */
 	void setImageLayout(VkCommandBuffer commandBuffer, VkImage image,
-		VkImageLayout oldLayout, VkImageLayout newLayout, VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT);
+		VkImageLayout oldLayout, VkImageLayout newLayout,
+		VkImageSubresourceRange subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1});
 	/** @brief create & return image view */
 	VkImageView createImageView(VkDevice device, VkImage image, VkImageViewType viewType,
 		VkFormat format, VkImageAspectFlags aspectFlags);
 	/** @brief return suitable image format */
 	VkFormat findSupportedFormat(VkPhysicalDevice physicalDevice, const std::vector<VkFormat>& candidates,
 		VkImageTiling tiling, VkFormatFeatureFlags features);
+	/** @brief check if the format has depth component */
+	bool hasDepthComponent(VkFormat format);
 	/** @brief check if the format has stencil component */
 	bool hasStencilComponent(VkFormat format);
-	/** @brief get buffer address */
-	VkDeviceAddress getBufferDeviceAddress(VkDevice device, VkBuffer buffer);
-	/** @brief convert glm mat4 to VkTransformMatrixKHR */
-	VkTransformMatrixKHR toTransformMatrixKHR(const glm::mat4& mat);
 	/** @brief create renderpass */
 	VkRenderPass createRenderPass(VkDevice device,
 		const std::vector<VkFormat>& colorAttachmentFormats,
 		VkFormat depthAttachmentFormat,
+		VkSampleCountFlagBits sampleCount,
 		uint32_t subpassCount = 1,
 		bool clearColor = true,
 		bool clearDepth = true,
 		VkImageLayout initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 		VkImageLayout finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-		VkPipelineStageFlags stageFlags = 
-			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
-			VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
-		VkAccessFlags dstAccessMask = 
-			VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | 
-			VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
+		VkPipelineStageFlags stageFlags = 0,
+		VkAccessFlags dstAccessMask = 0);
 	/** @brief allocate descriptor sets */
 	std::vector<VkDescriptorSet> allocateDescriptorSets(VkDevice device, VkDescriptorSetLayout layout,
 		VkDescriptorPool pool, uint32_t nbDescriptors);
 	/** @brief set dynamic state (viewport & scissor) */
 	void setViewportScissorDynamicStates(VkCommandBuffer cmdBuf, VkExtent2D extent);
+	/** @brief get buffer address */
+	VkDeviceAddress getBufferDeviceAddress(VkDevice device, VkBuffer buffer);
+	/** @brief convert glm mat4 to VkTransformMatrixKHR */
+	VkTransformMatrixKHR toTransformMatrixKHR(const glm::mat4& mat);
 
 	namespace initializers {
 		inline VkBufferCreateInfo bufferCreateInfo(VkDeviceSize size,
@@ -164,8 +164,12 @@ namespace vktools {
 			return info;
 		}
 
-		inline VkImageCreateInfo imageCreateInfo(VkExtent3D extent,
-			VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage) {
+		inline VkImageCreateInfo imageCreateInfo(
+			VkExtent3D extent,
+			VkFormat format,
+			VkImageTiling tiling,
+			VkImageUsageFlags usage,
+			VkSampleCountFlagBits numSamples = VK_SAMPLE_COUNT_1_BIT) {
 			VkImageCreateInfo info{};
 			info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 			if (extent.depth == 1) {
@@ -185,7 +189,7 @@ namespace vktools {
 			info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 			info.usage = usage;
 			info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-			info.samples = VK_SAMPLE_COUNT_1_BIT;
+			info.samples = numSamples;
 			return info;
 		}
 
@@ -217,8 +221,25 @@ namespace vktools {
 			samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
 			samplerInfo.mipLodBias = 0.f;
 			samplerInfo.minLod = 0.f;
-			samplerInfo.maxLod = 0.f;
+			samplerInfo.maxLod = 1.f;
 			return samplerInfo;
+		}
+
+		inline VkImageViewCreateInfo imageViewCreateInfo(VkImage image, VkImageViewType viewType,
+			VkFormat format, VkImageSubresourceRange subresourceRange) {
+			VkImageViewCreateInfo info{};
+			info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+			info.image = image;
+			info.viewType = viewType;
+			info.format = format;
+			info.subresourceRange = subresourceRange;
+			info.components = {
+				VK_COMPONENT_SWIZZLE_R,
+				VK_COMPONENT_SWIZZLE_G,
+				VK_COMPONENT_SWIZZLE_B,
+				VK_COMPONENT_SWIZZLE_A
+			};
+			return info;
 		}
 
 		inline VkBufferImageCopy bufferCopyRegion(
@@ -315,11 +336,14 @@ namespace vktools {
 		}
 
 		inline VkPipelineMultisampleStateCreateInfo pipelineMultisampleStateCreateInfo(
-			VkSampleCountFlagBits sampleCount = VK_SAMPLE_COUNT_1_BIT) {
+			VkSampleCountFlagBits sampleCount = VK_SAMPLE_COUNT_1_BIT,
+			VkBool32 enableSampleShading = VK_FALSE,
+			float minSampleShading = 0.f) {
 			VkPipelineMultisampleStateCreateInfo info{};
 			info.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
 			info.rasterizationSamples = sampleCount;
-			info.sampleShadingEnable = VK_FALSE;
+			info.sampleShadingEnable = enableSampleShading;
+			info.minSampleShading = minSampleShading;
 			return info;
 		}
 

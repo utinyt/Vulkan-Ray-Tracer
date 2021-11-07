@@ -21,13 +21,16 @@ struct VulkanDevice {
 	/** @brief create image & image memory */
 	MemoryAllocator::HostVisibleMemory createImage(VkImage& image, VkExtent3D extent, VkFormat format,
 		VkImageTiling tiling, VkImageUsageFlags usage,
-		VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+		VkSampleCountFlagBits numSamples = VK_SAMPLE_COUNT_1_BIT);
 	/** @brief copy data to an image */
 	void copyBufferToImage(VkBuffer buffer, VkImage image, VkOffset3D offset, VkExtent3D extent) const;
 	/** @brief create & start one-time submit command buffer */
-	VkCommandBuffer beginOneTimeSubmitCommandBuffer() const;
+	VkCommandBuffer beginCommandBuffer(VkCommandBufferUsageFlagBits flag = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) const;
 	/** @brief submit command to the queue, end & destroy one-time submit command buffer */
-	void endOneTimeSubmitCommandBuffer(VkCommandBuffer commandBuffer) const;
+	void endCommandBuffer(VkCommandBuffer commandBuffer) const;
+	/** @brief get max sample count */
+	VkSampleCountFlagBits getMaxSampleCount() const;
 
 	/** GPU handle */
 	VkPhysicalDevice physicalDevice;
@@ -39,28 +42,37 @@ struct VulkanDevice {
 	struct QueueFamilyIndices {
 		std::optional<uint32_t> graphicsFamily;
 		std::optional<uint32_t> presentFamily;
+		std::optional<uint32_t> computeFamily;
 
 		bool isComplete() const {
-			return graphicsFamily.has_value() && presentFamily.has_value();
+			return graphicsFamily.has_value() && 
+				presentFamily.has_value() && 
+				computeFamily.has_value();
 		}
 	} indices;
 	/** handle to the graphics queue */
 	VkQueue graphicsQueue;
 	/** handle to the present queue (usually the same as graphics queue)*/
 	VkQueue presentQueue;
+	/** handle to the compute queue */
+	VkQueue computeQueue;
 	/** memory properties of the current physical device */
 	VkPhysicalDeviceMemoryProperties memProperties;
 	/** current physical device properties */
 	VkPhysicalDeviceProperties properties;
 	/** available device features */
 	VkPhysicalDeviceFeatures2 availableFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
+	/** vulkan 1.2 features */
+	VkPhysicalDeviceVulkan12Features vk12Features{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES };
 	/** command pool - graphics */
 	VkCommandPool commandPool = VK_NULL_HANDLE;
 	/** custom memory allocator */
 	MemoryAllocator memoryAllocator;
+	/** max sample count */
+	uint32_t maxSampleCount;
+	/** VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT support */
+	bool lazilyAllocatedMemoryTypeExist = false;
 
-	/** vulkan 1.2 features */
-	VkPhysicalDeviceVulkan12Features vk12Features{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES };
 	/** ray tracing features */
 	VkPhysicalDeviceRayTracingPipelineFeaturesKHR rtFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR };
 	/** acceleration features */
