@@ -25,5 +25,9 @@ A lot of code were based on these great resources:
 ## Path Tracing - (Sep.20.2021)
 ![path_tracing](https://github.com/utinyt/Vulkan-Ray-Tracer/blob/master/screenshots/path_tracing.gif)<br>
 
-## Path Tracing - (Sep.12.2021)
+#### Reference: https://github.com/nvpro-samples/vk_raytracing_tutorial_KHR/tree/master/ray_tracing_gltf
+
+## First model - (Sep.12.2021)
 ![bunny](https://github.com/utinyt/Vulkan-Ray-Tracer/blob/master/screenshots/bunny.png)<br>
+
+#### Reference: https://nvpro-samples.github.io/vk_raytracing_tutorial_KHR/
