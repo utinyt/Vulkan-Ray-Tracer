@@ -1,4 +1,6 @@
 # Vulkan Ray Tracer
+This is a real-time ray tracer using C++ / Vulkan / GLSL.
+
 ## Developing Environments
 * OS: Windows 10
 * IDE: Visual Studio 2019
