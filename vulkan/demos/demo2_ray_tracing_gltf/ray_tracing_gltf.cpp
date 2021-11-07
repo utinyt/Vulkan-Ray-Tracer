@@ -1584,4 +1584,4 @@ private:
 };
 
 //entry point
-RUN_APPLICATION_MAIN(VulkanApp, 1200, 800, "ray tracing glTF");
+RUN_APPLICATION_MAIN(VulkanApp, 800, 800, "ray tracing glTF");
