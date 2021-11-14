@@ -15,7 +15,8 @@ public:
 	/** @brief clean up */
 	void cleanup();
 	/** @brief add attachment and create actual image */
-	void addAttachment(VkImageCreateInfo imageCreateInfo, VkMemoryPropertyFlags memoryProperties);
+	void addAttachment(VkImageCreateInfo imageCreateInfo, VkMemoryPropertyFlags memoryProperties,
+		VkImageLayout imageLayoutOverride = VK_IMAGE_LAYOUT_UNDEFINED, bool earlyLayoutTransition = false);
 	/** @brief create render pass based on the added attachments*/
 	VkRenderPass createRenderPass(const std::vector<VkSubpassDependency>& dependencies);
 	/** @brief create framebuffer */

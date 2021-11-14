@@ -71,7 +71,7 @@ void VulkanAppBase::init() {
 	initVulkan();
 	LOG("vulkan initialization completed\n");
 	initApp();
-	updateCamera();
+	initCamera();
 	LOG("application initialization completed\n");
 }
 
@@ -135,6 +135,18 @@ void VulkanAppBase::initVulkan() {
 }
 
 /*
+* init camera - projection matrix
+*/
+void VulkanAppBase::initCamera() {
+	cameraMatrices.view = glm::lookAt(camera.camPos, camera.camPos + camera.camFront, camera.camUp);
+	cameraMatrices.viewInverse = glm::inverse(cameraMatrices.view);
+	cameraMatrices.proj = glm::perspective(glm::radians(45.f),
+		swapchain.extent.width / (float)swapchain.extent.height, 0.1f, 1000.f);
+	cameraMatrices.proj[1][1] *= -1;
+	cameraMatrices.projInverse = glm::inverse(cameraMatrices.proj);
+}
+
+/*
 * update camera position & front vector
 */
 void VulkanAppBase::updateCamera() {
@@ -186,9 +198,7 @@ void VulkanAppBase::updateCamera() {
 	camera.camFront = glm::normalize(dir);
 
 	cameraMatrices.view = glm::lookAt(camera.camPos, camera.camPos + camera.camFront, camera.camUp);
-	cameraMatrices.proj = glm::perspective(glm::radians(45.f),
-		swapchain.extent.width / (float)swapchain.extent.height, 0.1f, 1000.f);
-	cameraMatrices.proj[1][1] *= -1;
+	cameraMatrices.viewInverse = glm::inverse(cameraMatrices.view);
 }
 
 /*

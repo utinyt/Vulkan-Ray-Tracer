@@ -11,20 +11,6 @@ struct Mesh {
 	void loadObj(const std::string& path);
 	static GltfScene loadGltf(const std::string& path);
 
-	/*
-	* input used to build bottom-level acceleration structure
-	*/
-	struct BlasInput {
-		std::vector<VkAccelerationStructureGeometryKHR> asGeometry;
-		std::vector<VkAccelerationStructureBuildRangeInfoKHR> asBuildOffsetInfo;
-	};
-
-	/** @brief convert mesh to ray tracing geometry used to build the BLAS */
-	BlasInput getVkGeometryKHR(VkDevice device, VkBuffer vertexBuffer, VkBuffer indexBuffer) const;
-	/** @brief convert gltf primitive to rt geometry used for BLAS */
-	static BlasInput getVkGeometryKHR(VkDevice device, const GltfPrimMesh& primMesh,
-		VkBuffer vertexBuffer, VkBuffer indexBuffer);
-
 	/** @brief return binding description */
 	std::vector<VkVertexInputBindingDescription> getBindingDescription() const;
 	/** @brief return attribute description */

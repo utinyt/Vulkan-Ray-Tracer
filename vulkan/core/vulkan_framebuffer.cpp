@@ -27,7 +27,10 @@ void Framebuffer::cleanup() {
 * @param imageCreateInfo - info needed to create VkImage
 * @param memoryProperties - needed for allocateImageMemory()
 */
-void Framebuffer::addAttachment(VkImageCreateInfo imageCreateInfo, VkMemoryPropertyFlags memoryProperties) {
+void Framebuffer::addAttachment(VkImageCreateInfo imageCreateInfo,
+	VkMemoryPropertyFlags memoryProperties,
+	VkImageLayout imageLayoutOverride,
+	bool earlyLayoutTransition) {
 	Attachment attachment{};
 
 	//create image
@@ -68,14 +71,46 @@ void Framebuffer::addAttachment(VkImageCreateInfo imageCreateInfo, VkMemoryPrope
 												VK_ATTACHMENT_STORE_OP_STORE : VK_ATTACHMENT_STORE_OP_DONT_CARE;
 	attachment.description.stencilLoadOp	= VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 	attachment.description.stencilStoreOp	= VK_ATTACHMENT_STORE_OP_DONT_CARE;
-	attachment.description.initialLayout	= VK_IMAGE_LAYOUT_UNDEFINED;
 	
-	if (imageAspect & VK_IMAGE_ASPECT_DEPTH_BIT || imageAspect & VK_IMAGE_ASPECT_STENCIL_BIT) {
-		attachment.description.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+	VkCommandBuffer cmdBuf = devices->beginCommandBuffer();
+	if (imageLayoutOverride == VK_IMAGE_LAYOUT_UNDEFINED) {
+		if (imageAspect & VK_IMAGE_ASPECT_DEPTH_BIT || imageAspect & VK_IMAGE_ASPECT_STENCIL_BIT) {
+			attachment.description.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+			if (earlyLayoutTransition) {
+				vktools::setImageLayout(cmdBuf,
+					attachment.image,
+					VK_IMAGE_LAYOUT_UNDEFINED,
+					VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+					{ imageAspect, 0, 1, 0,1 }
+				);
+			}
+			
+		}
+		else {
+			attachment.description.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			if (earlyLayoutTransition) {
+				vktools::setImageLayout(cmdBuf,
+					attachment.image,
+					VK_IMAGE_LAYOUT_UNDEFINED,
+					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+					{ imageAspect, 0, 1, 0,1 }
+				);
+			}
+		}
 	}
 	else {
-		attachment.description.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		attachment.description.finalLayout = imageLayoutOverride;
+		if (earlyLayoutTransition) {
+			vktools::setImageLayout(cmdBuf,
+				attachment.image,
+				VK_IMAGE_LAYOUT_UNDEFINED,
+				imageLayoutOverride,
+				{ imageAspect, 0, 1, 0,1 }
+			);
+		}
 	}
+	attachment.description.initialLayout = earlyLayoutTransition ? attachment.description.finalLayout : VK_IMAGE_LAYOUT_UNDEFINED;
+	devices->endCommandBuffer(cmdBuf);
 
 	attachments.push_back(attachment);
 }

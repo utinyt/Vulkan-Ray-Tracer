@@ -137,8 +137,11 @@ void VulkanDevice::createLogicalDevice() {
 	//add buffer device address feature
 	if (std::find(requiredExtensions.begin(), requiredExtensions.end(),
 		VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME) != requiredExtensions.end()) {
-		if (vk12Features.bufferDeviceAddress == VK_TRUE && asFeatures.accelerationStructure == VK_TRUE) {
+		if (vk12Features.bufferDeviceAddress == VK_TRUE && 
+			vk12Features.hostQueryReset == VK_TRUE && 
+			asFeatures.accelerationStructure == VK_TRUE) {
 			device12Features.bufferDeviceAddress = VK_TRUE;
+			device12Features.hostQueryReset = VK_TRUE;
 			deviceAsFeatures.accelerationStructure = VK_TRUE;
 			deviceFeatures.pNext = &device12Features;
 			device12Features.pNext = &deviceAsFeatures;

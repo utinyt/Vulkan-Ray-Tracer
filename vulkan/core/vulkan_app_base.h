@@ -101,6 +101,8 @@ protected:
 	struct CameraMatrices {
 		glm::mat4 view;
 		glm::mat4 proj;
+		glm::mat4 viewInverse;
+		glm::mat4 projInverse;
 	} cameraMatrices;
 
 private:
@@ -113,6 +115,7 @@ private:
 
 	void initWindow();
 	void initVulkan();
+	void initCamera();
 	void updateCamera();
 
 	void createInstance();
