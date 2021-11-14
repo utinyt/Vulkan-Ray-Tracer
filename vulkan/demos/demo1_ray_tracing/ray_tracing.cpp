@@ -165,11 +165,13 @@ public:
 			vktools::getBufferDeviceAddress(devices.device, vertexBuffer),
 			vktools::getBufferDeviceAddress(devices.device, indexBuffer) }
 		);
-
 		//scene description buffer
 		createBuffer(objInstances.data(), static_cast<VkDeviceSize>(objInstances.size() * sizeof(ObjInstance)),
 			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, sceneBuffer);
 
+		/*
+		* rasterizer
+		*/
 		createOffscreenResources();
 		createDescriptorSet();
 		createOffscreenPipeline();
@@ -177,18 +179,15 @@ public:
 		/*
 		* ray tracing
 		*/
-		//descriptor set
 		createRtDescriptorSet();
 		for (size_t i = 0; i < static_cast<int>(MAX_FRAMES_IN_FLIGHT); ++i) {
 			updateRtDescriptorSet(i);
 		}
-		//pipeline
 		createRtPipeline();
-		//SBT
 		createRtShaderBindingTable();
 
 		/*
-		* post
+		* full-quad
 		*/
 		//post descriptor set
 		createPostDescriptorSet();
@@ -211,7 +210,6 @@ public:
 
 		//imgui
 		imguiBase->init(&devices, swapchain.extent.width, swapchain.extent.height, postRenderPass, MAX_FRAMES_IN_FLIGHT, VK_SAMPLE_COUNT_1_BIT);
-
 		//framebuffer
 		createFramebuffers();
 		//command buffer
@@ -654,8 +652,6 @@ private:
 	* create (normal) descriptor set - set camera matrix uniform buffer & scene description buffer
 	*/
 	void createDescriptorSet() {
-		uint32_t nbTexture = 0;
-
 		//camera matrix
 		descriptorSetBindings.addBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1,
 			VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_RAYGEN_BIT_KHR);
@@ -666,15 +662,7 @@ private:
 		uint32_t nbDescriptorSet = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
 		descriptorSetLayout = descriptorSetBindings.createDescriptorSetLayout(devices.device);
 		descriptorPool = descriptorSetBindings.createDescriptorPool(devices.device, nbDescriptorSet);
-		
-		VkDescriptorSetAllocateInfo descInfo{};
-		std::vector<VkDescriptorSetLayout> layout(nbDescriptorSet, descriptorSetLayout);
-		descInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-		descInfo.descriptorPool = descriptorPool;
-		descInfo.descriptorSetCount = nbDescriptorSet;
-		descInfo.pSetLayouts = layout.data();
-		descriptorSets.resize(nbDescriptorSet);
-		VK_CHECK_RESULT(vkAllocateDescriptorSets(devices.device, &descInfo, descriptorSets.data()));
+		descriptorSets = vktools::allocateDescriptorSets(devices.device, descriptorSetLayout, descriptorPool, nbDescriptorSet);
 
 		for (size_t i = 0; i < static_cast<size_t>(MAX_FRAMES_IN_FLIGHT); ++i) {
 			VkDescriptorBufferInfo camMatricesInfo{ uniformBuffers[i], 0, sizeof(CameraMatrices) };
@@ -976,6 +964,7 @@ private:
 	* rasterize
 	* 
 	* @param cmdBuf
+	* @param resourceIndex
 	*/
 	void rasterize(VkCommandBuffer cmdBuf, size_t resourceIndex) {
 		vktools::setViewportScissorDynamicStates(cmdBuf, swapchain.extent);
