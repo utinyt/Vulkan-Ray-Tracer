@@ -63,5 +63,5 @@ void main() {
 
 	float NL = max(dot(normal, L), 0.2);
 
-	prd.hitValue = vec3(NL, 0, 0);
+	prd.hitValue = vec3(NL, NL, NL);
 }

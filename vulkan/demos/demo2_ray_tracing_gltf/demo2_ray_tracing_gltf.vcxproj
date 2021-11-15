@@ -11,7 +11,11 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="ray_tracing_gltf.cpp" />
+    <ClCompile Include="ray_tracing_gltf.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="ray_tracing_gltf_alternative.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="shaders\full_quad.frag" />

@@ -7,8 +7,8 @@
 * 
 * @param path - path to the mesh file
 */
-Mesh::Mesh(const std::string& path) {
-	loadObj(path);
+Mesh::Mesh(const std::string& path, bool ignoreVertexNormal, bool ignoreTexCoords) {
+	loadObj(path, ignoreVertexNormal, ignoreTexCoords);
 }
 
 /*
@@ -16,7 +16,7 @@ Mesh::Mesh(const std::string& path) {
 *
 * @param path - path to the mesh file
 */
-void Mesh::loadObj(const std::string& path) {
+void Mesh::loadObj(const std::string& path, bool ignoreVertexNormal, bool ignoreTexCoords) {
 	vertices.cleanup();
 	indices.clear();
 
@@ -31,8 +31,8 @@ void Mesh::loadObj(const std::string& path) {
 	}
 
 	//vertex size
-	hasNormalAttribute = !attrib.normals.empty();
-	hasTexcoordAttribute = !attrib.texcoords.empty();
+	hasNormalAttribute = !attrib.normals.empty() && !ignoreVertexNormal;
+	hasTexcoordAttribute = !attrib.texcoords.empty() && !ignoreTexCoords;
 	vertexSize = sizeof(glm::vec3);
 	if (hasNormalAttribute) {
 		vertexSize += sizeof(glm::vec3);
@@ -79,36 +79,6 @@ void Mesh::loadObj(const std::string& path) {
 			indices.push_back(static_cast<uint32_t>(indices.size()));
 		}
 	}
-}
-
-
-/*
-* parse vertex data froma a gltf file
-*
-* @param path - path to the mesh file
-*/
-GltfScene Mesh::loadGltf(const std::string& path) {
-	tinygltf::Model tmodel;
-	tinygltf::TinyGLTF loader;
-	std::string err, warn;
-
-	//load gltf file
-	bool result = loader.LoadASCIIFromFile(&tmodel, &err, &warn, path);
-	std::string str = "Mesh::loadGltf(): ";
-	if (!warn.empty()) {
-		throw std::runtime_error(str + warn);
-	}
-	if (!err.empty()) {
-		throw std::runtime_error(str + err);
-	}
-	if (!result) {
-		throw std::runtime_error("failed to parse glTF\n");
-	}
-
-	GltfScene scene;
-	scene.importMaterials(tmodel);
-	scene.importDrawableNodes(tmodel, GltfAttributes::Normal | GltfAttributes::Texcoord_0);
-	return scene;
 }
 
 std::vector<VkVertexInputBindingDescription> Mesh::getBindingDescription() const{

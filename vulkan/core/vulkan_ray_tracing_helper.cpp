@@ -22,7 +22,7 @@ AsGeometry getVkGeometryKHR(VkDevice device, const Mesh& mesh, VkBuffer vertexBu
 	//describe index info
 	asGeometryTrianglesData.indexType = VK_INDEX_TYPE_UINT32;
 	asGeometryTrianglesData.indexData.deviceAddress = vktools::getBufferDeviceAddress(device, indexBuffer);
-	//geometryTrianglesData.transformData = {}; // null device pointer => identity transform
+	//asGeometryTrianglesData.transformData = {}; // null device pointer => identity transform
 
 	//identify above data as containing opaque triangles
 	VkAccelerationStructureGeometryKHR asGeometry{};
@@ -43,6 +43,79 @@ AsGeometry getVkGeometryKHR(VkDevice device, const Mesh& mesh, VkBuffer vertexBu
 }
 
 /*
+* same as above function - but for GLTF model
+*/
+AsGeometry getVkGeometryKHR(const VulkanGLTF::Primitive& primitive,
+	VkDeviceAddress vertexAddress,
+	VkDeviceAddress indexAddress) {
+	//triangle data
+	VkAccelerationStructureGeometryTrianglesDataKHR asGeometryTrianglesData{};
+	asGeometryTrianglesData.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
+	//describe vertex info
+	asGeometryTrianglesData.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT;
+	asGeometryTrianglesData.vertexData.deviceAddress = vertexAddress;
+	asGeometryTrianglesData.vertexStride = sizeof(glm::vec3);
+	asGeometryTrianglesData.maxVertex = primitive.vertexCount;
+	//describe index info
+	asGeometryTrianglesData.indexType = VK_INDEX_TYPE_UINT32;
+	asGeometryTrianglesData.indexData.deviceAddress = indexAddress;
+	//geometryTrianglesData.transformData = {}; // null device pointer => identity transform
+
+	//identify above data as containing opaque triangles
+	VkAccelerationStructureGeometryKHR asGeometry{};
+	asGeometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
+	//sgeometry.flags = VK_GEOMETRY_OPAQUE_BIT_KHR; //no any-hit shader invocation
+	asGeometry.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
+	asGeometry.geometry.triangles = asGeometryTrianglesData;
+
+	//build range for bottom-level acceleration structure -> whole range
+	uint32_t maxPrimitiveCount = static_cast<uint32_t>(primitive.indexCount / 3);
+	VkAccelerationStructureBuildRangeInfoKHR asBuildRangeInfo{};
+	asBuildRangeInfo.firstVertex = primitive.vertexStart;
+	asBuildRangeInfo.primitiveCount = maxPrimitiveCount;
+	asBuildRangeInfo.primitiveOffset = primitive.firstIndex * sizeof(uint32_t);
+	asBuildRangeInfo.transformOffset = 0;
+
+	return { asGeometry, asBuildRangeInfo };
+}
+
+/*
+* acculmulate single geometries to BlasGeometries
+*/
+void getBlasGeometriesKHR(VulkanGLTF::Node& node,
+	VkDeviceAddress vertexAddress,
+	VkDeviceAddress indexAddress,
+	BlasGeometries& blasGeometries) {
+	
+	for (VulkanGLTF::Primitive& primitive : node.mesh) {
+		blasGeometries.push_back(getVkGeometryKHR(primitive, vertexAddress, indexAddress));
+	}
+	for (VulkanGLTF::Node& child : node.children) {
+		getBlasGeometriesKHR(child, vertexAddress, indexAddress, blasGeometries);
+	}
+}
+
+/*
+* convert gltf model to ray tracing geometry used to build the BLAS
+*
+* @param device - logical device handle
+* @param gltfModel
+*
+* @return BlasInput
+*/
+BlasGeometries getBlasGeometriesKHR(VkDevice device, VulkanGLTF& gltfModel) {
+	VkDeviceAddress vertexAddress = vktools::getBufferDeviceAddress(device, gltfModel.vertexBuffer);
+	VkDeviceAddress indexAddress = vktools::getBufferDeviceAddress(device, gltfModel.indexBuffer);
+
+	BlasGeometries geometries;
+	for (VulkanGLTF::Node& node : gltfModel.nodes) {
+		getBlasGeometriesKHR(node, vertexAddress, indexAddress, geometries);
+	}
+
+	return geometries;
+}
+
+/*
 * convert gltf primitive to rt geometry used for BLAS
 *
 * @param device
@@ -52,41 +125,41 @@ AsGeometry getVkGeometryKHR(VkDevice device, const Mesh& mesh, VkBuffer vertexBu
 *
 * @return BlasInput
 */
-//BlasInput getVkGeometryKHR(VkDevice device, const GltfPrimMesh& primMesh,
-//	VkBuffer vertexBuffer, VkBuffer indexBuffer) {
-//	//get addresses
-//	VkDeviceAddress vertexAddress = vktools::getBufferDeviceAddress(device, vertexBuffer);
-//	VkDeviceAddress indexAddress = vktools::getBufferDeviceAddress(device, indexBuffer);
-//
-//	uint32_t maxPrimitiveCount = primMesh.indexCount / 3;
-//
-//	VkAccelerationStructureGeometryTrianglesDataKHR triangles{};
-//	triangles.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
-//	//describe vertex info
-//	triangles.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT;
-//	triangles.vertexData.deviceAddress = vertexAddress;
-//	triangles.vertexStride = sizeof(glm::vec3);
-//	//describe index info
-//	triangles.indexType = VK_INDEX_TYPE_UINT32;
-//	triangles.indexData.deviceAddress = indexAddress;
-//	triangles.maxVertex = primMesh.vertexCount;
-//
-//	//identify above data as containing opaque triangles
-//	VkAccelerationStructureGeometryKHR asGeo{};
-//	asGeo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
-//	asGeo.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
-//	asGeo.flags = VK_GEOMETRY_NO_DUPLICATE_ANY_HIT_INVOCATION_BIT_KHR;
-//	asGeo.geometry.triangles = triangles;
-//
-//	//BLAS
-//	VkAccelerationStructureBuildRangeInfoKHR offset{};
-//	offset.firstVertex = primMesh.vertexOffset;
-//	offset.primitiveCount = maxPrimitiveCount;
-//	offset.primitiveOffset = primMesh.firstIndex * sizeof(uint32_t);
-//	offset.transformOffset = 0;
-//
-//	return { asGeo, offset };
-//}
+AsGeometry getVkGeometryKHR(VkDevice device, const GltfPrimMesh& primMesh,
+	VkBuffer vertexBuffer, VkBuffer indexBuffer) {
+	//get addresses
+	VkDeviceAddress vertexAddress = vktools::getBufferDeviceAddress(device, vertexBuffer);
+	VkDeviceAddress indexAddress = vktools::getBufferDeviceAddress(device, indexBuffer);
+
+	uint32_t maxPrimitiveCount = primMesh.indexCount / 3;
+
+	VkAccelerationStructureGeometryTrianglesDataKHR triangles{};
+	triangles.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
+	//describe vertex info
+	triangles.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT;
+	triangles.vertexData.deviceAddress = vertexAddress;
+	triangles.vertexStride = sizeof(glm::vec3);
+	//describe index info
+	triangles.indexType = VK_INDEX_TYPE_UINT32;
+	triangles.indexData.deviceAddress = indexAddress;
+	triangles.maxVertex = primMesh.vertexCount;
+
+	//identify above data as containing opaque triangles
+	VkAccelerationStructureGeometryKHR asGeo{};
+	asGeo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
+	asGeo.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
+	asGeo.flags = VK_GEOMETRY_NO_DUPLICATE_ANY_HIT_INVOCATION_BIT_KHR;
+	asGeo.geometry.triangles = triangles;
+
+	//BLAS
+	VkAccelerationStructureBuildRangeInfoKHR offset{};
+	offset.firstVertex = primMesh.vertexOffset;
+	offset.primitiveCount = maxPrimitiveCount;
+	offset.primitiveOffset = primMesh.firstIndex * sizeof(uint32_t);
+	offset.transformOffset = 0;
+
+	return { asGeo, offset };
+}
 
 /*
 * create acceleration structure & buffer

@@ -21,6 +21,9 @@
     <ClCompile Include="ray_tracing_gltf.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="ray_tracing_gltf_alternative.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="shaders\pathtrace.rchit">

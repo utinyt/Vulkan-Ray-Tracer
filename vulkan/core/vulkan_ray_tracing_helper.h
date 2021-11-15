@@ -1,6 +1,7 @@
 #pragma once
 #include "vulkan_utils.h"
 #include "vulkan_mesh.h"
+#include "vulkan_gltf.h"
 
 struct VulkanDevice;
 
@@ -50,6 +51,9 @@ AsGeometry getVkGeometryKHR(VkDevice device,
 	VkBuffer vertexBuffer,
 	VkBuffer indexBuffer
 );
+
+/** @brief convert mesh to ray tracing geometry used to build the BLAS */
+BlasGeometries getBlasGeometriesKHR(VkDevice device, VulkanGLTF& gltfModel);
 
 /** @brief convert gltf primitive to rt geometry used for BLAS */
 /*static BlasInput getVkGeometryKHR(VkDevice device, const GltfPrimMesh& primMesh,

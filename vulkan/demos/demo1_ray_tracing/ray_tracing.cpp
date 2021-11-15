@@ -94,10 +94,14 @@ public:
 		vkDestroyBuffer(devices.device, tlas.buffer, nullptr);
 
 		//vertex & index buffers
-		devices.memoryAllocator.freeBufferMemory(vertexBuffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-		vkDestroyBuffer(devices.device, vertexBuffer, nullptr);
-		devices.memoryAllocator.freeBufferMemory(indexBuffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-		vkDestroyBuffer(devices.device, indexBuffer, nullptr);
+		devices.memoryAllocator.freeBufferMemory(bunnyVertexBuffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		vkDestroyBuffer(devices.device, bunnyVertexBuffer, nullptr);
+		devices.memoryAllocator.freeBufferMemory(bunnyIndexBuffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		vkDestroyBuffer(devices.device, bunnyIndexBuffer, nullptr);
+		devices.memoryAllocator.freeBufferMemory(teapotVertexBuffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		vkDestroyBuffer(devices.device, teapotVertexBuffer, nullptr);
+		devices.memoryAllocator.freeBufferMemory(teapotIndexBuffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		vkDestroyBuffer(devices.device, teapotIndexBuffer, nullptr);
 
 		//swapchain framebuffers
 		for (auto& framebuffer : framebuffers) {
@@ -162,8 +166,12 @@ public:
 
 		//push bunny obj instance
 		objInstances.push_back({ glm::mat4(1.f), glm::mat4(1.f),
-			vktools::getBufferDeviceAddress(devices.device, vertexBuffer),
-			vktools::getBufferDeviceAddress(devices.device, indexBuffer) }
+			vktools::getBufferDeviceAddress(devices.device, bunnyVertexBuffer),
+			vktools::getBufferDeviceAddress(devices.device, bunnyIndexBuffer) }
+		);
+		objInstances.push_back({ glm::mat4(1.f), glm::mat4(1.f),
+			vktools::getBufferDeviceAddress(devices.device, teapotVertexBuffer),
+			vktools::getBufferDeviceAddress(devices.device, teapotIndexBuffer) }
 		);
 		//scene description buffer
 		createBuffer(objInstances.data(), static_cast<VkDeviceSize>(objInstances.size() * sizeof(ObjInstance)),
@@ -279,8 +287,8 @@ public:
 		clearValues[0].color = { 0.2f, 0.0f, 0.f, 1.f };
 		clearValues[1].depthStencil = { 1.f, 0 };
 
-		rtPushConstants.clearColor = { 0.95f, 0.95f, 0.95f, 1.f };
-		rtPushConstants.lightPos = { 2.f, 2.f, 2.f };
+		rtPushConstants.clearColor = { 0.2f, 0.f, 0.f, 1.f };
+		rtPushConstants.lightPos = { 20.f, 20.f, 20.f };
 
 		//for rasterizer render pass
 		VkRenderPassBeginInfo offscreenRenderPassBeginInfo{ VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO };
@@ -354,9 +362,13 @@ private:
 		VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_PROPERTIES_KHR 
 	};
 	/** vertex & index buffer */
-	VkBuffer vertexBuffer = VK_NULL_HANDLE, indexBuffer = VK_NULL_HANDLE;
+	VkBuffer bunnyVertexBuffer = VK_NULL_HANDLE, bunnyIndexBuffer = VK_NULL_HANDLE;
 	/** bunny mesh */
-	Mesh mesh;
+	Mesh bunnyMesh;
+	/** vertex & index buffer */
+	VkBuffer teapotVertexBuffer = VK_NULL_HANDLE, teapotIndexBuffer = VK_NULL_HANDLE;
+	/** bunny mesh */
+	Mesh teapotMesh;
 	/** bottom-level acceleration structures */
 	std::vector<AccelKHR> blasHandles;
 	/** top-level acceleration structure */
@@ -510,23 +522,32 @@ private:
 	*/
 	void createBottomLevelAccelerationStructure() {
 		//load bunny mesh
-		mesh.loadObj("../../meshes/bunny.obj");
+		bunnyMesh.loadObj("../../meshes/bunny.obj");
+		teapotMesh.loadObj("../../meshes/teapot.obj", false, true);
 
 		//create vertex & index buffers
 		VkBufferUsageFlags rtFlags = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
 			VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR /*|
 			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT*/;
-		createBuffer(mesh.vertices.data(), mesh.vertices.bufferSize,
+		createBuffer(bunnyMesh.vertices.data(), bunnyMesh.vertices.bufferSize,
 			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | rtFlags,
-			vertexBuffer);
-		createBuffer(mesh.indices.data(), sizeof(mesh.indices[0]) * mesh.indices.size(),
+			bunnyVertexBuffer);
+		createBuffer(bunnyMesh.indices.data(), sizeof(bunnyMesh.indices[0]) * bunnyMesh.indices.size(),
 			VK_BUFFER_USAGE_INDEX_BUFFER_BIT | rtFlags,
-			indexBuffer);		
+			bunnyIndexBuffer);		
+		createBuffer(teapotMesh.vertices.data(), teapotMesh.vertices.bufferSize,
+			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | rtFlags,
+			teapotVertexBuffer);
+		createBuffer(teapotMesh.indices.data(), sizeof(teapotMesh.indices[0]) * teapotMesh.indices.size(),
+			VK_BUFFER_USAGE_INDEX_BUFFER_BIT | rtFlags,
+			teapotIndexBuffer);
 
 		//create BLASs - 1 blas containing 1 geometry
-		BlasGeometries blas;
-		blas.push_back(getVkGeometryKHR(devices.device, mesh, vertexBuffer, indexBuffer)); // 1 blas
-		std::vector<BlasGeometries> allBlas{ blas }; //array of blas
+		BlasGeometries bunnyBlas;
+		bunnyBlas.push_back(getVkGeometryKHR(devices.device, bunnyMesh, bunnyVertexBuffer, bunnyIndexBuffer)); // 1 blas
+		BlasGeometries teapotBlas;
+		teapotBlas.push_back(getVkGeometryKHR(devices.device, teapotMesh, teapotVertexBuffer, teapotIndexBuffer)); // 1 blas
+		std::vector<BlasGeometries> allBlas{ bunnyBlas, teapotBlas }; //array of blas -> 2 blass
 
 		buildBlas(&devices, allBlas,
 			VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR |
@@ -541,26 +562,28 @@ private:
 		size_t nbInstancne = 9; // 9 bunnies
 		std::vector<VkAccelerationStructureInstanceKHR> instances{};
 
+		glm::mat4 scaleDownx10 = glm::scale(glm::mat4(1.f), glm::vec3(0.05f));
 		std::vector<VkTransformMatrixKHR> transforms{
 			vktools::toTransformMatrixKHR(glm::translate(glm::mat4(1.f), glm::vec3(2, 0, 2))),
-			vktools::toTransformMatrixKHR(glm::translate(glm::mat4(1.f), glm::vec3(0, 0, 2))),
+			vktools::toTransformMatrixKHR(glm::translate(glm::mat4(1.f), glm::vec3(0, 0.5, 2)) * scaleDownx10),
 			vktools::toTransformMatrixKHR(glm::translate(glm::mat4(1.f), glm::vec3(-2, 0, 2))),
-			vktools::toTransformMatrixKHR(glm::translate(glm::mat4(1.f), glm::vec3(2, 0, 0))),
+			vktools::toTransformMatrixKHR(glm::translate(glm::mat4(1.f), glm::vec3(2, 0.5, 0)) * scaleDownx10),
 			vktools::toTransformMatrixKHR(glm::translate(glm::mat4(1.f), glm::vec3(0, 0, 0))),
-			vktools::toTransformMatrixKHR(glm::translate(glm::mat4(1.f), glm::vec3(-2, 0, 0))),
+			vktools::toTransformMatrixKHR(glm::translate(glm::mat4(1.f), glm::vec3(-2, 0.5, 0)) * scaleDownx10),
 			vktools::toTransformMatrixKHR(glm::translate(glm::mat4(1.f), glm::vec3(2, 0, -2))),
-			vktools::toTransformMatrixKHR(glm::translate(glm::mat4(1.f), glm::vec3(0, 0, -2))),
+			vktools::toTransformMatrixKHR(glm::translate(glm::mat4(1.f), glm::vec3(0, 0.5, -2)) * scaleDownx10),
 			vktools::toTransformMatrixKHR(glm::translate(glm::mat4(1.f), glm::vec3(-2, 0, -2)))
 		};
 
 		//blas containing 1 bunny
-		uint64_t blasAddress = getBlasDeviceAddress(devices.device, blasHandles[0].accel);
+		uint64_t bunnyBlasAddress = getBlasDeviceAddress(devices.device, blasHandles[0].accel);
+		uint64_t teapotBlasAddress = getBlasDeviceAddress(devices.device, blasHandles[1].accel);
 
 		for (uint32_t i = 0; i < static_cast<uint32_t>(nbInstancne); ++i) {
 			VkAccelerationStructureInstanceKHR instance;
 			instance.transform = transforms[i];
-			instance.instanceCustomIndex = 0; //index of model? -> model[0] -> bunny
-			instance.accelerationStructureReference = blasAddress;
+			instance.instanceCustomIndex = i % 2 ? 1 : 0; //index of model? -> model[0] -> bunny
+			instance.accelerationStructureReference = i % 2 ? teapotBlasAddress : bunnyBlasAddress;
 			instance.instanceShaderBindingTableRecordOffset = 0; // we will use the same hit group for all object
 			instance.flags = VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR;
 			instance.mask = 0xFF;
@@ -633,8 +656,8 @@ private:
 	* create general (rasterizer) pipeline
 	*/
 	void createOffscreenPipeline() {
-		auto bindingDescription = mesh.getBindingDescription();
-		auto attributeDescription = mesh.getAttributeDescriptions();
+		auto bindingDescription = bunnyMesh.getBindingDescription();
+		auto attributeDescription = bunnyMesh.getAttributeDescriptions();
 
 		PipelineGenerator gen(devices.device);
 		gen.addVertexInputBindingDescription(bindingDescription);
@@ -666,7 +689,7 @@ private:
 
 		for (size_t i = 0; i < static_cast<size_t>(MAX_FRAMES_IN_FLIGHT); ++i) {
 			VkDescriptorBufferInfo camMatricesInfo{ uniformBuffers[i], 0, sizeof(CameraMatrices) };
-			VkDescriptorBufferInfo sceneBufferInfo{ sceneBuffer, 0, sizeof(ObjInstance) };
+			VkDescriptorBufferInfo sceneBufferInfo{ sceneBuffer, 0, objInstances.size() * sizeof(ObjInstance) };
 
 			std::vector<VkWriteDescriptorSet> writes;
 			writes.emplace_back(descriptorSetBindings.makeWrite(descriptorSets[i], 0, &camMatricesInfo));
@@ -974,9 +997,9 @@ private:
 
 		VkDeviceSize offsets[1] = { 0 };
 		for (auto& obj : objInstances) {
-			vkCmdBindVertexBuffers(cmdBuf, 0, 1, &vertexBuffer, offsets);
-			vkCmdBindIndexBuffer(cmdBuf, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-			vkCmdDrawIndexed(cmdBuf, static_cast<uint32_t>(mesh.indices.size()), 1, 0, 0, 0);
+			vkCmdBindVertexBuffers(cmdBuf, 0, 1, &bunnyVertexBuffer, offsets);
+			vkCmdBindIndexBuffer(cmdBuf, bunnyIndexBuffer, 0, VK_INDEX_TYPE_UINT32);
+			vkCmdDrawIndexed(cmdBuf, static_cast<uint32_t>(bunnyMesh.indices.size()), 1, 0, 0, 0);
 		}
 	}
 };

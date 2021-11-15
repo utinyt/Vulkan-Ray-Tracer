@@ -6,10 +6,9 @@
 
 struct Mesh {
 	Mesh() {}
-	Mesh(const std::string& path);
+	Mesh(const std::string& path, bool ignoreVertexNormal = false, bool ignoreTexCoords = false);
 	/** @brief load obj from a file */
-	void loadObj(const std::string& path);
-	static GltfScene loadGltf(const std::string& path);
+	void loadObj(const std::string& path, bool ignoreVertexNormal = false, bool ignoreTexCoords = false);
 
 	/** @brief return binding description */
 	std::vector<VkVertexInputBindingDescription> getBindingDescription() const;
