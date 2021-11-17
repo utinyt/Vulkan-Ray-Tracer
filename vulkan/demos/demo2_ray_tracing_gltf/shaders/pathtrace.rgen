@@ -17,63 +17,58 @@ layout(binding = 0, set = 1) uniform CameraMatrices{
 
 layout(location = 0) rayPayloadEXT hitPayload prd;
 
-layout(push_constant) uniform Constants{
-	vec4 clearColor;
-	vec3 lightPosition;
-	float lightIntensity;
-	int lightType;
-	int64_t frame;
-} constants;
+layout(push_constant) uniform PushConstant {
+	RtPushConstant pc;
+};
 
 void main() {
     //anti-aliasing
     uint seed = tea(gl_LaunchIDEXT.y * gl_LaunchSizeEXT.x + gl_LaunchIDEXT.x, int(clockARB()));
 
+    float r1 = rnd(seed);
+    float r2 = rnd(seed);
+    vec2 jitter = pc.frame == 0 ? vec2(0.5f, 0.5f) : vec2(r1, r2);
+
+    const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + jitter; //gl_LaunchIDEXT - integer coordinate of current pixel
+    const vec2 inUV = pixelCenter / vec2(gl_LaunchSizeEXT.xy); //gl_LaunchSizeEXT - image size
+    vec2 d = inUV * 2.0 - 1.0;
+
+    vec4 origin = cam.viewInverse * vec4(0, 0, 0, 1);
+    vec4 target = cam.projInverse * vec4(d.x, d.y, 1, 1);
+    vec4 direction = cam.viewInverse * vec4(normalize(target.xyz), 0);
+
+    uint rayFlags = gl_RayFlagsOpaqueEXT;
+    float tMin = 0.001;
+    float tMax = 10000.0;
+
+    prd.hitValue = vec3(0.f);
     prd.seed = seed;
     prd.depth = 0;
-    prd.hitValue = vec3(0.f);
     prd.weight = vec3(1.f);
+    prd.rayOrigin = origin.xyz;
+    prd.rayDirection = direction.xyz;
 
     vec3 hitValue = vec3(0.f);
-    int nbSample = 1;
-    for(int sampleNum = 0; sampleNum < nbSample; sampleNum++){
-        float r1 = rnd(seed);
-        float r2 = rnd(seed);
-        vec2 jitter = constants.frame == 0 ? vec2(0.5f, 0.5f) : vec2(r1, r2);
-
-        const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + jitter; //gl_LaunchIDEXT - integer coordinate of current pixel
-        const vec2 inUV = pixelCenter / vec2(gl_LaunchSizeEXT.xy); //gl_LaunchSizeEXT - image size
-        vec2 d = inUV * 2.0 - 1.0;
-
-        vec4 origin = cam.viewInverse * vec4(0, 0, 0, 1);
-        vec4 target = cam.projInverse * vec4(d.x, d.y, 1, 1);
-        vec4 direction = cam.viewInverse * vec4(normalize(target.xyz), 0);
-
-        uint rayFlags = gl_RayFlagsOpaqueEXT;
-        float tMin = 0.001;
-        float tMax = 10000.0;
-
+    for(; prd.depth < pc.maxDepht; prd.depth++){
         traceRayEXT(topLevelAS, //acceleration structure
             rayFlags,           //rayFlags
             0xFF,               //cullMask
             0,                  //sbtRecordOffset
             0,                  //sbtRecordStride
             0,                  //missIndex
-            origin.xyz,         //ray origin
+            prd.rayOrigin,         //ray origin
             tMin,               //ray minRange
-            direction.xyz,      //ray direction
+            prd.rayDirection,      //ray direction
             tMax,               //ray maxRange
             0                   //payload (location = 0)
         );
-        hitValue += prd.hitValue;
     }
-    hitValue = hitValue / float(nbSample);
 
-    if(constants.frame > 0) {
-        float a = 1.f / float(constants.frame + 1);
+    if(pc.frame > 0) {
+        float a = 1.f / float(pc.frame + 1);
         vec3 oldColor = imageLoad(image, ivec2(gl_LaunchIDEXT.xy)).xyz;
-        imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(mix(oldColor, hitValue, a), 1.0));
+        imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(mix(oldColor, prd.hitValue, a), 1.0));
     }else{
-        imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(hitValue, 1.0));
+        imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(prd.hitValue, 1.0));
     }
 }

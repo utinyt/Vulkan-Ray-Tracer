@@ -19,13 +19,12 @@ public:
 		ImGui::Begin("Settings");
 
 		//toggle render mode
-		static int renderMode = 0;
-		ImGui::RadioButton("raytrace", &renderMode, RENDER_MODE::RAYRACE); ImGui::SameLine();
-		ImGui::RadioButton("rasterizer", &renderMode, RENDER_MODE::RASTERIZER);
-		if (renderMode != userInput.renderMode) {
-			userInput.renderMode = renderMode;
+		ImGui::RadioButton("raytrace", &userInput.renderMode, RENDER_MODE::RAYRACE); ImGui::SameLine();
+		ImGui::RadioButton("rasterizer", &userInput.renderMode, RENDER_MODE::RASTERIZER);
+		if (userInput.renderMode == RENDER_MODE::RAYRACE) {
+			ImGui::SliderInt("Maximum ray depth", &userInput.maxRayDepth, 1, 30);
 		}
-		if (renderMode == RENDER_MODE::RASTERIZER) {
+		else {
 			ImGui::SliderFloat("Light position X", &userInput.lightPos.x, -3.0f, 3.0f);
 			ImGui::SliderFloat("Light position Y", &userInput.lightPos.y, -3.0f, 3.0f);
 			ImGui::SliderFloat("Light position Z", &userInput.lightPos.z, -3.0f, 3.0f);
@@ -45,6 +44,7 @@ public:
 	/** imgui user input collection */
 	struct UserInput {
 		int renderMode = RAYRACE;
+		int maxRayDepth = 10;
 		glm::vec3 lightPos{ 0.f, 1.5f, 0.1f };
 	}userInput;
 };
@@ -314,12 +314,14 @@ public:
 	void buildCommandBuffer() {
 		VkCommandBufferBeginInfo cmdBufBeginInfo{};
 		cmdBufBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+		cmdBufBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
 		std::array<VkClearValue, 2> clearValues{};
 		clearValues[0].color = { 0.05f, 0.05f, 0.05f, 1.f };
 		clearValues[1].depthStencil = { 1.f, 0 };
 
 		rtPushConstants.lightPos = { 20.f, 20.f, 20.f };
+		rtPushConstants.maxDepht = static_cast<Imgui*>(imguiBase)->userInput.maxRayDepth;
 
 		//for rasterizer render pass
 		VkRenderPassBeginInfo offscreenRenderPassBeginInfo{ VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO };
@@ -483,6 +485,7 @@ private:
 		float lightIntensity = 100.f;
 		int lightType = 0;
 		int64_t frame = -1;
+		int maxDepht = 10;
 	} rtPushConstants;
 	/*
 	* descriptors for raytracer

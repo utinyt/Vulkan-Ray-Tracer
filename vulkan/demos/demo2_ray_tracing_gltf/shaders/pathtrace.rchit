@@ -44,14 +44,6 @@ layout(binding = 1, set = 1, scalar) readonly buffer Scene {
 };
 layout(binding = 2, set = 1) uniform sampler2D textures[];
 
-layout(push_constant) uniform Constants{
-	vec4 clearColor;
-	vec3 lightPosition;
-	float lightIntensity;
-	int lightType;
-	int64_t frame;
-} constants;
-
 void main() {
 	Indices indices = Indices(sceneDesc.indexAddress);
 	Vertices vertices = Vertices(sceneDesc.vertexAddress);
@@ -111,6 +103,11 @@ void main() {
 		prd.hitValue += prd.weight * emittance;
 	}
 	
+	prd.rayOrigin = rayOrigin;
+	prd.rayDirection = rayDirection;
+
+	/*
+	//not optimized 
 	//recursive call
 	if(prd.depth < 10){
 		prd.depth++;
@@ -129,6 +126,7 @@ void main() {
 			tMax,
 			0);
 	}
+	*/
 	
 	//nvidia example
 	/*
