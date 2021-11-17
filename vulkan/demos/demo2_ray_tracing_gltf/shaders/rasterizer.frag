@@ -33,11 +33,19 @@ void main(){
 	GltfShadeMaterial materials = GltfShadeMaterial(sceneDesc.materialAddress);
 	ShadeMaterial material = materials.material[materialId];
 
+	//diffuse color
 	vec3 fragToLight = viewLightPos - viewFragPos;
 	fragToLight = normalize(fragToLight);
-	float diff = dot(fragToLight, inNormal);
+	float diff = max(dot(fragToLight, inNormal), 0);
 	col = vec4(vec3(diff) *material.baseColorFactor.xyz , 1.f);
 	if(material.baseColorTextureIndex > -1){
 		col.xyz *= texture(textures[material.baseColorTextureIndex], inUV).xyz;
 	}
+
+	//specular
+	vec3 fragToView = normalize(-viewFragPos);
+	vec3 reflectDir = reflect(-fragToLight, inNormal);
+	float spec = 5 * pow(max(dot(fragToView, reflectDir), 0), 64);
+
+	col.xyz += vec3(spec);
 }
