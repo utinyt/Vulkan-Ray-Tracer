@@ -52,6 +52,12 @@ AsGeometry getVkGeometryKHR(VkDevice device,
 	VkBuffer indexBuffer
 );
 
+/** @brief convert gltf primitive to ray tracing geometry used to build the BLAS */
+AsGeometry getVkGeometryKHR(const VulkanGLTF::Primitive& primitive,
+	VkDeviceAddress vertexAddress,
+	VkDeviceAddress indexAddress,
+	VkDeviceSize vertexSize);
+
 /** @brief convert mesh to ray tracing geometry used to build the BLAS */
 BlasGeometries getBlasGeometriesKHR(VkDevice device, VulkanGLTF& gltfModel);
 

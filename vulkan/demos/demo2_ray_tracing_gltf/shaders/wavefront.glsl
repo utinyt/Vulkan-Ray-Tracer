@@ -2,58 +2,33 @@
 * struct definition - this file is to be included
 */
 
-struct CameraMatrices{
-    mat4 view;
-    mat4 proj;
-    mat4 viewInverse;
-    mat4 projInverse;
-	int frame;
+struct Vertex{
+	vec3 pos;
+	vec3 normal;
+	vec2 uv;
+	vec3 color;
+	vec4 tangent;
 };
 
 struct SceneDesc{
+	mat4 transform;
+	mat4 transformIT;
 	uint64_t vertexAddress;
+	uint64_t indexAddress;
 	uint64_t normalAddress;
 	uint64_t uvAddress;
-	uint64_t indexAddress;
+	uint64_t colorAddress;
+	uint64_t tangentAddress;
+	uint64_t materialIndicesAddress;
 	uint64_t materialAddress;
-	uint64_t primInfoAddress;
+	uint64_t primitiveAddress;
+	uint64_t padding;
 };
 
-struct RasterPushConstant{
-	mat4 modelMatrix;
-	vec3 lightPos;
-	uint objIndex;
-	float lightIntensity;
-	int lightType;
-	int materialId;
+struct Primitive {
+	uint firstIndex;
+	uint indexCount;
+	uint vertexStart;
+	uint vertexCount;
+	//int materialIndex;
 };
-
-struct GltfShadeMaterial{
-	vec4 pbrBaseColorFactor;
-	vec3 emissiveFactor;
-	int pbrBaseColorTexture;
-};
-
-struct PrimMeshInfo
-{
-  uint indexOffset;
-  uint vertexOffset;
-  int  materialIndex;
-};
-
-/*
-* phong lighting calculation
-*/
-vec3 calculateDiffuse(GltfShadeMaterial mat, vec3 fragToLight, vec3 normal){
-	fragToLight = normalize(fragToLight);
-	float nl = max(dot(fragToLight, normal), 0);
-	return mat.pbrBaseColorFactor.xyz * nl;
-}
-
-vec3 calculateSpecular(vec3 viewToFrag, vec3 fragToLight, vec3 normal){
-	vec3 fragToView = normalize(-viewToFrag);
-	fragToLight = normalize(fragToLight);
-	vec3 reflectDir = reflect(-fragToLight, normal);
-	float spec = 5 * pow(max(dot(fragToView , reflectDir), 0.0), 64);
-	return vec3(spec);
-}

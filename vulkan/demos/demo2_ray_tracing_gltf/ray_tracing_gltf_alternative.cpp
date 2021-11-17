@@ -159,6 +159,23 @@ public:
 			updateUniformBuffer(i);
 		}
 
+		//push bunny obj instance
+		objInstances.push_back({ glm::mat4(1.f), glm::mat4(1.f),
+			vktools::getBufferDeviceAddress(devices.device, gltfDioramaModel.vertexBuffer),
+			vktools::getBufferDeviceAddress(devices.device, gltfDioramaModel.indexBuffer),
+			vktools::getBufferDeviceAddress(devices.device, gltfDioramaModel.normalBuffer),
+			vktools::getBufferDeviceAddress(devices.device, gltfDioramaModel.uvBuffer),
+			vktools::getBufferDeviceAddress(devices.device, gltfDioramaModel.colorBuffer),
+			vktools::getBufferDeviceAddress(devices.device, gltfDioramaModel.tangentBuffer),
+			vktools::getBufferDeviceAddress(devices.device, gltfDioramaModel.materialIndicesBuffer),
+			vktools::getBufferDeviceAddress(devices.device, gltfDioramaModel.materialBuffer), 
+			vktools::getBufferDeviceAddress(devices.device, gltfDioramaModel.primitiveBuffer) 
+			}
+		);
+		//scene description buffer
+		createBuffer(objInstances.data(), static_cast<VkDeviceSize>(objInstances.size() * sizeof(ObjInstance)),
+			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, sceneBuffer);
+
 		/*
 		* rasterizer
 		*/
@@ -364,6 +381,14 @@ private:
 		glm::mat4 transformIT;
 		uint64_t vertexAddress;
 		uint64_t IndexAddress;
+		uint64_t normalAddress;
+		uint64_t uvAddress;
+		uint64_t colorAddress;
+		uint64_t tangentAddress;
+		uint64_t materialIndicesAddress;
+		uint64_t materialAddress;
+		uint64_t primitiveAddress;
+		uint64_t padding;
 	};
 	/** vector of obj instances */
 	std::vector<ObjInstance> objInstances;
@@ -502,10 +527,18 @@ private:
 			VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
 		gltfDioramaModel.loadScene(&devices, "../../meshes/pica_pica_mini_diorama/scene.gltf", rtFlags);
 
-		//create BLASs - 1 blas containing 1 geometry
-		BlasGeometries blas = getBlasGeometriesKHR(devices.device, gltfDioramaModel); // 1 blas
-		std::vector<BlasGeometries> allBlas{ blas }; //array of blas
-
+		std::vector<BlasGeometries> allBlas{}; //array of blas
+		allBlas.reserve(gltfDioramaModel.primitives.size());
+		for (VulkanGLTF::Primitive& primitive : gltfDioramaModel.primitives) {
+			BlasGeometries blas;
+			blas.push_back(getVkGeometryKHR(primitive,
+				vktools::getBufferDeviceAddress(devices.device, gltfDioramaModel.vertexBuffer),
+				vktools::getBufferDeviceAddress(devices.device, gltfDioramaModel.indexBuffer),
+				gltfDioramaModel.vertexSize)
+			);
+			allBlas.push_back(blas);
+		}
+		
 		buildBlas(&devices, allBlas,
 			VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR |
 			VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_COMPACTION_BIT_KHR, // allow compaction
@@ -516,29 +549,17 @@ private:
 	* create top-level acceleration structure
 	*/
 	void createTopLevelAccelerationStructure() {
-		size_t nbInstancne = 9; // 9 bunnies
+		/*size_t nbInstancne = 1;
 		std::vector<VkAccelerationStructureInstanceKHR> instances{};
-
-		std::vector<VkTransformMatrixKHR> transforms{
-			vktools::toTransformMatrixKHR(glm::translate(glm::mat4(1.f), glm::vec3(2, 0, 2))),
-			vktools::toTransformMatrixKHR(glm::translate(glm::mat4(1.f), glm::vec3(0, 0, 2))),
-			vktools::toTransformMatrixKHR(glm::translate(glm::mat4(1.f), glm::vec3(-2, 0, 2))),
-			vktools::toTransformMatrixKHR(glm::translate(glm::mat4(1.f), glm::vec3(2, 0, 0))),
-			vktools::toTransformMatrixKHR(glm::translate(glm::mat4(1.f), glm::vec3(0, 0, 0))),
-			vktools::toTransformMatrixKHR(glm::translate(glm::mat4(1.f), glm::vec3(-2, 0, 0))),
-			vktools::toTransformMatrixKHR(glm::translate(glm::mat4(1.f), glm::vec3(2, 0, -2))),
-			vktools::toTransformMatrixKHR(glm::translate(glm::mat4(1.f), glm::vec3(0, 0, -2))),
-			vktools::toTransformMatrixKHR(glm::translate(glm::mat4(1.f), glm::vec3(-2, 0, -2)))
-		};
-
-		//blas containing 1 bunny
-		uint64_t blasAddress = getBlasDeviceAddress(devices.device, blasHandles[0].accel);
-
-		for (uint32_t i = 0; i < static_cast<uint32_t>(nbInstancne); ++i) {
+		uint64_t blasAddress = getBlasDeviceAddress(devices.device, blasHandles[0].accel);*/
+		std::vector<VkAccelerationStructureInstanceKHR> instances{};
+		//for (uint32_t i = 0; i < static_cast<uint32_t>(nbInstancne); ++i) {
+		//for (size_t i = 0; i < gltfDioramaModel.primitives.size(); ++i) {
+		for(VulkanGLTF::Node& node : gltfDioramaModel.nodes){
 			VkAccelerationStructureInstanceKHR instance;
-			instance.transform = transforms[i];
-			instance.instanceCustomIndex = 0; //index of model? -> model[0] -> bunny
-			instance.accelerationStructureReference = blasAddress;
+			instance.transform = vktools::toTransformMatrixKHR(node.matrix);
+			instance.instanceCustomIndex = node.primitiveIndex;
+			instance.accelerationStructureReference = getBlasDeviceAddress(devices.device, blasHandles[node.primitiveIndex].accel);
 			instance.instanceShaderBindingTableRecordOffset = 0; // we will use the same hit group for all object
 			instance.flags = VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR;
 			instance.mask = 0xFF;
@@ -644,7 +665,7 @@ private:
 
 		for (size_t i = 0; i < static_cast<size_t>(MAX_FRAMES_IN_FLIGHT); ++i) {
 			VkDescriptorBufferInfo camMatricesInfo{ uniformBuffers[i], 0, sizeof(CameraMatrices) };
-			VkDescriptorBufferInfo sceneBufferInfo{ sceneBuffer, 0, sizeof(ObjInstance) };
+			VkDescriptorBufferInfo sceneBufferInfo{ sceneBuffer, 0, objInstances.size() * sizeof(ObjInstance) };
 
 			std::vector<VkWriteDescriptorSet> writes;
 			writes.emplace_back(descriptorSetBindings.makeWrite(descriptorSets[i], 0, &camMatricesInfo));
@@ -665,12 +686,18 @@ private:
 			VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
 			1,
 			VK_SHADER_STAGE_RAYGEN_BIT_KHR); //output image
+		rtDescriptorSetBindings.addBinding(2,
+			VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+			2,
+			VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR); //output image
 
 		//create rt descriptor pool & layout
 		uint32_t nbRtDescriptorSet = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
 		rtDescriptorPool = rtDescriptorSetBindings.createDescriptorPool(devices.device, nbRtDescriptorSet);
 		rtDescriptorSetLayout = rtDescriptorSetBindings.createDescriptorSetLayout(devices.device);
 		rtDescriptorSets = vktools::allocateDescriptorSets(devices.device, rtDescriptorSetLayout, rtDescriptorPool, nbRtDescriptorSet);
+
+		VkDescriptorBufferInfo primitiveInfo{ gltfDioramaModel.primitiveBuffer, 0, VK_WHOLE_SIZE };
 
 		//update raytrace descriptor sets
 		for (uint32_t i = 0; i < nbRtDescriptorSet; ++i) {
@@ -683,6 +710,7 @@ private:
 			std::vector<VkWriteDescriptorSet> writes;
 			writes.emplace_back(rtDescriptorSetBindings.makeWrite(rtDescriptorSets[i], 0, &descAsInfo));
 			writes.emplace_back(rtDescriptorSetBindings.makeWrite(rtDescriptorSets[i], 1, &imageInfo));
+			writes.emplace_back(rtDescriptorSetBindings.makeWrite(rtDescriptorSets[i], 2, &primitiveInfo));
 			vkUpdateDescriptorSets(devices.device, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
 		}
 	}

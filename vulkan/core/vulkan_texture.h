@@ -22,7 +22,7 @@ public:
 	/** texture buffer handle */
 	VkImage image = VK_NULL_HANDLE;
 	/** image descriptor */
-	VkDescriptorImageInfo descriptor{};
+	VkDescriptorImageInfo descriptor{VK_NULL_HANDLE, VK_NULL_HANDLE };
 };
 
 class Texture2D : public TextureBase {
