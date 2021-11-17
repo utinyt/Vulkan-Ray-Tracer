@@ -423,6 +423,12 @@ private:
 	VkPipeline offscreenPipeline = VK_NULL_HANDLE;
 	/** general pipeline layout */
 	VkPipelineLayout offscreenPipelineLayout = VK_NULL_HANDLE;
+	/* push constancts for rasterizer pipeline*/
+	struct RasterPushConstant {
+		glm::mat4 modelMatrix{ 1.f };
+		glm::vec3 lightPos;
+		uint32_t materialId = 0;
+	} rasterPushConstants;
 
 
 	/*
@@ -627,19 +633,25 @@ private:
 	* create general (rasterizer) pipeline
 	*/
 	void createOffscreenPipeline() {
-		/*auto bindingDescription = mesh.getBindingDescription();
-		auto attributeDescription = mesh.getAttributeDescriptions();
-
 		PipelineGenerator gen(devices.device);
-		gen.addVertexInputBindingDescription(bindingDescription);
-		gen.addVertexInputAttributeDescription(attributeDescription);
+		gen.addVertexInputBindingDescription({
+			{0, sizeof(glm::vec3)},
+			{1, sizeof(glm::vec3)},
+			{2, sizeof(glm::vec2)}
+		});
+		gen.addVertexInputAttributeDescription({
+			{0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0}, //pos
+			{1, 1, VK_FORMAT_R32G32B32_SFLOAT, 0}, //normal
+			{2, 2, VK_FORMAT_R32G32_SFLOAT, 0}, //texcoord0
+		});
 		gen.addDescriptorSetLayout({ descriptorSetLayout });
+		gen.addPushConstantRange({ {VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(RasterPushConstant)} });
 		gen.addShader(vktools::createShaderModule(devices.device, vktools::readFile("shaders/rasterizer_vert.spv")),
 			VK_SHADER_STAGE_VERTEX_BIT);
 		gen.addShader(vktools::createShaderModule(devices.device, vktools::readFile("shaders/rasterizer_frag.spv")),
 			VK_SHADER_STAGE_FRAGMENT_BIT);
 
-		gen.generate(offscreenRenderPass, &offscreenPipeline, &offscreenPipelineLayout);*/
+		gen.generate(offscreenRenderPass, &offscreenPipeline, &offscreenPipelineLayout);
 	}
 
 	/*
@@ -982,11 +994,27 @@ private:
 		vkCmdBindDescriptorSets(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, offscreenPipelineLayout,
 			0, 1, &descriptorSets[resourceIndex], 0, nullptr);
 
-		VkDeviceSize offsets[1] = { 0 };
-		for (auto& obj : objInstances) {
-			/*vkCmdBindVertexBuffers(cmdBuf, 0, 1, &vertexBuffer, offsets);
-			vkCmdBindIndexBuffer(cmdBuf, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-			vkCmdDrawIndexed(cmdBuf, static_cast<uint32_t>(mesh.indices.size()), 1, 0, 0, 0);*/
+		//bind vertex / index buffers
+		VkDeviceSize offsets[3] = { 0, 0, 0 };
+		VkBuffer vertexBuffers[3] = {
+			gltfDioramaModel.vertexBuffer,
+			gltfDioramaModel.normalBuffer,
+			gltfDioramaModel.uvBuffer
+		};
+		vkCmdBindVertexBuffers(cmdBuf, 0, 3, vertexBuffers, offsets);
+		vkCmdBindIndexBuffer(cmdBuf, gltfDioramaModel.indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+
+		rasterPushConstants.lightPos = glm::vec3(20, 20, 20);
+
+		//draw
+		for (VulkanGLTF::Node& node : gltfDioramaModel.nodes) {
+			VulkanGLTF::Primitive& primitive = gltfDioramaModel.primitives[node.primitiveIndex];
+			rasterPushConstants.modelMatrix = node.matrix;
+			rasterPushConstants.materialId = primitive.materialIndex;
+			vkCmdPushConstants(cmdBuf, offscreenPipelineLayout,
+				VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+				0, sizeof(RasterPushConstant), &rasterPushConstants);
+			vkCmdDrawIndexed(cmdBuf, primitive.indexCount, 1, primitive.firstIndex, 0, 0);
 		}
 	}
 };

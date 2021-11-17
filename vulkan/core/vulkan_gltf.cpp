@@ -382,8 +382,6 @@ void VulkanGLTF::addPrimitive(const tinygltf::Primitive& inputPrimitive, const t
 		bufferData.positions.push_back(glm::make_vec3(&positionBuffer[i * 3]));
 		bufferData.normals.push_back(normalsBuffer ? glm::normalize(glm::make_vec3(&normalsBuffer[i * 3])) : glm::vec3(0.f));
 		bufferData.texCoord0s.push_back(texCoordsBuffer ? glm::make_vec2(&texCoordsBuffer[i * 2]) : glm::vec2(0.f));
-		
-			//std::cout << "u = " << bufferData.texCoord0s.back()[0] << "\tv = " << bufferData.texCoord0s.back()[1] << std::endl;
 		bufferData.colors.push_back(glm::vec3(1.f));
 		bufferData.tangents.push_back(tangentsBuffer ? glm::make_vec4(&tangentsBuffer[i * 4]) : glm::vec4(0.f));
 	}

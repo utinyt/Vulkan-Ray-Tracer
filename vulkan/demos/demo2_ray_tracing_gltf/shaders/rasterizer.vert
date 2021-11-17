@@ -10,14 +10,23 @@ layout(binding = 0, set = 0) uniform CameraMatrices{
 
 layout(location = 0) in vec3 inPos;
 layout(location = 1) in vec3 inNormal;
-layout(location = 0) out vec3 normal;
-layout(location = 1) out vec3 viewFragPos;
-layout(location = 2) out vec3 lightPos;
+layout(location = 2) in vec2 inUV;
+layout(location = 0) out vec3 outNormal;
+layout(location = 1) out vec2 outUV;
+layout(location = 2) out vec3 viewFragPos;
+layout(location = 3) out vec3 viewLightPos;
+
+layout(push_constant) uniform RasterPushConstant{
+	mat4 modelMatrix;
+	vec3 lightPos;
+	uint materialId;
+};
 
 void main(){
-	mat4 modelView = cam.view;
+	mat4 modelView = cam.view * modelMatrix;
 	viewFragPos = (modelView * vec4(inPos, 1.f)).xyz;
 	gl_Position = cam.proj * vec4(viewFragPos , 1.f);
-	normal = mat3(transpose(cam.viewInverse)) * inNormal;
-	lightPos = (cam.view * vec4(2.f, 2.f, 2.f, 1.f)).xyz;
+	outNormal = mat3(transpose(cam.viewInverse)) * inNormal;
+	viewLightPos = (cam.view * vec4(lightPos, 1.f)).xyz;
+	outUV = inUV;
 }
