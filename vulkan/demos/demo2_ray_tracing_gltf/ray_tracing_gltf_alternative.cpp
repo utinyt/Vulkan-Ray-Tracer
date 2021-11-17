@@ -24,17 +24,12 @@ public:
 		ImGui::RadioButton("rasterizer", &renderMode, RENDER_MODE::RASTERIZER);
 		if (renderMode != userInput.renderMode) {
 			userInput.renderMode = renderMode;
-			rerecordcommandBuffer = true;
 		}
 		if (renderMode == RENDER_MODE::RASTERIZER) {
 			ImGui::SliderFloat("Light position X", &userInput.lightPos.x, -3.0f, 3.0f);
 			ImGui::SliderFloat("Light position Y", &userInput.lightPos.y, -3.0f, 3.0f);
 			ImGui::SliderFloat("Light position Z", &userInput.lightPos.z, -3.0f, 3.0f);
 			static glm::vec3 lightPos;
-			if (lightPos != userInput.lightPos) {
-				lightPos = userInput.lightPos;
-				rerecordcommandBuffer = true;
-			}
 		}
 
 		ImGui::End();
@@ -61,11 +56,22 @@ public:
 	*/
 	VulkanApp(int width, int height, const std::string& appName)
 		: VulkanAppBase(width, height, appName) {
+		//extensions
 		enabledDeviceExtensions.push_back(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME);
 		enabledDeviceExtensions.push_back(VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME);
 		enabledDeviceExtensions.push_back(VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME);
 		enabledDeviceExtensions.push_back(VK_KHR_SHADER_CLOCK_EXTENSION_NAME);
+
+		//imgui
 		imguiBase = new Imgui;
+
+		//command buffer settings
+		commandPoolFlags =
+			VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | //short lived
+			VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT; //automatic reset via vkBeginCommandBuffer
+		buildCommandBuffersEveryFrame = true;
+
+		MAX_FRAMES_IN_FLIGHT = 1;
 	}
 
 	/*
@@ -250,7 +256,7 @@ public:
 		submitInfo.pWaitSemaphores = &presentCompleteSemaphores[currentFrame];
 		submitInfo.pWaitDstStageMask = waitStages;
 		submitInfo.commandBufferCount = 1;
-		size_t commandBufferIndex = currentFrame * framebuffers.size() + imageIndex;
+		size_t commandBufferIndex = imageIndex;
 		submitInfo.pCommandBuffers = &commandBuffers[commandBufferIndex];
 		submitInfo.signalSemaphoreCount = 1;
 		submitInfo.pSignalSemaphores = &renderCompleteSemaphores[currentFrame];
@@ -266,6 +272,8 @@ public:
 			oldViewMatrix = cameraMatrices.view;
 		}
 		rtPushConstants.frame++;
+
+		buildCommandBuffer();
 	}
 
 	/*
@@ -298,7 +306,12 @@ public:
 	/*
 	* record command buffer
 	*/
-	virtual void recordCommandBuffer() override {
+	virtual void recordCommandBuffer() override { }
+
+	/*
+	* record command buffer every frame
+	*/
+	void buildCommandBuffer() {
 		VkCommandBufferBeginInfo cmdBufBeginInfo{};
 		cmdBufBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
@@ -306,7 +319,6 @@ public:
 		clearValues[0].color = { 0.05f, 0.05f, 0.05f, 1.f };
 		clearValues[1].depthStencil = { 1.f, 0 };
 
-		rtPushConstants.clearColor = { 0.05f, 0.05f, 0.05f, 1.f };
 		rtPushConstants.lightPos = { 20.f, 20.f, 20.f };
 
 		//for rasterizer render pass
@@ -323,18 +335,18 @@ public:
 		postRenderPassBeginInfo.renderPass = postRenderPass;
 		postRenderPassBeginInfo.renderArea = { {0, 0},swapchain.extent };
 
-		for (size_t i = 0; i < framebuffers.size() * MAX_FRAMES_IN_FLIGHT; ++i) {
+		for (size_t i = 0; i < framebuffers.size(); ++i) {
 			VK_CHECK_RESULT(vkBeginCommandBuffer(commandBuffers[i], &cmdBufBeginInfo));
 
 			//#1 raytracing
-			size_t resourceIndex = i / framebuffers.size();
 			if (static_cast<Imgui*>(imguiBase)->userInput.renderMode == Imgui::RENDER_MODE::RAYRACE) {
-				raytrace(commandBuffers[i], resourceIndex);
+				raytrace(commandBuffers[i], currentFrame);
 			}
+			//#1 or rasterization
 			else {
-				offscreenRenderPassBeginInfo.framebuffer = offscreenFramebuffers[resourceIndex].framebuffer;
+				offscreenRenderPassBeginInfo.framebuffer = offscreenFramebuffers[currentFrame].framebuffer;
 				vkCmdBeginRenderPass(commandBuffers[i], &offscreenRenderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
-				rasterize(commandBuffers[i], resourceIndex);
+				rasterize(commandBuffers[i], currentFrame);
 				vkCmdEndRenderPass(commandBuffers[i]);
 			}
 
@@ -346,10 +358,10 @@ public:
 			vktools::setViewportScissorDynamicStates(commandBuffers[i], swapchain.extent);
 			vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, postPipeline);
 			vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, postPipelineLayout, 0, 1,
-				&postDescriptorSets[resourceIndex], 0, nullptr);
+				&postDescriptorSets[currentFrame], 0, nullptr);
 			vkCmdDraw(commandBuffers[i], 3, 1, 0, 0); //full screen triangle
 
-			imguiBase->drawFrame(commandBuffers[i], resourceIndex);
+			imguiBase->drawFrame(commandBuffers[i], currentFrame);
 
 			vkCmdEndRenderPass(commandBuffers[i]);
 			VK_CHECK_RESULT(vkEndCommandBuffer(commandBuffers[i]));
@@ -466,7 +478,7 @@ private:
 	VkBuffer rtSBTBuffer = VK_NULL_HANDLE;
 	/* push constancts for rt pipeline*/
 	struct RtPushConstant {
-		glm::vec4 clearColor;
+		glm::vec4 clearColor = { 0.05f, 0.05f, 0.05f, 1.f };
 		glm::vec3 lightPos;
 		float lightIntensity = 100.f;
 		int lightType = 0;
@@ -727,7 +739,7 @@ private:
 		rtDescriptorSetBindings.addBinding(2,
 			VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 			1,
-			VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR); //output image
+			VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR);
 
 		//create rt descriptor pool & layout
 		uint32_t nbRtDescriptorSet = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
@@ -850,7 +862,7 @@ private:
 		rayPipelineInfo.groupCount = static_cast<uint32_t>(rtShaderGroups.size());
 		rayPipelineInfo.pGroups = rtShaderGroups.data();
 
-		rayPipelineInfo.maxPipelineRayRecursionDepth = 10; //ray depth
+		rayPipelineInfo.maxPipelineRayRecursionDepth = 2; //ray depth
 		rayPipelineInfo.layout = rtPipelineLayout;
 
 		VK_CHECK_RESULT(vkfp::vkCreateRayTracingPipelinesKHR(devices.device, {}, {}, 1, &rayPipelineInfo, nullptr, &rtPipeline));
@@ -977,6 +989,10 @@ private:
 	* @param descriptorSetIndex
 	*/
 	void raytrace(VkCommandBuffer cmdBuf, size_t descriptorSetIndex) {
+		/*if (rtPushConstants.frame > 2000) {
+			return;
+		}*/
+
 		vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, rtPipeline);
 
 		std::vector<VkDescriptorSet> descSets{ rtDescriptorSets[descriptorSetIndex], descriptorSets[descriptorSetIndex] };

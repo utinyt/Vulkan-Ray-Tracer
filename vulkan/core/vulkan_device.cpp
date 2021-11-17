@@ -75,7 +75,7 @@ void VulkanDevice::cleanup() {
 /*
 * create command pool - use no flags
 */
-void VulkanDevice::createCommandPool() {
+void VulkanDevice::createCommandPool(VkCommandPoolCreateFlags flags) {
 	if (commandPool != VK_NULL_HANDLE) {
 		throw std::runtime_error("VulkanDeivce::createCommandPool() called multiple times");
 	}
@@ -83,7 +83,7 @@ void VulkanDevice::createCommandPool() {
 	VkCommandPoolCreateInfo poolInfo{};
 	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 	poolInfo.queueFamilyIndex = indices.graphicsFamily.value();
-	poolInfo.flags = 0;
+	poolInfo.flags = flags;
 
 	VK_CHECK_RESULT(vkCreateCommandPool(device, &poolInfo, nullptr, &commandPool));
 	LOG("created:\tcommand pool");

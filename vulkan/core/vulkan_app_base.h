@@ -89,6 +89,10 @@ protected:
 	VkImageView multisampleColorImageView = VK_NULL_HANDLE;
 	/** image sample count */
 	VkSampleCountFlagBits sampleCount = VK_SAMPLE_COUNT_1_BIT;
+	/** command pool flags */
+	VkCommandPoolCreateFlags commandPoolFlags = 0;
+	/** indicate app using pre-recoreded command buffers or re-reocrd every frame */
+	bool buildCommandBuffersEveryFrame = false;
 	/** frame time & elapsed time*/
 	float dt = 0, oldTime = 0;
 

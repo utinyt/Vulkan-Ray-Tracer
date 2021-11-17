@@ -128,7 +128,7 @@ void VulkanAppBase::initVulkan() {
 	//physical & logical device
 	devices.pickPhysicalDevice(instance, surface, enabledDeviceExtensions);
 	devices.createLogicalDevice();
-	devices.createCommandPool();
+	devices.createCommandPool(commandPoolFlags);
 
 	swapchain.init(&devices, window);
 	swapchain.create();
@@ -253,6 +253,9 @@ void VulkanAppBase::update() {
 	if (imguiBase->updateBuffers() || (ImGui::IsMouseDown(ImGuiMouseButton(0)) && io.WantCaptureKeyboard) || imguiBase->rerecordcommandBuffer) {
 		if (imguiBase->rerecordcommandBuffer) {
 			imguiBase->rerecordcommandBuffer = false;
+		}
+		if (buildCommandBuffersEveryFrame = true) {
+			return;
 		}
 		resetCommandBuffer();
 		recordCommandBuffer();
@@ -469,7 +472,8 @@ void VulkanAppBase::createInstance() {
 * allocate empty command buffers
 */
 void VulkanAppBase::createCommandBuffers() {
-	commandBuffers.resize(swapchain.imageCount * MAX_FRAMES_IN_FLIGHT);
+	commandBuffers.resize(buildCommandBuffersEveryFrame ? 
+		swapchain.imageCount  : swapchain.imageCount * MAX_FRAMES_IN_FLIGHT);
 
 	VkCommandBufferAllocateInfo commandBufferInfo{};
 	commandBufferInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;

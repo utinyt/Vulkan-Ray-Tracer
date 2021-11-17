@@ -53,7 +53,6 @@ layout(push_constant) uniform Constants{
 } constants;
 
 void main() {
-	//SceneDesc objInstance = sceneDesc.i[0]; //gl_InstanceCustomIndexEXT - object that was hit
 	Indices indices = Indices(sceneDesc.indexAddress);
 	Vertices vertices = Vertices(sceneDesc.vertexAddress);
 	Normals normals = Normals(sceneDesc.normalAddress);
@@ -77,14 +76,14 @@ void main() {
 	vec3 v1 = vertices.v[triangleIndex.y];
 	vec3 v2 = vertices.v[triangleIndex.z];
 	vec3 worldPos = v0 * barycentrics.x + v1 * barycentrics.y + v2 * barycentrics.z;
-	worldPos = vec3(sceneDesc.transform * vec4(worldPos, 1.0));
+	worldPos = vec3(gl_ObjectToWorldEXT * vec4(worldPos, 1.0));
 
 	//normals of the triangle
 	vec3 n0 = normals.n[triangleIndex.x];
 	vec3 n1 = normals.n[triangleIndex.y];
 	vec3 n2 = normals.n[triangleIndex.z];
 	vec3 normal = n0 * barycentrics.x + n1 * barycentrics.y + n2 * barycentrics.z;
-	normal = normalize(vec3(sceneDesc.transformIT * vec4(normal, 0.0)));
+	normal = normalize(vec3(normal * gl_WorldToObjectEXT));
 
 	vec2 uv0 = texcoord0s.t[triangleIndex.x];
 	vec2 uv1 = texcoord0s.t[triangleIndex.y];
@@ -96,42 +95,45 @@ void main() {
 	
 	//new ray -> wi
 	vec3 rayOrigin = worldPos;
-	//////////////////////////////////////////////////////////////////////////////////
 	vec3 rayDirection = sampleBRDF(normal, rnd(prd.seed), rnd(prd.seed)); // = wi
-//
-//	vec3 textureColor = vec3(1.f);
-//	if(material.baseColorTextureIndex > -1)
-//		textureColor = texture(textures[material.baseColorTextureIndex], texcoord0).xyz;
-//
-//	vec3 f = textureColor * evalScattering(normal, rayDirection, material.baseColorFactor.xyz); // = NL * kd / PI
-//	float russianRoulette = 0.8;
-//	float p = pdfBRDF(normal, rayDirection) * russianRoulette;
-//
-//	prd.weight *= f/p;
-//
-//	prd.hitValue += emittance;
-//	
-//	//recursive call
-//	if(prd.depth < 10){
-//		prd.depth++;
-//		float tMin = 0.001;
-//		float tMax = 1000000;
-//		uint flags = gl_RayFlagsOpaqueEXT;
-//		traceRayEXT(topLevelAS,
-//			flags,
-//			0xFF,
-//			0,
-//			0,
-//			0,
-//			rayOrigin,
-//			tMin,
-//			rayDirection,
-//			tMax,
-//			0);
-//	}
-//////////////////////////////////////////////////////////////////////////////////
+
+	vec3 textureColor = vec3(1.f);
+	if(material.baseColorTextureIndex > -1)
+		textureColor = texture(textures[material.baseColorTextureIndex], texcoord0).xyz;
+
+	vec3 f = textureColor * evalScattering(normal, rayDirection, material.baseColorFactor.xyz); // = NL * kd / PI
+	float russianRoulette = 0.8;
+	float p = pdfBRDF(normal, rayDirection) * russianRoulette;
+
+	prd.weight *= f/p;
+
+	if(length(emittance) > 0){
+		prd.hitValue += prd.weight * emittance;
+	}
+	
+	//recursive call
+	if(prd.depth < 10){
+		prd.depth++;
+		float tMin = 0.001;
+		float tMax = 1000000;
+		uint flags = gl_RayFlagsOpaqueEXT;
+		traceRayEXT(topLevelAS,
+			flags,
+			0xFF,
+			0,
+			0,
+			0,
+			rayOrigin,
+			tMin,
+			rayDirection,
+			tMax,
+			0);
+	}
+	
+	//nvidia example
+	/*
 	const float p = 1/ PI;
-	float cos_theta = dot(rayDirection, normal);
+	float cos_theta = max(dot(rayDirection, normal), 0);
 	vec3 BRDF = material.baseColorFactor.xyz / PI;
 
 	if(prd.depth < 10){
@@ -152,5 +154,6 @@ void main() {
 			0);
 	}
 	vec3 incoming = prd.hitValue;
-	prd.hitValue = rayDirection;//emittance + (BRDF * incoming * cos_theta / p * 100);
+	prd.hitValue = emittance + (BRDF * incoming * cos_theta / p);
+	*/
 }

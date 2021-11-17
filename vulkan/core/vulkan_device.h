@@ -9,7 +9,7 @@ struct VulkanDevice {
 		const std::vector<const char*>& requiredExtensions);
 	void createLogicalDevice();
 	void cleanup();
-	void createCommandPool();
+	void createCommandPool(VkCommandPoolCreateFlags flags = 0);
 	
 	/** @brief create buffer & buffer memory */
 	MemoryAllocator::HostVisibleMemory createBuffer(VkBuffer& buffer, VkDeviceSize size,

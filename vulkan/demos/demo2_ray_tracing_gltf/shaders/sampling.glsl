@@ -4,16 +4,15 @@ const float PI = 3.141592;
 vec4 quaternionfFromTwoVectors(vec3 v1, vec3 v2){
 	vec4 q;
 	q.xyz = cross(v1, v2);
-	float v1Len = length(v1);
-	float v2Len = length(v2);
-	q.w = sqrt(v1Len * v1Len * v2Len * v2Len) + dot(v1,v2);
+	q.w = sqrt(dot(v1, v1) * dot(v2, v2)) + dot(v1,v2);
 	q = normalize(q);
 	return q;
 }
 
 //quaternion vector multiplication
 vec3 qtransform(vec4 q, vec3 v) {
-	return v + 2.0 * cross((cross(v, q.xyz) + q.w*v), q.wyz);
+	vec3 t = 2 * cross(q.xyz, v);
+	return v + q.w * t + cross(q.xyz, t);//2.0 * cross((cross(v, q.xyz) + q.w*v), q.wyz);
 }
 
 //importance sampling

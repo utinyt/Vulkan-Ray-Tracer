@@ -67,13 +67,13 @@ void main() {
         );
         hitValue += prd.hitValue;
     }
-    prd.hitValue = hitValue / float(nbSample);
+    hitValue = hitValue / float(nbSample);
 
     if(constants.frame > 0) {
         float a = 1.f / float(constants.frame + 1);
         vec3 oldColor = imageLoad(image, ivec2(gl_LaunchIDEXT.xy)).xyz;
-        imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(mix(oldColor, prd.hitValue, a), 1.0));
+        imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(mix(oldColor, hitValue, a), 1.0));
     }else{
-        imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(prd.hitValue, 1.0));
+        imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(hitValue, 1.0));
     }
 }
