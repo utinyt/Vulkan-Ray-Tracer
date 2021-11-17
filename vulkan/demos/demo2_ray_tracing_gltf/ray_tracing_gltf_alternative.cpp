@@ -19,8 +19,13 @@ public:
 		ImGui::Begin("Settings");
 
 		//toggle render mode
-		ImGui::RadioButton("raytrace", &userInput.renderMode, RENDER_MODE::RAYRACE); ImGui::SameLine();
-		ImGui::RadioButton("rasterizer", &userInput.renderMode, RENDER_MODE::RASTERIZER);
+		static int renderMode = RAYRACE;
+		ImGui::RadioButton("raytrace", &renderMode, RENDER_MODE::RAYRACE); ImGui::SameLine();
+		ImGui::RadioButton("rasterizer", &renderMode, RENDER_MODE::RASTERIZER);
+		if (renderMode != userInput.renderMode) {
+			userInput.renderMode = renderMode;
+			renderModeChanged = true;
+		}
 		if (userInput.renderMode == RENDER_MODE::RAYRACE) {
 			ImGui::SliderInt("Maximum ray depth", &userInput.maxRayDepth, 1, 30);
 		}
@@ -47,6 +52,8 @@ public:
 		int maxRayDepth = 10;
 		glm::vec3 lightPos{ 0.f, 1.5f, 0.1f };
 	}userInput;
+
+	bool renderModeChanged = false;
 };
 
 class VulkanApp : public VulkanAppBase {
@@ -267,9 +274,12 @@ public:
 
 	virtual void update() override {
 		VulkanAppBase::update();
-		if (oldViewMatrix != cameraMatrices.view) {
+		Imgui* imgui = static_cast<Imgui*>(imguiBase);
+		if (oldViewMatrix != cameraMatrices.view || imgui->renderModeChanged) {
 			rtPushConstants.frame = -1;
 			oldViewMatrix = cameraMatrices.view;
+			if (imgui->renderModeChanged)
+				imgui->renderModeChanged = false;
 		}
 		rtPushConstants.frame++;
 
