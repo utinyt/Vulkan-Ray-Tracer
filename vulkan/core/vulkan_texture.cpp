@@ -22,7 +22,7 @@ void TextureBase::cleanup() {
 * @param devices - abstracted vulkan device handle
 * @param path - texture file path
 */
-void Texture2D::load(VulkanDevice* devices, const std::string& path) {
+void Texture2D::load(VulkanDevice* devices, const std::string& path, VkFilter filter, VkSamplerAddressMode mode) {
 	this->devices = devices;
 	
 	//image load
@@ -34,7 +34,7 @@ void Texture2D::load(VulkanDevice* devices, const std::string& path) {
 		throw std::runtime_error("failed to load texture: " + path);
 	}
 
-	load(devices, pixels, width, height, imageSize, VK_FORMAT_R8G8B8A8_SRGB);
+	load(devices, pixels, width, height, imageSize, VK_FORMAT_R8G8B8A8_SRGB, filter, mode);
 	stbi_image_free(pixels);
 }
 
@@ -112,7 +112,7 @@ void Texture2D::load(VulkanDevice* devices, unsigned char* data,
 * @param devices - abstracted vulkan device handle
 * @param path - path to the folder containing 6 textures
 */
-void TextureCube::load(VulkanDevice* devices, const std::string& path){
+void TextureCube::load(VulkanDevice* devices, const std::string& path, VkFilter filter, VkSamplerAddressMode mode){
 	this->devices = devices;
 	//6 texture paths
 	std::vector<std::string> paths = {
@@ -218,7 +218,7 @@ void TextureCube::load(VulkanDevice* devices, const std::string& path){
 
 	//create sampler
 	VkSamplerCreateInfo samplerInfo = 
-		vktools::initializers::samplerCreateInfo(devices->availableFeatures, devices->properties);
+		vktools::initializers::samplerCreateInfo(devices->availableFeatures, devices->properties, filter, mode);
 	samplerInfo.compareOp = VK_COMPARE_OP_NEVER;
 	VK_CHECK_RESULT(vkCreateSampler(devices->device, &samplerInfo, nullptr, &descriptor.sampler));
 

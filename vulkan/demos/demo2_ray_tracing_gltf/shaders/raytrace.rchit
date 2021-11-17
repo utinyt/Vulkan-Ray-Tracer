@@ -17,16 +17,30 @@ layout(buffer_reference, scalar) readonly buffer Vertices {
 layout(buffer_reference, scalar) readonly buffer Normals {
 	vec3 n[]; //normals
 };
+layout(buffer_reference, scalar) readonly buffer Texcoord0s {
+	vec2 t[]; //normals
+};
 layout(buffer_reference, scalar) readonly buffer Indices {
 	uint i[]; //triangle indices
 };
+layout(buffer_reference, scalar) readonly buffer MaterialIndices {
+	uint i[]; //triangle indices
+};
+layout(buffer_reference, scalar) readonly buffer Materials {
+	ShadeMaterial m[]; //triangle indices
+};
+
+//ray tracing descriptors
 layout(binding = 0, set = 0) uniform accelerationStructureEXT topLevelAS;
 layout(binding = 2, set = 0) readonly  buffer Primitives {
 	Primitive prim[]; //triangle indices
 };
+
+//shared descriptors
 layout(binding = 1, set = 1, scalar) readonly buffer Scene {
 	SceneDesc sceneDesc;
 };
+layout(binding = 2, set = 1) uniform sampler2D textures[];
 
 layout(push_constant) uniform Constants{
 	vec4 clearColor;
@@ -40,10 +54,14 @@ void main() {
 	Indices indices = Indices(sceneDesc.indexAddress);
 	Vertices vertices = Vertices(sceneDesc.vertexAddress);
 	Normals normals = Normals(sceneDesc.normalAddress);
+	Texcoord0s texcoord0s = Texcoord0s(sceneDesc.uvAddress);
+	MaterialIndices materialIndices = MaterialIndices(sceneDesc.materialIndicesAddress);
+	Materials materials = Materials(sceneDesc.materialAddress);
 
 	Primitive primInfo = prim[gl_InstanceCustomIndexEXT];
 	uint indexOffset = primInfo.firstIndex + (3 * gl_PrimitiveID);
 	uint vertexOffset = primInfo.vertexStart;
+	uint materialIndex = primInfo.materialIndex;
 
 	ivec3 triangleIndex = ivec3(indices.i[indexOffset + 0], indices.i[indexOffset + 1], indices.i[indexOffset + 2]);
 	
@@ -65,6 +83,13 @@ void main() {
 	vec3 normal = n0 * barycentrics.x + n1 * barycentrics.y + n2 * barycentrics.z;
 	normal = normalize(vec3(sceneDesc.transformIT * vec4(normal, 0.0)));
 
+	vec2 uv0 = texcoord0s.t[triangleIndex.x];
+	vec2 uv1 = texcoord0s.t[triangleIndex.y];
+	vec2 uv2 = texcoord0s.t[triangleIndex.z];
+	vec2 texcoord0 = uv0 * barycentrics.x + uv1 * barycentrics.y + uv2 * barycentrics.z;
+
+	ShadeMaterial material = materials.m[materialIndex];
+
 	vec3 L;
 	//point light
 	if(constants.lightType == 0){
@@ -76,5 +101,7 @@ void main() {
 
 	float NL = max(dot(normal, L), 0.2);
 
-	prd.hitValue = vec3(NL, NL, NL);
+	prd.hitValue = NL * material.baseColorFactor.xyz;
+	if(material.baseColorTextureIndex > -1)
+		prd.hitValue *= texture(textures[material.baseColorTextureIndex], texcoord0).xyz;
 }

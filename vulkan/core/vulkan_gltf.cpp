@@ -190,7 +190,7 @@ void VulkanGLTF::loadImages(tinygltf::Model& input) {
 	images.resize(input.images.size());
 	for (int i = 0; i < input.images.size(); ++i) {
 		tinygltf::Image& srcImage = input.images[i];
-		images[i].load(devices, path + srcImage.uri);
+		images[i].load(devices, path + srcImage.uri, VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_REPEAT);
 	}
 }
 
@@ -230,7 +230,7 @@ void VulkanGLTF::loadMaterials(tinygltf::Model& input) {
 		}
 		//additional parameters
 		materials[i].alphaMode = srcMaterial.alphaMode;
-		materials[i].alphaCutoff = srcMaterial.alphaCutoff;
+		materials[i].alphaCutoff = static_cast<float>(srcMaterial.alphaCutoff);
 		materials[i].doubleSided = srcMaterial.doubleSided;
 		materials[i].emissiveFactor = glm::make_vec3(srcMaterial.emissiveFactor.data());
 	}
@@ -382,6 +382,8 @@ void VulkanGLTF::addPrimitive(const tinygltf::Primitive& inputPrimitive, const t
 		bufferData.positions.push_back(glm::make_vec3(&positionBuffer[i * 3]));
 		bufferData.normals.push_back(normalsBuffer ? glm::normalize(glm::make_vec3(&normalsBuffer[i * 3])) : glm::vec3(0.f));
 		bufferData.texCoord0s.push_back(texCoordsBuffer ? glm::make_vec2(&texCoordsBuffer[i * 2]) : glm::vec2(0.f));
+		
+			//std::cout << "u = " << bufferData.texCoord0s.back()[0] << "\tv = " << bufferData.texCoord0s.back()[1] << std::endl;
 		bufferData.colors.push_back(glm::vec3(1.f));
 		bufferData.tangents.push_back(tangentsBuffer ? glm::make_vec4(&tangentsBuffer[i * 4]) : glm::vec4(0.f));
 	}
@@ -424,7 +426,7 @@ void VulkanGLTF::addPrimitive(const tinygltf::Primitive& inputPrimitive, const t
 
 	primitive.indexCount = indexCount;
 	primitive.vertexCount = static_cast<uint32_t>(vertexCount);
-	//primitive.materialIndex = inputPrimitive.material;
+	primitive.materialIndex = inputPrimitive.material;
 	primitives.push_back(primitive);
 	bufferData.materialIndices.push_back(inputPrimitive.material);
 }

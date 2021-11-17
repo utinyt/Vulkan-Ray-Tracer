@@ -287,7 +287,7 @@ public:
 		clearValues[1].depthStencil = { 1.f, 0 };
 
 		rtPushConstants.clearColor = { 0.95f, 0.95f, 0.95f, 1.f };
-		rtPushConstants.lightPos = { 2.f, 2.f, 2.f };
+		rtPushConstants.lightPos = { 20.f, 20.f, 20.f };
 
 		//for rasterizer render pass
 		VkRenderPassBeginInfo offscreenRenderPassBeginInfo{ VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO };
@@ -549,12 +549,7 @@ private:
 	* create top-level acceleration structure
 	*/
 	void createTopLevelAccelerationStructure() {
-		/*size_t nbInstancne = 1;
 		std::vector<VkAccelerationStructureInstanceKHR> instances{};
-		uint64_t blasAddress = getBlasDeviceAddress(devices.device, blasHandles[0].accel);*/
-		std::vector<VkAccelerationStructureInstanceKHR> instances{};
-		//for (uint32_t i = 0; i < static_cast<uint32_t>(nbInstancne); ++i) {
-		//for (size_t i = 0; i < gltfDioramaModel.primitives.size(); ++i) {
 		for(VulkanGLTF::Node& node : gltfDioramaModel.nodes){
 			VkAccelerationStructureInstanceKHR instance;
 			instance.transform = vktools::toTransformMatrixKHR(node.matrix);
@@ -657,19 +652,28 @@ private:
 		//scene description
 		descriptorSetBindings.addBinding(1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1,
 			VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR);
+		descriptorSetBindings.addBinding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, static_cast<uint32_t>(gltfDioramaModel.images.size()),
+			 VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR);
 
 		uint32_t nbDescriptorSet = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
 		descriptorSetLayout = descriptorSetBindings.createDescriptorSetLayout(devices.device);
 		descriptorPool = descriptorSetBindings.createDescriptorPool(devices.device, nbDescriptorSet);
 		descriptorSets = vktools::allocateDescriptorSets(devices.device, descriptorSetLayout, descriptorPool, nbDescriptorSet);
 
+		std::vector<VkDescriptorImageInfo> imageInfos{};
+		for (auto& image : gltfDioramaModel.images) {
+			imageInfos.emplace_back(image.descriptor);
+		}
+
 		for (size_t i = 0; i < static_cast<size_t>(MAX_FRAMES_IN_FLIGHT); ++i) {
 			VkDescriptorBufferInfo camMatricesInfo{ uniformBuffers[i], 0, sizeof(CameraMatrices) };
 			VkDescriptorBufferInfo sceneBufferInfo{ sceneBuffer, 0, objInstances.size() * sizeof(ObjInstance) };
+			VkDescriptorBufferInfo iamgesInfo{ sceneBuffer, 0, objInstances.size() * sizeof(ObjInstance) };
 
 			std::vector<VkWriteDescriptorSet> writes;
 			writes.emplace_back(descriptorSetBindings.makeWrite(descriptorSets[i], 0, &camMatricesInfo));
 			writes.emplace_back(descriptorSetBindings.makeWrite(descriptorSets[i], 1, &sceneBufferInfo));
+			writes.emplace_back(descriptorSetBindings.makeWriteArray(descriptorSets[i], 2, imageInfos.data()));
 			vkUpdateDescriptorSets(devices.device, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
 		}
 	}

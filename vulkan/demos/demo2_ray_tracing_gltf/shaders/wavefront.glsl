@@ -30,5 +30,11 @@ struct Primitive {
 	uint indexCount;
 	uint vertexStart;
 	uint vertexCount;
-	//int materialIndex;
+	int materialIndex;
+};
+
+struct ShadeMaterial {
+	vec4 baseColorFactor;
+	vec3 emissiveFactor;
+	int baseColorTextureIndex;
 };

@@ -44,7 +44,7 @@ public:
 	*/
 	struct Material {
 		glm::vec4 baseColorFactor = glm::vec4(1.f);
-		uint32_t baseColorTextureIndex = 0;
+		int32_t baseColorTextureIndex = -1;
 		uint32_t normalTextureIndex = 0;
 		glm::vec3 emissiveFactor = glm::vec4(0.f);
 		std::string alphaMode = "OPAQUE";
@@ -120,14 +120,14 @@ public:
 	struct ShadeMaterial {
 		glm::vec4 baseColorFactor = glm::vec4(1.f);
 		glm::vec3 emissiveFactor = glm::vec4(0.f);
-		uint32_t baseColorTextureIndex = 0;
+		int32_t baseColorTextureIndex = -1;
 	};
 	struct Primitive {
 		uint32_t firstIndex;
 		uint32_t indexCount;
 		uint32_t vertexOffset;
 		uint32_t vertexCount;
-		//int32_t materialIndex;
+		int32_t materialIndex;
 	};
 	std::vector<Primitive> primitives;
 	VkBuffer primitiveBuffer = VK_NULL_HANDLE;

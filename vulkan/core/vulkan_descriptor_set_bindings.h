@@ -31,6 +31,9 @@ public:
 	/** @brief create make write structure - VkDescriptorImageInfo */
 	VkWriteDescriptorSet makeWrite(VkDescriptorSet dstSet, uint32_t dstBinding,
 		const VkDescriptorImageInfo* pImageInfo, uint32_t arrayElement = 0);
+	/** @brief create make write structure - array of VkDescriptorImageInfo */
+	VkWriteDescriptorSet makeWriteArray(VkDescriptorSet dstSet, uint32_t dstBinding,
+		const VkDescriptorImageInfo* pImageInfo);
 	/** @brief create make write structure - VkDescriptorBufferInfo */
 	VkWriteDescriptorSet makeWrite(VkDescriptorSet dstSet, uint32_t dstBinding,
 		const VkDescriptorBufferInfo* pBufferInfo, uint32_t arrayElement = 0);
@@ -40,6 +43,8 @@ private:
 	std::vector<VkDescriptorPoolSize> getRequiredPoolSizes(uint32_t numSets = 1) const;
 	/** helper function for makeWrite*** */
 	VkWriteDescriptorSet makeWrite(VkDescriptorSet dstSet, uint32_t dstBinding, uint32_t arrayElement = 0);
+	/** helper function for makeWriteArray*** */
+	VkWriteDescriptorSet makeWriteArray(VkDescriptorSet dstSet, uint32_t dstBinding);
 
 	/** contains descriptor info & requirements*/
 	std::vector<VkDescriptorSetLayoutBinding> bindings;
