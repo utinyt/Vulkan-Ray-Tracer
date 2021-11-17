@@ -7,6 +7,8 @@
 #extension GL_GOOGLE_include_directive : enable
 #include "ray_common.glsl"
 #include "wavefront.glsl"
+#include "random.glsl"
+#include "sampling.glsl"
 
 layout(location = 0) rayPayloadInEXT hitPayload prd;
 hitAttributeEXT vec2 attrib;
@@ -90,19 +92,65 @@ void main() {
 	vec2 texcoord0 = uv0 * barycentrics.x + uv1 * barycentrics.y + uv2 * barycentrics.z;
 
 	ShadeMaterial material = materials.m[materialIndex];
+	vec3 emittance = material.emissiveFactor;
+	
+	//new ray -> wi
+	vec3 rayOrigin = worldPos;
+	//////////////////////////////////////////////////////////////////////////////////
+	vec3 rayDirection = sampleBRDF(normal, rnd(prd.seed), rnd(prd.seed)); // = wi
+//
+//	vec3 textureColor = vec3(1.f);
+//	if(material.baseColorTextureIndex > -1)
+//		textureColor = texture(textures[material.baseColorTextureIndex], texcoord0).xyz;
+//
+//	vec3 f = textureColor * evalScattering(normal, rayDirection, material.baseColorFactor.xyz); // = NL * kd / PI
+//	float russianRoulette = 0.8;
+//	float p = pdfBRDF(normal, rayDirection) * russianRoulette;
+//
+//	prd.weight *= f/p;
+//
+//	prd.hitValue += emittance;
+//	
+//	//recursive call
+//	if(prd.depth < 10){
+//		prd.depth++;
+//		float tMin = 0.001;
+//		float tMax = 1000000;
+//		uint flags = gl_RayFlagsOpaqueEXT;
+//		traceRayEXT(topLevelAS,
+//			flags,
+//			0xFF,
+//			0,
+//			0,
+//			0,
+//			rayOrigin,
+//			tMin,
+//			rayDirection,
+//			tMax,
+//			0);
+//	}
+//////////////////////////////////////////////////////////////////////////////////
+	const float p = 1/ PI;
+	float cos_theta = dot(rayDirection, normal);
+	vec3 BRDF = material.baseColorFactor.xyz / PI;
 
-	vec3 L;
-	//point light
-	if(constants.lightType == 0){
-		vec3 lightDir = constants.lightPosition - worldPos;
-		L = normalize(lightDir);
-	}else{
-		L = normalize(constants.lightPosition);
+	if(prd.depth < 10){
+		prd.depth++;
+		float tmin = 0.001;
+		float tmax = 1000000;
+		uint flags = gl_RayFlagsOpaqueEXT;
+		traceRayEXT(topLevelAS,
+			flags,
+			0xFF,
+			0,
+			0,
+			0,
+			rayOrigin,
+			tmin,
+			rayDirection,
+			tmax,
+			0);
 	}
-
-	float NL = max(dot(normal, L), 0.2);
-
-	prd.hitValue = NL * material.baseColorFactor.xyz;
-	if(material.baseColorTextureIndex > -1)
-		prd.hitValue *= texture(textures[material.baseColorTextureIndex], texcoord0).xyz;
+	vec3 incoming = prd.hitValue;
+	prd.hitValue = rayDirection;//emittance + (BRDF * incoming * cos_theta / p * 100);
 }

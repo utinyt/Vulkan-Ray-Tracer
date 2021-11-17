@@ -68,5 +68,8 @@
     <None Include="shaders\random.glsl">
       <Filter>Source Files\shaders</Filter>
     </None>
+    <None Include="shaders\sampling.glsl">
+      <Filter>Source Files\shaders</Filter>
+    </None>
   </ItemGroup>
 </Project>

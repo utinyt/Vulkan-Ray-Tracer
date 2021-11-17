@@ -719,7 +719,7 @@ private:
 		rtDescriptorSetBindings.addBinding(0,
 			VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,
 			1,
-			VK_SHADER_STAGE_RAYGEN_BIT_KHR); //tlas
+			VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR); //tlas
 		rtDescriptorSetBindings.addBinding(1,
 			VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
 			1,
@@ -850,7 +850,7 @@ private:
 		rayPipelineInfo.groupCount = static_cast<uint32_t>(rtShaderGroups.size());
 		rayPipelineInfo.pGroups = rtShaderGroups.data();
 
-		rayPipelineInfo.maxPipelineRayRecursionDepth = 1; //ray depth
+		rayPipelineInfo.maxPipelineRayRecursionDepth = 10; //ray depth
 		rayPipelineInfo.layout = rtPipelineLayout;
 
 		VK_CHECK_RESULT(vkfp::vkCreateRayTracingPipelinesKHR(devices.device, {}, {}, 1, &rayPipelineInfo, nullptr, &rtPipeline));

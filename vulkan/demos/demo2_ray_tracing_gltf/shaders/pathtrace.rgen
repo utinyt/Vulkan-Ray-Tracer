@@ -27,10 +27,16 @@ layout(push_constant) uniform Constants{
 
 void main() {
     //anti-aliasing
-    uint seed = tea(gl_LaunchIDEXT.y * gl_LaunchSizeEXT.x + gl_LaunchIDEXT.x, int(constants.frame));
+    uint seed = tea(gl_LaunchIDEXT.y * gl_LaunchSizeEXT.x + gl_LaunchIDEXT.x, int(clockARB()));
+
+    prd.seed = seed;
+    prd.depth = 0;
+    prd.hitValue = vec3(0.f);
+    prd.weight = vec3(1.f);
 
     vec3 hitValue = vec3(0.f);
-    for(int sampleNum = 0; sampleNum < 10; sampleNum++){
+    int nbSample = 1;
+    for(int sampleNum = 0; sampleNum < nbSample; sampleNum++){
         float r1 = rnd(seed);
         float r2 = rnd(seed);
         vec2 jitter = constants.frame == 0 ? vec2(0.5f, 0.5f) : vec2(r1, r2);
@@ -61,7 +67,7 @@ void main() {
         );
         hitValue += prd.hitValue;
     }
-    prd.hitValue = hitValue / 10.f;
+    prd.hitValue = hitValue / float(nbSample);
 
     if(constants.frame > 0) {
         float a = 1.f / float(constants.frame + 1);
