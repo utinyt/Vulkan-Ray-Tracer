@@ -187,6 +187,14 @@ void VulkanGLTF::cleanup() {
 * @param input - loaded gltf model
 */
 void VulkanGLTF::loadImages(tinygltf::Model& input) {
+	if (input.images.empty()) {
+		//add dummy texture
+		images.resize(1);
+		unsigned char pixel = 255;
+		images[0].load(devices, &pixel, 1, 1, 1, VK_FORMAT_R8_SRGB);
+		return;
+	}
+
 	images.resize(input.images.size());
 	for (int i = 0; i < input.images.size(); ++i) {
 		tinygltf::Image& srcImage = input.images[i];

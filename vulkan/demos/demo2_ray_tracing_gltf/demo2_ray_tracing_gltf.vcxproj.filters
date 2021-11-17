@@ -65,5 +65,8 @@
     <None Include="shaders\full_quad.vert">
       <Filter>Source Files\shaders</Filter>
     </None>
+    <None Include="shaders\random.glsl">
+      <Filter>Source Files\shaders</Filter>
+    </None>
   </ItemGroup>
 </Project>

@@ -139,9 +139,11 @@ void VulkanDevice::createLogicalDevice() {
 		VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME) != requiredExtensions.end()) {
 		if (vk12Features.bufferDeviceAddress == VK_TRUE && 
 			vk12Features.hostQueryReset == VK_TRUE && 
+			vk12Features.runtimeDescriptorArray == VK_TRUE &&
 			asFeatures.accelerationStructure == VK_TRUE) {
 			device12Features.bufferDeviceAddress = VK_TRUE;
 			device12Features.hostQueryReset = VK_TRUE;
+			device12Features.runtimeDescriptorArray = VK_TRUE;
 			deviceAsFeatures.accelerationStructure = VK_TRUE;
 			deviceFeatures.pNext = &device12Features;
 			device12Features.pNext = &deviceAsFeatures;

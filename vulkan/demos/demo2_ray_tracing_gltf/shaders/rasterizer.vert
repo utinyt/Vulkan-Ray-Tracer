@@ -26,7 +26,7 @@ void main(){
 	mat4 modelView = cam.view * modelMatrix;
 	viewFragPos = (modelView * vec4(inPos, 1.f)).xyz;
 	gl_Position = cam.proj * vec4(viewFragPos , 1.f);
-	outNormal = mat3(transpose(cam.viewInverse)) * inNormal;
+	outNormal = mat3(transpose(inverse(modelView))) * inNormal;
 	viewLightPos = (cam.view * vec4(lightPos, 1.f)).xyz;
 	outUV = inUV;
 }

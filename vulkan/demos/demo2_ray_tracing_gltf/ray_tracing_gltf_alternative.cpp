@@ -26,6 +26,16 @@ public:
 			userInput.renderMode = renderMode;
 			rerecordcommandBuffer = true;
 		}
+		if (renderMode == RENDER_MODE::RASTERIZER) {
+			ImGui::SliderFloat("Light position X", &userInput.lightPos.x, -3.0f, 3.0f);
+			ImGui::SliderFloat("Light position Y", &userInput.lightPos.y, -3.0f, 3.0f);
+			ImGui::SliderFloat("Light position Z", &userInput.lightPos.z, -3.0f, 3.0f);
+			static glm::vec3 lightPos;
+			if (lightPos != userInput.lightPos) {
+				lightPos = userInput.lightPos;
+				rerecordcommandBuffer = true;
+			}
+		}
 
 		ImGui::End();
 		ImGui::Render();
@@ -40,6 +50,7 @@ public:
 	/** imgui user input collection */
 	struct UserInput {
 		int renderMode = RAYRACE;
+		glm::vec3 lightPos{ 0.f, 1.5f, 0.1f };
 	}userInput;
 };
 
@@ -248,6 +259,15 @@ public:
 		submitFrame(imageIndex);
 	}
 
+	virtual void update() override {
+		VulkanAppBase::update();
+		if (oldViewMatrix != cameraMatrices.view) {
+			rtPushConstants.frame = -1;
+			oldViewMatrix = cameraMatrices.view;
+		}
+		rtPushConstants.frame++;
+	}
+
 	/*
 	* create framebuffers
 	*/
@@ -283,10 +303,10 @@ public:
 		cmdBufBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
 		std::array<VkClearValue, 2> clearValues{};
-		clearValues[0].color = { 0.2f, 0.0f, 0.f, 1.f };
+		clearValues[0].color = { 0.05f, 0.05f, 0.05f, 1.f };
 		clearValues[1].depthStencil = { 1.f, 0 };
 
-		rtPushConstants.clearColor = { 0.95f, 0.95f, 0.95f, 1.f };
+		rtPushConstants.clearColor = { 0.05f, 0.05f, 0.05f, 1.f };
 		rtPushConstants.lightPos = { 20.f, 20.f, 20.f };
 
 		//for rasterizer render pass
@@ -372,6 +392,8 @@ private:
 	std::vector<MemoryAllocator::HostVisibleMemory> uniformBufferMemories;
 	/** gltf model */
 	VulkanGLTF gltfDioramaModel;
+	/** view matrix of previous frame */
+	glm::mat4 oldViewMatrix;
 
 	/*
 	* object instances - scene descriptor
@@ -429,7 +451,7 @@ private:
 		glm::vec3 lightPos;
 		uint32_t materialId = 0;
 	} rasterPushConstants;
-
+	
 
 	/*
 	* ray trace pipeline
@@ -448,6 +470,7 @@ private:
 		glm::vec3 lightPos;
 		float lightIntensity = 100.f;
 		int lightType = 0;
+		int64_t frame = -1;
 	} rtPushConstants;
 	/*
 	* descriptors for raytracer
@@ -531,7 +554,7 @@ private:
 		VkBufferUsageFlags rtFlags = 
 			VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
 			VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
-		gltfDioramaModel.loadScene(&devices, "../../meshes/pica_pica_mini_diorama/scene.gltf", rtFlags);
+		gltfDioramaModel.loadScene(&devices, "../../meshes/scene.gltf", rtFlags);
 
 		std::vector<BlasGeometries> allBlas{}; //array of blas
 		allBlas.reserve(gltfDioramaModel.primitives.size());
@@ -680,7 +703,6 @@ private:
 		for (size_t i = 0; i < static_cast<size_t>(MAX_FRAMES_IN_FLIGHT); ++i) {
 			VkDescriptorBufferInfo camMatricesInfo{ uniformBuffers[i], 0, sizeof(CameraMatrices) };
 			VkDescriptorBufferInfo sceneBufferInfo{ sceneBuffer, 0, objInstances.size() * sizeof(ObjInstance) };
-			VkDescriptorBufferInfo iamgesInfo{ sceneBuffer, 0, objInstances.size() * sizeof(ObjInstance) };
 
 			std::vector<VkWriteDescriptorSet> writes;
 			writes.emplace_back(descriptorSetBindings.makeWrite(descriptorSets[i], 0, &camMatricesInfo));
@@ -704,7 +726,7 @@ private:
 			VK_SHADER_STAGE_RAYGEN_BIT_KHR); //output image
 		rtDescriptorSetBindings.addBinding(2,
 			VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-			2,
+			1,
 			VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR); //output image
 
 		//create rt descriptor pool & layout
@@ -762,15 +784,15 @@ private:
 		stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
 		stage.pName = "main";
 		//raygen
-		stage.module = vktools::createShaderModule(devices.device, vktools::readFile("shaders/raytrace_rgen.spv"));
+		stage.module = vktools::createShaderModule(devices.device, vktools::readFile("shaders/pathtrace_rgen.spv"));
 		stage.stage = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
 		stages[STAGE_RAYGEN] = stage;
 		//miss
-		stage.module = vktools::createShaderModule(devices.device, vktools::readFile("shaders/raytrace_rmiss.spv"));
+		stage.module = vktools::createShaderModule(devices.device, vktools::readFile("shaders/pathtrace_rmiss.spv"));
 		stage.stage = VK_SHADER_STAGE_MISS_BIT_KHR;
 		stages[STAGE_MISS] = stage;
 		//closest hit
-		stage.module = vktools::createShaderModule(devices.device, vktools::readFile("shaders/raytrace_rchit.spv"));
+		stage.module = vktools::createShaderModule(devices.device, vktools::readFile("shaders/pathtrace_rchit.spv"));
 		stage.stage = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
 		stages[STAGE_CLOSEST_HIT] = stage;
 
@@ -1003,8 +1025,7 @@ private:
 		};
 		vkCmdBindVertexBuffers(cmdBuf, 0, 3, vertexBuffers, offsets);
 		vkCmdBindIndexBuffer(cmdBuf, gltfDioramaModel.indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-
-		rasterPushConstants.lightPos = glm::vec3(20, 20, 20);
+		rasterPushConstants.lightPos = static_cast<Imgui*>(imguiBase)->userInput.lightPos;
 
 		//draw
 		for (VulkanGLTF::Node& node : gltfDioramaModel.nodes) {
