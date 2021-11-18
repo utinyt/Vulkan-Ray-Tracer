@@ -29,6 +29,18 @@ public:
 		}
 		ImGui::NewLine();
 
+		if (renderMode == RENDER_MODE::RAYRACE) {
+			ImGui::Text("Shadow");
+			static int shadow = 0;
+			ImGui::RadioButton("Soft shadow", &shadow, 0); ImGui::SameLine();
+			ImGui::RadioButton("Hard shadow", &shadow, 1);
+			if (shadow != userInput.shadow) {
+				userInput.shadow = shadow;
+				frameReset = true;
+			}
+			ImGui::NewLine();
+		}
+
 		static glm::vec3 lightPos = { 24.382f, 30.f, 0.1f };
 		ImGui::Text("Light sphere position");
 		ImGui::SliderFloat("X [-30, 30]", &lightPos.x, -30.0f, 30.0f);
@@ -80,6 +92,7 @@ public:
 		int rayPerPixel = 8;
 		float radius = 6;
 		float lightInternsity = 100;
+		int shadow = 0;
 		glm::vec3 lightPos{ 24.382f, 30.f, 0.1f };
 	}userInput;
 
@@ -366,6 +379,7 @@ public:
 		rtPushConstants.lightRadius = imgui->userInput.radius;
 		rtPushConstants.lightIntensity = imgui->userInput.lightInternsity;
 		rtPushConstants.rayPerPixel = imgui->userInput.rayPerPixel;
+		rtPushConstants.shadow = imgui->userInput.shadow;
 
 		//for rasterizer render pass
 		VkRenderPassBeginInfo offscreenRenderPassBeginInfo{ VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO };
@@ -531,6 +545,7 @@ private:
 		int64_t frame = -1;
 		int maxDepht = 10;
 		int rayPerPixel = 1;
+		int shadow = true;
 	} rtPushConstants;
 	/*
 	* descriptors for raytracer

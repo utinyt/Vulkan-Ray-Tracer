@@ -116,6 +116,9 @@ void main() {
 	vec3 sphereNormal = vec3(0.f);
 	vec3 spherePoint = vec3(0.f);
 	sampleSphere(sphereCenter, sphereRadius, rnd(prd.seed), rnd(prd.seed), sphereNormal, spherePoint);
+	if(pc.shadow == 1){
+		spherePoint = pc.lightPos;
+	}
 	
 	float p = pdfLight(sphereRadius) / geometryFactor(worldPos, spherePoint, normal, sphereNormal);
 	vec3 rayDirection = normalize(spherePoint - worldPos);

@@ -88,14 +88,6 @@ public:
 	void loadNode(const tinygltf::Model& model, int nodeIndex, const glm::mat4& parentMatrix);
 
 	/*
-	* draw
-	*/
-	/** @brief draw certain node and its children */
-	void drawNode(VkCommandBuffer cmdBuf, VkPipelineLayout pipelineLayout, Node& node);
-	/** @brief draw all node */
-	void draw(VkCommandBuffer cmdBuf, VkPipelineLayout pipelineLayout);
-
-	/*
 	* buffers
 	*/
 	struct BufferData {

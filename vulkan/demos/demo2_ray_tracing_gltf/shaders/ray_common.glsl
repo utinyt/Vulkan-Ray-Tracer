@@ -20,6 +20,7 @@ struct RtPushConstant{
 	int64_t frame;
 	int maxDepth;
 	int rayPerPixel;
+	int shadow;
 };
 
 const float russianRoulette = 0.8f;

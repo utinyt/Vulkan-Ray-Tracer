@@ -271,47 +271,6 @@ void VulkanGLTF::loadNode(const tinygltf::Model& model, int nodeIndex, const glm
 }
 
 /*
-* draw certain node and its children 
-*/
-void VulkanGLTF::drawNode(VkCommandBuffer cmdBuf, VkPipelineLayout pipelineLayout, Node& node) {
-	//if (node.visible == false) {
-	//	return;
-	//}
-	//if (node.mesh.size() > 0) {
-	//	//traverse node hierarchy to the top-most parent to get the final matrix
-	//	glm::mat4 nodeMatrix = node.matrix;
-	//	Node* currentParent = node.parent;
-	//	while (currentParent) {
-	//		nodeMatrix = currentParent->matrix * nodeMatrix;
-	//		currentParent = currentParent->parent;
-	//	}
-
-	//	//pass the final matrix to the vertex shader via push constants
-	//	vkCmdPushConstants(cmdBuf, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4), &nodeMatrix);
-	//	for (Primitive& primitive : node.mesh) {
-	//		if (primitive.indexCount > 0) {
-	//			Material& material = materials[primitive.materialIndex];
-	//			vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, material.pipeline);
-	//			vkCmdBindDescriptorSets(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 1, 1, &material.descriptorSet, 0, nullptr);
-	//			vkCmdDrawIndexed(cmdBuf, primitive.indexCount, 1, primitive.firstIndex, 0, 0);
-	//		}
-	//	}
-	//}
-
-	////draw all child
-	//for (auto& child : node.children) {
-	//	drawNode(cmdBuf, pipelineLayout, child);
-	//}
-}
-
-/*
-* draw all node 
-*/
-void VulkanGLTF::draw(VkCommandBuffer cmdBuf, VkPipelineLayout pipelineLayout) {
-
-}
-
-/*
 * get local matrix from the node 
 * 
 * @param inputNode
