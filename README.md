@@ -1,5 +1,5 @@
 # Vulkan Ray Tracer
-This is a real-time ray tracer using C++ / Vulkan / GLSL.
+This is a real-time ray tracer written in C++ / Vulkan / GLSL.
 
 ## Developing Environments
 * OS: Windows 10
