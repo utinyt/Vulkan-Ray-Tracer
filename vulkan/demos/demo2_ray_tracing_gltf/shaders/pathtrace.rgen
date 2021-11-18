@@ -47,10 +47,11 @@ void main() {
     prd.weight = vec3(1.f);
     prd.rayOrigin = origin.xyz;
     prd.rayDirection = direction.xyz;
+    prd.p = 0;
 
     vec3 hitValue = vec3(0.f);
     for(int i = 0; i < pc.rayPerPixel; ++i) {
-        for(; prd.depth < pc.maxDepht; prd.depth++){
+        for(; prd.depth < pc.maxDepth && rnd(seed) < russianRoulette; prd.depth++){
             traceRayEXT(topLevelAS, //acceleration structure
                 rayFlags,           //rayFlags
                 0xFF,               //cullMask
@@ -63,6 +64,10 @@ void main() {
                 tMax,               //ray maxRange
                 0                   //payload (location = 0)
             );
+            seed = tea(gl_LaunchIDEXT.y * gl_LaunchSizeEXT.x + gl_LaunchIDEXT.x + i, int(clockARB()));
+            if(prd.p < EPSILON){
+                break;
+            }
         }
         //acummulate color
         hitValue += prd.hitValue;
@@ -87,6 +92,7 @@ void main() {
         prd.weight = vec3(1.f);
         prd.rayOrigin = origin.xyz;
         prd.rayDirection = direction.xyz;
+        prd.p = 0;
     }
     hitValue /= float(pc.rayPerPixel);
 

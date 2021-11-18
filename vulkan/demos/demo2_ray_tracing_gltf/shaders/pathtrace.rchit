@@ -118,7 +118,7 @@ void main() {
 	sampleSphere(sphereCenter, sphereRadius, rnd(prd.seed), rnd(prd.seed), sphereNormal, spherePoint);
 	
 	float p = pdfLight(sphereRadius) / geometryFactor(worldPos, spherePoint, normal, sphereNormal);
-	vec3 rayDirection = spherePoint - worldPos;
+	vec3 rayDirection = normalize(spherePoint - worldPos);
 
 	float tMin = 0.001;
 	float tMax = 1000000;
@@ -134,12 +134,12 @@ void main() {
 		1,
 		rayOrigin,
 		0.001,
-		normalize(rayDirection),
-		length(rayDirection),
+		rayDirection,
+		length(spherePoint - worldPos) + 1,
 		1
 	);
 
-	if(prdDirectLightConnection){
+	if(prdDirectLightConnection && p > 0) {
 		vec3 f = textureColor * evalScattering(normal, rayDirection, material.baseColorFactor.xyz); // = NL * kd / PI
 		prd.hitValue += 0.5f * prd.weight * f / p * pc.lightIntensity;
 	}
@@ -150,8 +150,10 @@ void main() {
 	rayDirection = sampleBRDF(normal, rnd(prd.seed), rnd(prd.seed)); // = wi
 
 	vec3 f = textureColor * evalScattering(normal, rayDirection, material.baseColorFactor.xyz); // = NL * kd / PI
-	float russianRoulette = 1.0; //0.8f
 	p = pdfBRDF(normal, rayDirection) * russianRoulette;
+	prd.p = p;
+	if(p < EPSILON)
+		return;
 
 	prd.weight *= f/p;
 
@@ -159,7 +161,7 @@ void main() {
 		prd.hitValue += 0.5f * prd.weight * emittance;
 	}
 	
-	prd.rayOrigin = rayOrigin;
+	prd.rayOrigin = rayOrigin + rayDirection * EPSILON;
 	prd.rayDirection = rayDirection;
 
 	/*

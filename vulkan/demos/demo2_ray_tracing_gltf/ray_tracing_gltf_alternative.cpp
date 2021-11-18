@@ -16,9 +16,10 @@ class Imgui : public ImguiBase {
 public:
 	virtual void newFrame() override {
 		ImGui::NewFrame();
-		ImGui::Begin("Settings");
+		ImGui::Begin("Settings", 0, flags);
 
 		//toggle render mode
+		ImGui::Text("Render mode");
 		static int renderMode = RAYRACE;
 		ImGui::RadioButton("raytrace", &renderMode, RENDER_MODE::RAYRACE); ImGui::SameLine();
 		ImGui::RadioButton("rasterize", &renderMode, RENDER_MODE::RASTERIZER);
@@ -26,8 +27,9 @@ public:
 			userInput.renderMode = renderMode;
 			frameReset = true;
 		}
-		
-		static glm::vec3 lightPos = { 25.135f, 23.874f, 0.1f };
+		ImGui::NewLine();
+
+		static glm::vec3 lightPos = { 24.382f, 30.f, 0.1f };
 		ImGui::Text("Light sphere position");
 		ImGui::SliderFloat("X [-30, 30]", &lightPos.x, -30.0f, 30.0f);
 		ImGui::SliderFloat("Y [-30, 30]", &lightPos.y, -30.0f, 30.0f);
@@ -36,14 +38,15 @@ public:
 			userInput.lightPos = lightPos;
 			frameReset = true;
 		}
+		ImGui::NewLine();
 
-		static float radius = 4, lightIntensity = 10;
+		static float radius = 6, lightIntensity = 100;
 		static int depth = 5, rayPerPixel = 1;
 		if (userInput.renderMode == RENDER_MODE::RAYRACE) {
 			ImGui::Text("Light sphere radius");
 			ImGui::SliderFloat("[1, 10]", &radius, 1, 10);
 			ImGui::Text("Light intensity");
-			ImGui::SliderFloat("[1, 20]", &lightIntensity, 1, 20);
+			ImGui::SliderFloat("[1, 100]", &lightIntensity, 1, 100);
 			ImGui::Text("Maximum ray depth");
 			ImGui::SliderInt("[1, 30]", &depth, 1, 30);
 			ImGui::Text("Ray per pixel (!Warning: drastic frame drop)");
@@ -75,9 +78,9 @@ public:
 		int renderMode = RAYRACE;
 		int maxRayDepth = 5;
 		int rayPerPixel = 1;
-		float radius = 4;
-		float lightInternsity = 10;
-		glm::vec3 lightPos{ 25.135f, 23.874f, 0.1f };
+		float radius = 6;
+		float lightInternsity = 100;
+		glm::vec3 lightPos{ 24.382f, 30.f, 0.1f };
 	}userInput;
 
 	bool frameReset = false;
@@ -188,8 +191,8 @@ public:
 		VulkanAppBase::initApp();
 
 		//camera
-		camera.camPos = glm::vec3(0, 4, 8);
-		camera.camFront = glm::vec3(0, -4, -8);
+		camera.camPos = glm::vec3(-10, 15, 40);
+		camera.camFront = glm::vec3(10, -10, -40);
 		camera.camUp = glm::vec3(0, 1, 0);
 
 		//request ray tracing properties

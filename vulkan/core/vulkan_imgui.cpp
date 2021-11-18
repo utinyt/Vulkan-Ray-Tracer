@@ -22,6 +22,11 @@ void ImguiBase::init(VulkanDevice* devices, int width, int height,
 	style.Colors[ImGuiCol_MenuBarBg]		= ImVec4(1.f, 0.f, 0.f, 0.4f);
 	style.Colors[ImGuiCol_Header]			= ImVec4(1.f, 0.f, 0.f, 0.4f);
 	style.Colors[ImGuiCol_CheckMark]		= ImVec4(0.f, 1.f, 0.f, 1.0f);
+	style.FrameBorderSize = 1.f;
+	ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 12.0f);
+	
+	//window flags
+	flags |= (ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoBackground);
 
 	//dimensions
 	ImGuiIO& io = ImGui::GetIO();

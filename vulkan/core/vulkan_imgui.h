@@ -50,4 +50,6 @@ public:
 
 	/** for application update */
 	bool rerecordcommandBuffer = false;
+	/** window flags */
+	ImGuiWindowFlags flags;
 };

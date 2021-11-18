@@ -9,6 +9,7 @@ struct hitPayload{
 	vec3 weight;
 	vec3 rayOrigin;
 	vec3 rayDirection;
+	float p;
 };
 
 struct RtPushConstant{
@@ -17,6 +18,9 @@ struct RtPushConstant{
 	float lightRadius;
 	float lightIntensity;
 	int64_t frame;
-	int maxDepht;
+	int maxDepth;
 	int rayPerPixel;
 };
+
+const float russianRoulette = 0.8f;
+const float EPSILON = 0.0001f;
