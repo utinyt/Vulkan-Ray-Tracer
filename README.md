@@ -23,7 +23,7 @@ A lot of code were based on these great resources:
 
 ## Updates
 ## Path Tracing + Next Event Estimation - (Nov.17.2021)
-![path_tracing](https://github.com/utinyt/Vulkan-Ray-Tracer/blob/master/screenshots/pathtracing.pne)<br>
+![path_tracing](https://github.com/utinyt/Vulkan-Ray-Tracer/blob/master/screenshots/pathtracing.png)<br>
 
 #### Next Event Estimation
 ![path_tracing_nee](https://github.com/utinyt/Vulkan-Ray-Tracer/blob/master/screenshots/pathtracing.gif)<br>
