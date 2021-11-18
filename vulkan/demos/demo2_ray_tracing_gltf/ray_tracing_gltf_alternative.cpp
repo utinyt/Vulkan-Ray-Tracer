@@ -21,19 +21,43 @@ public:
 		//toggle render mode
 		static int renderMode = RAYRACE;
 		ImGui::RadioButton("raytrace", &renderMode, RENDER_MODE::RAYRACE); ImGui::SameLine();
-		ImGui::RadioButton("rasterizer", &renderMode, RENDER_MODE::RASTERIZER);
+		ImGui::RadioButton("rasterize", &renderMode, RENDER_MODE::RASTERIZER);
 		if (renderMode != userInput.renderMode) {
 			userInput.renderMode = renderMode;
-			renderModeChanged = true;
+			frameReset = true;
 		}
+		
+		static glm::vec3 lightPos = { 25.135f, 23.874f, 0.1f };
+		ImGui::Text("Light sphere position");
+		ImGui::SliderFloat("X [-30, 30]", &lightPos.x, -30.0f, 30.0f);
+		ImGui::SliderFloat("Y [-30, 30]", &lightPos.y, -30.0f, 30.0f);
+		ImGui::SliderFloat("Z [-30, 30]", &lightPos.z, -30.0f, 30.0f);
+		if (lightPos != userInput.lightPos) {
+			userInput.lightPos = lightPos;
+			frameReset = true;
+		}
+
+		static float radius = 4, lightIntensity = 10;
+		static int depth = 5, rayPerPixel = 1;
 		if (userInput.renderMode == RENDER_MODE::RAYRACE) {
-			ImGui::SliderInt("Maximum ray depth", &userInput.maxRayDepth, 1, 30);
-		}
-		else {
-			ImGui::SliderFloat("Light position X", &userInput.lightPos.x, -3.0f, 3.0f);
-			ImGui::SliderFloat("Light position Y", &userInput.lightPos.y, -3.0f, 3.0f);
-			ImGui::SliderFloat("Light position Z", &userInput.lightPos.z, -3.0f, 3.0f);
-			static glm::vec3 lightPos;
+			ImGui::Text("Light sphere radius");
+			ImGui::SliderFloat("[1, 10]", &radius, 1, 10);
+			ImGui::Text("Light intensity");
+			ImGui::SliderFloat("[1, 20]", &lightIntensity, 1, 20);
+			ImGui::Text("Maximum ray depth");
+			ImGui::SliderInt("[1, 30]", &depth, 1, 30);
+			ImGui::Text("Ray per pixel (!Warning: drastic frame drop)");
+			ImGui::SliderInt("[1, 32]", &rayPerPixel, 1, 32);
+			if (radius != userInput.radius || 
+				depth != userInput.maxRayDepth || 
+				lightIntensity != userInput.lightInternsity || 
+				rayPerPixel != userInput.rayPerPixel) {
+				userInput.radius = radius;
+				userInput.maxRayDepth = depth;
+				userInput.lightInternsity = lightIntensity;
+				userInput.rayPerPixel = rayPerPixel;
+				frameReset = true;
+			}
 		}
 
 		ImGui::End();
@@ -49,11 +73,14 @@ public:
 	/** imgui user input collection */
 	struct UserInput {
 		int renderMode = RAYRACE;
-		int maxRayDepth = 10;
-		glm::vec3 lightPos{ 0.f, 1.5f, 0.1f };
+		int maxRayDepth = 5;
+		int rayPerPixel = 1;
+		float radius = 4;
+		float lightInternsity = 10;
+		glm::vec3 lightPos{ 25.135f, 23.874f, 0.1f };
 	}userInput;
 
-	bool renderModeChanged = false;
+	bool frameReset = false;
 };
 
 class VulkanApp : public VulkanAppBase {
@@ -275,11 +302,11 @@ public:
 	virtual void update() override {
 		VulkanAppBase::update();
 		Imgui* imgui = static_cast<Imgui*>(imguiBase);
-		if (oldViewMatrix != cameraMatrices.view || imgui->renderModeChanged) {
+		if (oldViewMatrix != cameraMatrices.view || imgui->frameReset) {
 			rtPushConstants.frame = -1;
 			oldViewMatrix = cameraMatrices.view;
-			if (imgui->renderModeChanged)
-				imgui->renderModeChanged = false;
+			if (imgui->frameReset)
+				imgui->frameReset = false;
 		}
 		rtPushConstants.frame++;
 
@@ -330,8 +357,12 @@ public:
 		clearValues[0].color = { 0.05f, 0.05f, 0.05f, 1.f };
 		clearValues[1].depthStencil = { 1.f, 0 };
 
-		rtPushConstants.lightPos = { 20.f, 20.f, 20.f };
-		rtPushConstants.maxDepht = static_cast<Imgui*>(imguiBase)->userInput.maxRayDepth;
+		Imgui* imgui = static_cast<Imgui*>(imguiBase);
+		rtPushConstants.lightPos = imgui->userInput.lightPos;
+		rtPushConstants.maxDepht = imgui->userInput.maxRayDepth;
+		rtPushConstants.lightRadius = imgui->userInput.radius;
+		rtPushConstants.lightIntensity = imgui->userInput.lightInternsity;
+		rtPushConstants.rayPerPixel = imgui->userInput.rayPerPixel;
 
 		//for rasterizer render pass
 		VkRenderPassBeginInfo offscreenRenderPassBeginInfo{ VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO };
@@ -492,10 +523,11 @@ private:
 	struct RtPushConstant {
 		glm::vec4 clearColor = { 0.05f, 0.05f, 0.05f, 1.f };
 		glm::vec3 lightPos;
-		float lightIntensity = 100.f;
-		int lightType = 0;
+		float lightRadius = 1.f;
+		float lightIntensity = 1;
 		int64_t frame = -1;
 		int maxDepht = 10;
+		int rayPerPixel = 1;
 	} rtPushConstants;
 	/*
 	* descriptors for raytracer
@@ -579,7 +611,7 @@ private:
 		VkBufferUsageFlags rtFlags = 
 			VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
 			VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
-		gltfDioramaModel.loadScene(&devices, "../../meshes/scene.gltf", rtFlags);
+		gltfDioramaModel.loadScene(&devices, "../../meshes/pica_pica_mini_diorama/scene.gltf", rtFlags);
 
 		std::vector<BlasGeometries> allBlas{}; //array of blas
 		allBlas.reserve(gltfDioramaModel.primitives.size());
@@ -800,6 +832,7 @@ private:
 		enum StageIndices {
 			STAGE_RAYGEN,
 			STAGE_MISS,
+			STAGE_SHADOW_MISS,
 			STAGE_CLOSEST_HIT,
 			SHADER_GROUP_COUNT
 		};
@@ -816,6 +849,10 @@ private:
 		stage.module = vktools::createShaderModule(devices.device, vktools::readFile("shaders/pathtrace_rmiss.spv"));
 		stage.stage = VK_SHADER_STAGE_MISS_BIT_KHR;
 		stages[STAGE_MISS] = stage;
+		//shadow miss
+		stage.module = vktools::createShaderModule(devices.device, vktools::readFile("shaders/pathtrace_shadow_rmiss.spv"));
+		stage.stage = VK_SHADER_STAGE_MISS_BIT_KHR;
+		stages[STAGE_SHADOW_MISS] = stage;
 		//closest hit
 		stage.module = vktools::createShaderModule(devices.device, vktools::readFile("shaders/pathtrace_rchit.spv"));
 		stage.stage = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
@@ -837,6 +874,11 @@ private:
 		//miss
 		group.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
 		group.generalShader = STAGE_MISS;
+		rtShaderGroups.push_back(group);
+
+		//shadow miss
+		group.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
+		group.generalShader = STAGE_SHADOW_MISS;
 		rtShaderGroups.push_back(group);
 
 		//closest hit
@@ -891,7 +933,7 @@ private:
 	* gets all shader handles and write them in a SBT buffer
 	*/
 	void createRtShaderBindingTable() {
-		uint32_t groupCount = static_cast<uint32_t>(rtShaderGroups.size()); // 3 shaders: raygen, miss, chit
+		uint32_t groupCount = static_cast<uint32_t>(rtShaderGroups.size()); // 4 shaders: raygen, miss, shadow_miss, chit
 		uint32_t groupHandleSize = rtProperties.shaderGroupHandleSize;
 		//compute the actual size needed per SBT entry (round up to alignment needed)
 		uint32_t groupSizeAligned = alignUp(groupHandleSize, static_cast<size_t>(rtProperties.shaderGroupBaseAlignment));
@@ -1024,8 +1066,8 @@ private:
 		using Stride = VkStridedDeviceAddressRegionKHR;
 		std::array<Stride, 4> strideAddress{
 			Stride{sbtAddress + 0u * groupSize, groupStride, groupSize * 1},
-			Stride{sbtAddress + 1u * groupSize, groupStride, groupSize * 1},
-			Stride{sbtAddress + 2u * groupSize, groupStride, groupSize * 1},
+			Stride{sbtAddress + 1u * groupSize, groupStride, groupSize * 2},
+			Stride{sbtAddress + 3u * groupSize, groupStride, groupSize * 1},
 			Stride{0u, 0u, 0u}
 		};
 
@@ -1070,4 +1112,4 @@ private:
 };
 
 //entry point
-RUN_APPLICATION_MAIN(VulkanApp, 1200, 800, "ray tracing");
+RUN_APPLICATION_MAIN(VulkanApp, 1920, 1080, "ray tracing");

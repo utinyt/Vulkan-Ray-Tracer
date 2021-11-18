@@ -53,9 +53,6 @@
     <None Include="shaders\raytrace.rmiss">
       <Filter>Source Files\shaders</Filter>
     </None>
-    <None Include="shaders\raytrace_shadow.rmiss">
-      <Filter>Source Files\shaders</Filter>
-    </None>
     <None Include="shaders\wavefront.glsl">
       <Filter>Source Files\shaders</Filter>
     </None>
@@ -69,6 +66,9 @@
       <Filter>Source Files\shaders</Filter>
     </None>
     <None Include="shaders\sampling.glsl">
+      <Filter>Source Files\shaders</Filter>
+    </None>
+    <None Include="shaders\pathtrace_shadow.rmiss">
       <Filter>Source Files\shaders</Filter>
     </None>
   </ItemGroup>

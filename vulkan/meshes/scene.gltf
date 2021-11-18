@@ -488,9 +488,9 @@
     {
       "doubleSided": true,
       "emissiveFactor": [
-        100,
-        100,
-        100
+        0,
+        0,
+        0
       ],
       "name": "light",
       "pbrMetallicRoughness": {

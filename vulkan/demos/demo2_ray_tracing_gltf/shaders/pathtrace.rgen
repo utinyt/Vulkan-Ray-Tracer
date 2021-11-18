@@ -29,8 +29,8 @@ void main() {
     float r2 = rnd(seed);
     vec2 jitter = pc.frame == 0 ? vec2(0.5f, 0.5f) : vec2(r1, r2);
 
-    const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + jitter; //gl_LaunchIDEXT - integer coordinate of current pixel
-    const vec2 inUV = pixelCenter / vec2(gl_LaunchSizeEXT.xy); //gl_LaunchSizeEXT - image size
+    vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + jitter; //gl_LaunchIDEXT - integer coordinate of current pixel
+    vec2 inUV = pixelCenter / vec2(gl_LaunchSizeEXT.xy); //gl_LaunchSizeEXT - image size
     vec2 d = inUV * 2.0 - 1.0;
 
     vec4 origin = cam.viewInverse * vec4(0, 0, 0, 1);
@@ -49,26 +49,52 @@ void main() {
     prd.rayDirection = direction.xyz;
 
     vec3 hitValue = vec3(0.f);
-    for(; prd.depth < pc.maxDepht; prd.depth++){
-        traceRayEXT(topLevelAS, //acceleration structure
-            rayFlags,           //rayFlags
-            0xFF,               //cullMask
-            0,                  //sbtRecordOffset
-            0,                  //sbtRecordStride
-            0,                  //missIndex
-            prd.rayOrigin,         //ray origin
-            tMin,               //ray minRange
-            prd.rayDirection,      //ray direction
-            tMax,               //ray maxRange
-            0                   //payload (location = 0)
-        );
+    for(int i = 0; i < pc.rayPerPixel; ++i) {
+        for(; prd.depth < pc.maxDepht; prd.depth++){
+            traceRayEXT(topLevelAS, //acceleration structure
+                rayFlags,           //rayFlags
+                0xFF,               //cullMask
+                0,                  //sbtRecordOffset
+                0,                  //sbtRecordStride
+                0,                  //missIndex
+                prd.rayOrigin,         //ray origin
+                tMin,               //ray minRange
+                prd.rayDirection,      //ray direction
+                tMax,               //ray maxRange
+                0                   //payload (location = 0)
+            );
+        }
+        //acummulate color
+        hitValue += prd.hitValue;
+
+        //anti-aliasing
+        seed = tea(gl_LaunchIDEXT.y * gl_LaunchSizeEXT.x + gl_LaunchIDEXT.x, int(clockARB()));
+
+        r1 = rnd(seed);
+        r2 = rnd(seed);
+        jitter = pc.frame == 0 ? vec2(0.5f, 0.5f) : vec2(r1, r2);
+
+        pixelCenter = vec2(gl_LaunchIDEXT.xy) + jitter; //gl_LaunchIDEXT - integer coordinate of current pixel
+        inUV = pixelCenter / vec2(gl_LaunchSizeEXT.xy); //gl_LaunchSizeEXT - image size
+        d = inUV * 2.0 - 1.0;
+
+        target = cam.projInverse * vec4(d.x, d.y, 1, 1);
+        direction = cam.viewInverse * vec4(normalize(target.xyz), 0);
+
+        //reset payload
+        prd.hitValue = vec3(0.f);
+        prd.depth = 0;
+        prd.weight = vec3(1.f);
+        prd.rayOrigin = origin.xyz;
+        prd.rayDirection = direction.xyz;
     }
+    hitValue /= float(pc.rayPerPixel);
 
     if(pc.frame > 0) {
         float a = 1.f / float(pc.frame + 1);
         vec3 oldColor = imageLoad(image, ivec2(gl_LaunchIDEXT.xy)).xyz;
-        imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(mix(oldColor, prd.hitValue, a), 1.0));
+        imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(mix(oldColor, hitValue, a), 1.0));
     }else{
-        imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(prd.hitValue, 1.0));
+        imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(hitValue, 1.0));
     }
 }

@@ -34,3 +34,20 @@ vec3 sampleBRDF(vec3 normal, float randomFloat1, float randomFloat2){
 vec3 evalScattering(vec3 normal, vec3 wi, vec3 kd){
 	return abs(dot(normal, wi)) * kd / PI;
 }
+
+void sampleSphere(vec3 center, float radius, float randomFloat1, float randomFloat2, out vec3 normal, out vec3 point){
+	float z = 2.f * randomFloat1 - 1.f;
+	float r = sqrt(1 - z*z);
+	float a = 2 * PI * randomFloat2;
+	normal = normalize(vec3(r * cos(a), r * sin(a), z));
+	point = center + radius * normal;
+}
+
+float geometryFactor(vec3 intersectionPointA, vec3 intersectionPointB, vec3 normalA, vec3 normalB){
+	vec3 D = intersectionPointA - intersectionPointB;
+	return abs(dot(normalA, D) * dot(normalB, D) / pow(dot(D, D), 2));
+}
+
+float pdfLight(float sphereRadius){
+	return 1 / (4 * PI * sphereRadius * sphereRadius); //reciprocal of surface area of sphere
+}

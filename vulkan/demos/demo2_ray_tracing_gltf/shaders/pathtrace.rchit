@@ -10,9 +10,17 @@
 #include "random.glsl"
 #include "sampling.glsl"
 
+/*
+* payloads
+*/
 layout(location = 0) rayPayloadInEXT hitPayload prd;
+layout(location = 1) rayPayloadEXT bool prdDirectLightConnection;
+
 hitAttributeEXT vec2 attrib;
 
+/*
+* buffer references
+*/
 layout(buffer_reference, scalar) readonly buffer Vertices {
 	vec3 v[]; //position
 };
@@ -32,6 +40,9 @@ layout(buffer_reference, scalar) readonly buffer Materials {
 	ShadeMaterial m[]; //triangle indices
 };
 
+/*
+* descriptors
+*/
 //ray tracing descriptors
 layout(binding = 0, set = 0) uniform accelerationStructureEXT topLevelAS;
 layout(binding = 2, set = 0) readonly  buffer Primitives {
@@ -43,6 +54,11 @@ layout(binding = 1, set = 1, scalar) readonly buffer Scene {
 	SceneDesc sceneDesc;
 };
 layout(binding = 2, set = 1) uniform sampler2D textures[];
+
+//push_constant
+layout(push_constant) uniform PushConstant {
+	RtPushConstant pc;
+};
 
 void main() {
 	Indices indices = Indices(sceneDesc.indexAddress);
@@ -85,22 +101,62 @@ void main() {
 	ShadeMaterial material = materials.m[materialIndex];
 	vec3 emittance = material.emissiveFactor;
 	
-	//new ray -> wi
-	vec3 rayOrigin = worldPos;
-	vec3 rayDirection = sampleBRDF(normal, rnd(prd.seed), rnd(prd.seed)); // = wi
-
 	vec3 textureColor = vec3(1.f);
 	if(material.baseColorTextureIndex > -1)
 		textureColor = texture(textures[material.baseColorTextureIndex], texcoord0).xyz;
 
+	//new ray -> wi
+	vec3 rayOrigin = worldPos;
+
+	/*
+	* explicit light connection
+	*/
+	vec3 sphereCenter = pc.lightPos; // light position
+	float sphereRadius = pc.lightRadius;
+	vec3 sphereNormal = vec3(0.f);
+	vec3 spherePoint = vec3(0.f);
+	sampleSphere(sphereCenter, sphereRadius, rnd(prd.seed), rnd(prd.seed), sphereNormal, spherePoint);
+	
+	float p = pdfLight(sphereRadius) / geometryFactor(worldPos, spherePoint, normal, sphereNormal);
+	vec3 rayDirection = spherePoint - worldPos;
+
+	float tMin = 0.001;
+	float tMax = 1000000;
+	uint flags = gl_RayFlagsOpaqueEXT;
+
+	//trace ray to the light sphere
+	prdDirectLightConnection = false;
+	traceRayEXT(topLevelAS,
+		flags | gl_RayFlagsSkipClosestHitShaderEXT | gl_RayFlagsTerminateOnFirstHitEXT,
+		0xFF,
+		0,
+		0,
+		1,
+		rayOrigin,
+		0.001,
+		normalize(rayDirection),
+		length(rayDirection),
+		1
+	);
+
+	if(prdDirectLightConnection){
+		vec3 f = textureColor * evalScattering(normal, rayDirection, material.baseColorFactor.xyz); // = NL * kd / PI
+		prd.hitValue += 0.5f * prd.weight * f / p * pc.lightIntensity;
+	}
+
+	/*
+	* implicit light connection
+	*/
+	rayDirection = sampleBRDF(normal, rnd(prd.seed), rnd(prd.seed)); // = wi
+
 	vec3 f = textureColor * evalScattering(normal, rayDirection, material.baseColorFactor.xyz); // = NL * kd / PI
-	float russianRoulette = 0.8;
-	float p = pdfBRDF(normal, rayDirection) * russianRoulette;
+	float russianRoulette = 1.0; //0.8f
+	p = pdfBRDF(normal, rayDirection) * russianRoulette;
 
 	prd.weight *= f/p;
 
 	if(length(emittance) > 0){
-		prd.hitValue += prd.weight * emittance;
+		prd.hitValue += 0.5f * prd.weight * emittance;
 	}
 	
 	prd.rayOrigin = rayOrigin;

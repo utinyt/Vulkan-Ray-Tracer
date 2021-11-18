@@ -14,8 +14,9 @@ struct hitPayload{
 struct RtPushConstant{
 	vec4 clearColor;
 	vec3 lightPos;
+	float lightRadius;
 	float lightIntensity;
-	int lightType;
 	int64_t frame;
 	int maxDepht;
+	int rayPerPixel;
 };
