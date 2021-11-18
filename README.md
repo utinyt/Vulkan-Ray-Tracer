@@ -25,7 +25,7 @@ A lot of code were based on these great resources:
 ## Path Tracing + Next Event Estimation - (Nov.17.2021)
 ![path_tracing](https://github.com/utinyt/Vulkan-Ray-Tracer/blob/master/screenshots/pathtracing.png)<br>
 
-### Next Event Estimation
+### Next Event Estimation (Explicit light connection)
 ![path_tracing_nee](https://github.com/utinyt/Vulkan-Ray-Tracer/blob/master/screenshots/pathtracing.gif)<br>
 #### Average frame time: 19.32 (51.77 FPS)
 * 1200x800 screen resolution
@@ -35,7 +35,7 @@ A lot of code were based on these great resources:
 Closest hit shader shoots additional (shadow) ray to the invisible light sphere and check if current point is directly illuminated from it. This checking of 'explicit light connection' accelerates image convergence speed.<br>
 
 #### Gltf model reference: https://sketchfab.com/SEED.EA/collections/pica-pica
-
+<br>
 ## Path Tracing - (Sep.20.2021)
 ![path_tracing](https://github.com/utinyt/Vulkan-Ray-Tracer/blob/master/screenshots/path_tracing.gif)<br>
 
