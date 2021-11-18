@@ -41,7 +41,7 @@ public:
 		ImGui::NewLine();
 
 		static float radius = 6, lightIntensity = 100;
-		static int depth = 5, rayPerPixel = 1;
+		static int depth = 5, rayPerPixel = 8;
 		if (userInput.renderMode == RENDER_MODE::RAYRACE) {
 			ImGui::Text("Light sphere radius");
 			ImGui::SliderFloat("[1, 10]", &radius, 1, 10);
@@ -77,7 +77,7 @@ public:
 	struct UserInput {
 		int renderMode = RAYRACE;
 		int maxRayDepth = 5;
-		int rayPerPixel = 1;
+		int rayPerPixel = 8;
 		float radius = 6;
 		float lightInternsity = 100;
 		glm::vec3 lightPos{ 24.382f, 30.f, 0.1f };
@@ -1115,4 +1115,4 @@ private:
 };
 
 //entry point
-RUN_APPLICATION_MAIN(VulkanApp, 1920, 1080, "ray tracing");
+RUN_APPLICATION_MAIN(VulkanApp, 1200, 800, "ray tracing");
