@@ -1005,4 +1005,4 @@ private:
 };
 
 //entry point
-RUN_APPLICATION_MAIN(VulkanApp, 1200, 800, "ray tracing");
+RUN_APPLICATION_MAIN(VulkanApp, 800, 600, "ray tracing");
