@@ -35,7 +35,7 @@ A lot of code were based on these great resources:
 Closest hit shader shoots additional (shadow) ray to the invisible light sphere and check if current point is directly illuminated from it. This checking of 'explicit light connection' accelerates image convergence speed.<br>
 
 #### Gltf model reference: https://sketchfab.com/SEED.EA/collections/pica-pica
-<br>
+
 ## Path Tracing - (Sep.20.2021)
 ![path_tracing](https://github.com/utinyt/Vulkan-Ray-Tracer/blob/master/screenshots/path_tracing.gif)<br>
 
