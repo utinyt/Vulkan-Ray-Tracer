@@ -1,5 +1,5 @@
 # Vulkan Ray Tracer
-This is a real-time ray tracer using C++ / Vulkan / GLSL.
+This is a real-time ray tracer written in C++ / Vulkan / GLSL.
 
 ## Developing Environments
 * OS: Windows 10
@@ -42,6 +42,7 @@ Closest hit shader shoots additional (shadow) ray to the invisible light sphere 
 #### Reference: https://github.com/nvpro-samples/vk_raytracing_tutorial_KHR/tree/master/ray_tracing_gltf
 
 ## First model - (Sep.12.2021)
-![bunny](https://github.com/utinyt/Vulkan-Ray-Tracer/blob/master/screenshots/bunny.png)<br>
+![firstmodel](https://github.com/utinyt/Vulkan-Ray-Tracer/blob/master/screenshots/firstmodel.png)<br>
+*9 instances / 2 bottom level acceleration structures (bunny, teapot)*<br>
 
 #### Reference: https://nvpro-samples.github.io/vk_raytracing_tutorial_KHR/
