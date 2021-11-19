@@ -44,8 +44,8 @@ void main(){
 
 	//specular
 	vec3 fragToView = normalize(-viewFragPos);
-	vec3 reflectDir = reflect(-fragToLight, inNormal);
-	float spec = 5 * pow(max(dot(fragToView, reflectDir), 0), 64);
+	vec3 halfwayVector = normalize(fragToView + fragToLight);
+	float spec = pow(max(dot(halfwayVector, inNormal), 0), 32);
 
 	col.xyz += vec3(spec);
 }
