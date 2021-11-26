@@ -33,6 +33,10 @@ public:
 	void load(VulkanDevice* devices, unsigned char* data,
 		uint32_t texWidth, uint32_t texHeight, VkDeviceSize imageSize, VkFormat format,
 		VkFilter filter = VK_FILTER_LINEAR, VkSamplerAddressMode mode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE);
+	/** @brief create empty texture (mostly used as destination image) */
+	void createEmptyTexture(VulkanDevice* devices, VkExtent2D extent,
+		VkFormat format, VkImageTiling tiling,
+		VkImageUsageFlags usage, VkImageLayout layout, VkMemoryPropertyFlags memProperties);
 };
 
 class TextureCube : public TextureBase {

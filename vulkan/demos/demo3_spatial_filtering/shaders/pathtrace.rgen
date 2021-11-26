@@ -1,0 +1,114 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+#extension GL_GOOGLE_include_directive : enable
+#extension GL_ARB_shader_clock : enable
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+#include "ray_common.glsl"
+#include "random.glsl"
+
+layout(binding = 0, set = 0) uniform accelerationStructureEXT topLevelAS;
+layout(binding = 1, set = 0, rgba32f) uniform image2D imageColor;
+layout(binding = 2, set = 0, rgba32f) uniform image2D imagePos;
+layout(binding = 3, set = 0, rgba32f) uniform image2D imageNormal;
+layout(binding = 0, set = 1) uniform CameraMatrices{
+    mat4 view;
+    mat4 proj;
+    mat4 viewInverse;
+    mat4 projInverse;
+} cam;
+
+layout(location = 0) rayPayloadEXT hitPayload prd;
+
+layout(push_constant) uniform PushConstant {
+	RtPushConstant pc;
+};
+
+void main() {
+    //anti-aliasing
+    uint seed = tea(gl_LaunchIDEXT.y * gl_LaunchSizeEXT.x + gl_LaunchIDEXT.x, int(clockARB()));
+
+    float r1 = rnd(seed);
+    float r2 = rnd(seed);
+    vec2 jitter = pc.frame == 0 ? vec2(0.5f, 0.5f) : vec2(r1, r2);
+
+    vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) +  vec2(0.5f, 0.5f); //gl_LaunchIDEXT - integer coordinate of current pixel
+    vec2 inUV = pixelCenter / vec2(gl_LaunchSizeEXT.xy); //gl_LaunchSizeEXT - image size
+    vec2 d = inUV * 2.0 - 1.0;
+
+    vec4 origin = cam.viewInverse * vec4(0, 0, 0, 1);
+    vec4 target = cam.projInverse * vec4(d.x, d.y, 1, 1);
+    vec4 direction = cam.viewInverse * vec4(normalize(target.xyz), 0);
+
+    uint rayFlags = gl_RayFlagsOpaqueEXT;
+    float tMin = 0.001;
+    float tMax = 10000.0;
+
+    prd.hitValue = vec3(0.f);
+    prd.seed = seed;
+    prd.depth = 0;
+    prd.weight = vec3(1.f);
+    prd.rayOrigin = origin.xyz;
+    prd.rayDirection = direction.xyz;
+    prd.p = 0;
+
+    vec3 hitValue = vec3(0.0); //output color
+    vec3 outPos = vec3(0.0); //output pos
+    vec3 outNormal = vec3(0.0); //output normal
+    for(int i = 0; i < pc.rayPerPixel; ++i) {
+        for(; prd.depth < pc.maxDepth; prd.depth++){
+            if(rnd(seed) > russianRoulette){
+                if(prd.depth != 0)
+                    break;
+            }
+            traceRayEXT(topLevelAS, //acceleration structure
+                rayFlags,           //rayFlags
+                0xFF,               //cullMask
+                0,                  //sbtRecordOffset
+                0,                  //sbtRecordStride
+                0,                  //missIndex
+                prd.rayOrigin,         //ray origin
+                tMin,               //ray minRange
+                prd.rayDirection,      //ray direction
+                tMax,               //ray maxRange
+                0                   //payload (location = 0)
+            );
+            seed = tea(gl_LaunchIDEXT.y * gl_LaunchSizeEXT.x + gl_LaunchIDEXT.x + i, int(clockARB()));
+            if(prd.p < EPSILON){
+                break;
+            }
+            if(prd.depth == 0){
+                outPos = prd.rayOrigin;
+                outNormal = prd.normal;
+            }
+        }
+        //acummulate color
+        hitValue += prd.hitValue;
+
+        //anti-aliasing
+        seed = tea(gl_LaunchIDEXT.y * gl_LaunchSizeEXT.x + gl_LaunchIDEXT.x, int(clockARB()));
+
+        r1 = rnd(seed);
+        r2 = rnd(seed);
+        jitter = pc.frame == 0 ? vec2(0.5f, 0.5f) : vec2(r1, r2);
+
+        pixelCenter = vec2(gl_LaunchIDEXT.xy) + jitter; //gl_LaunchIDEXT - integer coordinate of current pixel
+        inUV = pixelCenter / vec2(gl_LaunchSizeEXT.xy); //gl_LaunchSizeEXT - image size
+        d = inUV * 2.0 - 1.0;
+
+        target = cam.projInverse * vec4(d.x, d.y, 1, 1);
+        direction = cam.viewInverse * vec4(normalize(target.xyz), 0);
+
+        //reset payload
+        prd.hitValue = vec3(0.f);
+        prd.depth = 0;
+        prd.weight = vec3(1.f);
+        prd.rayOrigin = origin.xyz;
+        prd.rayDirection = direction.xyz;
+        prd.p = 0;
+    }
+    hitValue /= float(pc.rayPerPixel);
+
+    imageStore(imageColor, ivec2(gl_LaunchIDEXT.xy), vec4(hitValue, 1.0));
+    imageStore(imagePos, ivec2(gl_LaunchIDEXT.xy), vec4(outPos, 1.0));
+    imageStore(imageNormal, ivec2(gl_LaunchIDEXT.xy), vec4(outNormal, 1.0));
+}

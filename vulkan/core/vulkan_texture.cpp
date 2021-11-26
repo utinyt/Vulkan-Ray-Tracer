@@ -107,6 +107,48 @@ void Texture2D::load(VulkanDevice* devices, unsigned char* data,
 }
 
 /*
+* create empty texture (mostly used as destination image) 
+*/
+void Texture2D::createEmptyTexture(VulkanDevice* devices,
+	VkExtent2D extent,
+	VkFormat format,
+	VkImageTiling tiling,
+	VkImageUsageFlags usage,
+	VkImageLayout layout,
+	VkMemoryPropertyFlags memProperties) {
+	this->devices = devices;
+	//create image
+	devices->createImage(image, { extent.width, extent.height, 1 }, format, tiling, usage, memProperties);
+
+	//check image aspect
+	VkImageAspectFlags imageAspect = 0;
+	if (usage & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) {
+		imageAspect = VK_IMAGE_ASPECT_COLOR_BIT;
+	}
+	else if (usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) {
+		if (vktools::hasDepthComponent(format)) {
+			imageAspect = VK_IMAGE_ASPECT_DEPTH_BIT;
+		}
+		if (vktools::hasStencilComponent(format)) {
+			imageAspect |= VK_IMAGE_ASPECT_STENCIL_BIT;
+		}
+	}
+
+	//create image view
+	descriptor.imageView = vktools::createImageView(devices->device, image, VK_IMAGE_VIEW_TYPE_2D, format, imageAspect);
+	descriptor.imageLayout = layout;
+	
+	//image layout trasition
+	VkCommandBuffer cmdBuf = devices->beginCommandBuffer();
+	vktools::setImageLayout(cmdBuf, image, VK_IMAGE_LAYOUT_UNDEFINED, layout);
+	devices->endCommandBuffer(cmdBuf);
+
+	//sampler
+	VkSamplerCreateInfo samplerInfo = vktools::initializers::samplerCreateInfo(devices->availableFeatures, devices->properties);
+	VK_CHECK_RESULT(vkCreateSampler(devices->device, &samplerInfo, nullptr, &descriptor.sampler));
+}
+
+/*
 * load cube map textures
 *
 * @param devices - abstracted vulkan device handle
