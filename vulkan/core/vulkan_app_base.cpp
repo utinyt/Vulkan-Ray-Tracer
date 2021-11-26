@@ -85,6 +85,7 @@ void VulkanAppBase::run() {
 		update();
 		draw();
 		currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+		elapsedFrames++;
 	}
 	vkDeviceWaitIdle(devices.device);
 }

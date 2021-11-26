@@ -80,6 +80,8 @@ protected:
 	int MAX_FRAMES_IN_FLIGHT = 2;
 	/** current frame - index for MAX_FRAMES_IN_FLIGHT */
 	size_t currentFrame = 0;
+	/** number of elapsed frames */
+	size_t elapsedFrames = 0;
 	/** window resize check */
 	bool windowResized = false;
 	/** depth format */
