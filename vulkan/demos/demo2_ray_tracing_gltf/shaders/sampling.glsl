@@ -49,5 +49,6 @@ float geometryFactor(vec3 intersectionPointA, vec3 intersectionPointB, vec3 norm
 }
 
 float pdfLight(float sphereRadius){
-	return 1 / (4 * PI * sphereRadius * sphereRadius); //reciprocal of surface area of sphere
+	float surfaceArea = 4.0 * PI * sphereRadius * sphereRadius;
+	return 1 / surfaceArea ;
 }

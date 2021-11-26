@@ -71,5 +71,8 @@
     <None Include="shaders\pathtrace_shadow.rmiss">
       <Filter>Source Files\shaders</Filter>
     </None>
+    <None Include="shaders\brdf.glsl">
+      <Filter>Source Files\shaders</Filter>
+    </None>
   </ItemGroup>
 </Project>

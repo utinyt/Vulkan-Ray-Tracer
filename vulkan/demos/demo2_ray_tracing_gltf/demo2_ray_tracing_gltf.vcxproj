@@ -24,6 +24,7 @@
     <None Include="shaders\pathtrace.rgen" />
     <None Include="shaders\pathtrace.rmiss" />
     <None Include="shaders\pathtrace_shadow.rmiss" />
+    <None Include="shaders\brdf.glsl" />
     <None Include="shaders\random.glsl" />
     <None Include="shaders\rasterizer.frag" />
     <None Include="shaders\rasterizer.vert" />
