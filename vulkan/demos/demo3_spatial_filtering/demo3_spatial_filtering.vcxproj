@@ -83,6 +83,7 @@
     <ClCompile Include="demo3_spatial_filtering.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="shaders\a_trous_filter.frag" />
     <None Include="shaders\brdf.glsl" />
     <None Include="shaders\full_quad.frag" />
     <None Include="shaders\full_quad.vert" />

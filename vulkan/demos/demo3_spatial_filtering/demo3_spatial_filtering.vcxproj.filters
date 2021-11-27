@@ -56,5 +56,8 @@
     <None Include="shaders\brdf.glsl">
       <Filter>Source Files\shaders</Filter>
     </None>
+    <None Include="shaders\a_trous_filter.frag">
+      <Filter>Source Files\shaders</Filter>
+    </None>
   </ItemGroup>
 </Project>

@@ -60,7 +60,17 @@ public:
 			userInput.rayPerPixel = rayPerPixel;
 			frameReset = true;
 		}
-		
+		ImGui::NewLine();
+
+		static glm::vec3 scale = { 0.125f, 0.125f, 0.125f };
+		ImGui::Text("Scale");
+		ImGui::SliderFloat("X [0.01, 30]", &scale.x, 0.01f, 30.0f);
+		ImGui::SliderFloat("Y [0.01, 30]", &scale.y, 0.01f, 30.0f);
+		ImGui::SliderFloat("Z [0.01, 30]", &scale.z, 0.01f, 30.0f);
+		if (scale != userInput.scale) {
+			userInput.scale = scale;
+			frameReset = true;
+		}
 
 		ImGui::End();
 		ImGui::Render();
@@ -74,6 +84,7 @@ public:
 		float lightInternsity = 100;
 		int shadow = 0;
 		glm::vec3 lightPos{ 24.382f, 30.f, 0.1f };
+		glm::vec3 scale{ 0.125f, 0.125f, 0.125f };
 	}userInput;
 
 	bool frameReset = false;
@@ -120,6 +131,9 @@ public:
 		vkDestroyPipeline(devices.device, postPipeline, nullptr);
 		vkDestroyPipelineLayout(devices.device, postPipelineLayout, nullptr);
 		vkDestroyRenderPass(devices.device, postRenderPass, nullptr);
+		vkDestroyPipeline(devices.device, imageFilteringPipeline, nullptr);
+		vkDestroyPipelineLayout(devices.device, imageFilteringPipelineLayout, nullptr);
+		vkDestroyRenderPass(devices.device, imageFilteringRenderPass, nullptr);
 
 		devices.memoryAllocator.freeBufferMemory(sceneBuffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 		vkDestroyBuffer(devices.device, sceneBuffer, nullptr);
@@ -145,6 +159,11 @@ public:
 			vkDestroyFramebuffer(devices.device, framebuffer, nullptr);
 		}
 
+		//pingpong framebuffer
+		for (auto& framebuffer : pingpongFramebuffer) {
+			framebuffer.cleanup();
+		}
+
 		//rt output images
 		rtOutputColor.cleanup();
 		rtOutputPos.cleanup();
@@ -157,6 +176,8 @@ public:
 		vkDestroyDescriptorSetLayout(devices.device, rtDescriptorSetLayout, nullptr);
 		vkDestroyDescriptorPool(devices.device, postDescriptorPool, nullptr);
 		vkDestroyDescriptorSetLayout(devices.device, postDescriptorSetLayout, nullptr);
+		vkDestroyDescriptorPool(devices.device, imageFilteringDescriptorPool, nullptr);
+		vkDestroyDescriptorSetLayout(devices.device, imageFilteringDescriptorSetLayout, nullptr);
 
 		//uniform buffers
 		for (auto& uniformBuffer : uniformBuffers) {
@@ -216,20 +237,26 @@ public:
 			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, sceneBuffer);
 
 		/*
-		* rasterizer
-		*/
-		createRaytraceOutputImages();
-		createDescriptorSet();
-
-		/*
 		* ray tracing
 		*/
+		createRaytraceOutputImages();
+		createDescriptorSet(); //shared descriptor
 		createRtDescriptorSet();
 		for (size_t i = 0; i < static_cast<int>(MAX_FRAMES_IN_FLIGHT); ++i) {
 			updateRtDescriptorSet(i);
 		}
 		createRtPipeline();
 		createRtShaderBindingTable();
+
+		/*
+		* image filtering
+		*/
+		createImageFilteringResources();
+		createImageFilteringDescriptorSet();
+		createImageFilteringPipeline();
+		for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+			updateImageFilteringDescriptorSet(i);
+		}
 
 		/*
 		* full-quad
@@ -353,19 +380,64 @@ public:
 		rtPushConstants.shadow = imgui->userInput.shadow;
 
 		//for #2 render pass
+		VkRenderPassBeginInfo iamgeFileringRenderPassBeginInfo{ VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO };
+		iamgeFileringRenderPassBeginInfo.clearValueCount = 1;
+		iamgeFileringRenderPassBeginInfo.pClearValues = clearValues.data();
+		iamgeFileringRenderPassBeginInfo.renderPass = imageFilteringRenderPass;
+		iamgeFileringRenderPassBeginInfo.renderArea = { {0, 0},swapchain.extent };
+		glm::vec4 imageFilteringPushConstant{ 1, 0.125, 0.125, 0.125 };
+
+		//for #3 render pass
 		VkRenderPassBeginInfo postRenderPassBeginInfo{ VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO };
 		postRenderPassBeginInfo.clearValueCount = 2;
 		postRenderPassBeginInfo.pClearValues = clearValues.data();
 		postRenderPassBeginInfo.renderPass = postRenderPass;
 		postRenderPassBeginInfo.renderArea = { {0, 0},swapchain.extent };
 
+		const int imageFilteringIteration = 5;
 		for (size_t i = 0; i < framebuffers.size(); ++i) {
 			VK_CHECK_RESULT(vkBeginCommandBuffer(commandBuffers[i], &cmdBufBeginInfo));
 
 			//#1 raytracing
 			raytrace(commandBuffers[i], currentFrame);
 
-			//#2 full screen quad
+			//#2 image filtering
+			for (int currenrtFilter = 1; currenrtFilter <= imageFilteringIteration; ++currenrtFilter) {
+				size_t pingpongFramebufferIndex = currentFrame * MAX_FRAMES_IN_FLIGHT + (currenrtFilter + 1) % 2;
+				iamgeFileringRenderPassBeginInfo.framebuffer = pingpongFramebuffer[pingpongFramebufferIndex].framebuffer;
+				vkCmdBeginRenderPass(commandBuffers[i], &iamgeFileringRenderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+				vktools::setViewportScissorDynamicStates(commandBuffers[i], swapchain.extent);
+
+				float dist = 0;
+				for (int a = 0; a < currenrtFilter; ++a) {
+					dist += 1 << a;
+				}
+				imageFilteringPushConstant.x = dist;
+				imageFilteringPushConstant.y = imgui->userInput.scale.x;
+				imageFilteringPushConstant.z = imgui->userInput.scale.y;
+				imageFilteringPushConstant.w = imgui->userInput.scale.z;
+
+				vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, imageFilteringPipeline);
+				vkCmdPushConstants(commandBuffers[i], imageFilteringPipelineLayout,
+					VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(glm::vec4), &imageFilteringPushConstant);
+
+				size_t descriptorIndex = currentFrame * MAX_FRAMES_IN_FLIGHT;
+				if (currenrtFilter != 1) {//2, 3, 4, 5
+					if (currenrtFilter % 2 == 0) {//2, 4
+						descriptorIndex = currentFrame * MAX_FRAMES_IN_FLIGHT + 1;
+					}
+					else {//3, 5
+						descriptorIndex = currentFrame * MAX_FRAMES_IN_FLIGHT + 2;
+					}
+				}
+
+				vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, imageFilteringPipelineLayout, 0, 1,
+					&imageFilteringDescriptorSets[descriptorIndex], 0, nullptr);
+				vkCmdDraw(commandBuffers[i], 3, 1, 0, 0); //full screen triangle
+				vkCmdEndRenderPass(commandBuffers[i]);
+			}
+
+			//#3 full screen quad
 			size_t framebufferIndex = i % framebuffers.size();
 			postRenderPassBeginInfo.framebuffer = framebuffers[framebufferIndex];
 			vkCmdBeginRenderPass(commandBuffers[i], &postRenderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
@@ -389,9 +461,11 @@ public:
 	virtual void resizeWindow(bool /*recordCmdBuf*/) override {
 		VulkanAppBase::resizeWindow(false);
 		createRaytraceOutputImages();
+		createImageFilteringResources(true);
 		for (size_t i = 0; i < static_cast<int>(MAX_FRAMES_IN_FLIGHT); ++i) {
 			updateRtDescriptorSet(i);
 			updatePostDescriptorSet(i);
+			updateImageFilteringDescriptorSet(i);
 		}
 		recordCommandBuffer();
 	}
@@ -504,6 +578,26 @@ private:
 
 
 	/*
+	* a-trous wavelet transform filtering
+	*/
+	/** 5 iteration - 2 sets framebuffer */
+	std::vector<Framebuffer> pingpongFramebuffer;
+	/** full quad pipeline */
+	VkPipeline imageFilteringPipeline = VK_NULL_HANDLE;
+	/** push constant + image descriptors */
+	VkPipelineLayout imageFilteringPipelineLayout = VK_NULL_HANDLE;
+	/** 1 color attachment */
+	VkRenderPass imageFilteringRenderPass = VK_NULL_HANDLE;
+	/** descriptor set layout bindings */
+	DescriptorSetBindings imageFilteringDescriptorSetBindings;
+	/** descriptor set layout */
+	VkDescriptorSetLayout imageFilteringDescriptorSetLayout = VK_NULL_HANDLE;
+	/** decriptor pool */
+	VkDescriptorPool imageFilteringDescriptorPool = VK_NULL_HANDLE;
+	/** descriptor sets */
+	std::vector<VkDescriptorSet> imageFilteringDescriptorSets;
+
+	/*
 	* full-quad pipeline resources
 	*/
 	/** descriptor set layout bindings */
@@ -570,7 +664,7 @@ private:
 		VkBufferUsageFlags rtFlags = 
 			VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
 			VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
-		gltfDioramaModel.loadScene(&devices, "../../meshes/pica_pica_mini_diorama/scene.gltf", rtFlags);
+		gltfDioramaModel.loadScene(&devices, "../../meshes/scene.gltf", rtFlags);
 
 		std::vector<BlasGeometries> allBlas{}; //array of blas
 		allBlas.reserve(gltfDioramaModel.primitives.size());
@@ -643,6 +737,116 @@ private:
 			VK_IMAGE_LAYOUT_GENERAL,
 			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
 		);
+	}
+
+	/*
+	* create image filtering resources
+	*/
+	void createImageFilteringResources(bool createFramebufferOnly = false) {
+		for (auto& framebuffer : pingpongFramebuffer) {
+			framebuffer.cleanup();
+		}
+		pingpongFramebuffer.resize(MAX_FRAMES_IN_FLIGHT * 2);
+
+		for (int i = 0; i < MAX_FRAMES_IN_FLIGHT * 2; ++i) {
+			pingpongFramebuffer[i].init(&devices);
+
+			//1 color output
+			VkImageCreateInfo imageCreateInfo =
+				vktools::initializers::imageCreateInfo({ swapchain.extent.width, swapchain.extent.height, 1 },
+					VK_FORMAT_R32G32B32A32_SFLOAT,
+					VK_IMAGE_TILING_OPTIMAL,
+					VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT
+			);
+			pingpongFramebuffer[i].addAttachment(imageCreateInfo, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+				VK_IMAGE_LAYOUT_GENERAL, true);
+		}
+
+		if (createFramebufferOnly == false) {
+			//renderpass
+			std::vector<VkSubpassDependency> dependencies{};
+			dependencies.resize(2);
+			dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
+			dependencies[0].dstSubpass = 0;
+			dependencies[0].srcStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+			dependencies[0].srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+			dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+			dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+			dependencies[1].srcSubpass = 0;
+			dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
+			dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+			dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+			dependencies[1].dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+			dependencies[1].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+			imageFilteringRenderPass = pingpongFramebuffer[0].createRenderPass(dependencies);
+		}
+
+		//create framebuffer
+		for (auto& framebuffer : pingpongFramebuffer) {
+			framebuffer.createFramebuffer(swapchain.extent, imageFilteringRenderPass);
+		}
+	}
+
+	/*
+	* create image filtering pipeline
+	*/
+	void createImageFilteringPipeline() {
+		PipelineGenerator gen(devices.device);
+		gen.setRasterizerInfo(VK_POLYGON_MODE_FILL, VK_CULL_MODE_FRONT_BIT);
+		gen.addDescriptorSetLayout({ imageFilteringDescriptorSetLayout });
+		gen.addPushConstantRange({ VkPushConstantRange{VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(glm::vec4)} });
+		gen.addShader(vktools::createShaderModule(devices.device, vktools::readFile("shaders/full_quad_vert.spv")),
+			VK_SHADER_STAGE_VERTEX_BIT);
+		gen.addShader(vktools::createShaderModule(devices.device, vktools::readFile("shaders/a_trous_filter_frag.spv")),
+			VK_SHADER_STAGE_FRAGMENT_BIT);
+		gen.generate(imageFilteringRenderPass, &imageFilteringPipeline, &imageFilteringPipelineLayout);
+	}
+
+	/*
+	* create image filtering descriptor set 
+	*/
+	void createImageFilteringDescriptorSet() {
+		imageFilteringDescriptorSetBindings.addBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT); //rt color
+		imageFilteringDescriptorSetBindings.addBinding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT); //position
+		imageFilteringDescriptorSetBindings.addBinding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT); //normal
+		imageFilteringDescriptorSetLayout = imageFilteringDescriptorSetBindings.createDescriptorSetLayout(devices.device);
+		uint32_t nbDescriptorSets = MAX_FRAMES_IN_FLIGHT * 3;
+		imageFilteringDescriptorPool = imageFilteringDescriptorSetBindings.createDescriptorPool(devices.device, nbDescriptorSets);
+		imageFilteringDescriptorSets = vktools::allocateDescriptorSets(devices.device, imageFilteringDescriptorSetLayout, imageFilteringDescriptorPool,
+			nbDescriptorSets);
+	}
+
+	/*
+	* update image filtering descriptor set
+	*/
+	void updateImageFilteringDescriptorSet(size_t currentFrame) {
+		std::vector<VkWriteDescriptorSet> writes;
+		size_t descriptorIndex = currentFrame * MAX_FRAMES_IN_FLIGHT;
+		//raytrace -> first pingpong framebuffer
+		writes.emplace_back(imageFilteringDescriptorSetBindings.makeWrite(imageFilteringDescriptorSets[descriptorIndex], 0, &rtOutputColor.descriptor));
+		writes.emplace_back(imageFilteringDescriptorSetBindings.makeWrite(imageFilteringDescriptorSets[descriptorIndex], 1, &rtOutputPos.descriptor));
+		writes.emplace_back(imageFilteringDescriptorSetBindings.makeWrite(imageFilteringDescriptorSets[descriptorIndex], 2, &rtOutputNormal.descriptor));
+		//first pingpong framebuffer -> second pingpong framebuffer
+		VkDescriptorImageInfo firstPingpongFramebufferImageInfo{
+			rtOutputColor.descriptor.sampler,
+			pingpongFramebuffer[MAX_FRAMES_IN_FLIGHT * currentFrame].attachments[0].imageView,
+			VK_IMAGE_LAYOUT_GENERAL
+		};
+		writes.emplace_back(imageFilteringDescriptorSetBindings.makeWrite(imageFilteringDescriptorSets[descriptorIndex +1], 0, &firstPingpongFramebufferImageInfo));
+		writes.emplace_back(imageFilteringDescriptorSetBindings.makeWrite(imageFilteringDescriptorSets[descriptorIndex +1], 1, &rtOutputPos.descriptor));
+		writes.emplace_back(imageFilteringDescriptorSetBindings.makeWrite(imageFilteringDescriptorSets[descriptorIndex +1], 2, &rtOutputNormal.descriptor));
+		//second pingpong framebuffer -> first pingpong framebuffer
+		VkDescriptorImageInfo secondPingpongFramebufferImageInfo{
+			rtOutputColor.descriptor.sampler,
+			pingpongFramebuffer[MAX_FRAMES_IN_FLIGHT * currentFrame + 1].attachments[0].imageView,
+			VK_IMAGE_LAYOUT_GENERAL
+		};
+		writes.emplace_back(imageFilteringDescriptorSetBindings.makeWrite(imageFilteringDescriptorSets[descriptorIndex +2], 0, &secondPingpongFramebufferImageInfo));
+		writes.emplace_back(imageFilteringDescriptorSetBindings.makeWrite(imageFilteringDescriptorSets[descriptorIndex +2], 1, &rtOutputPos.descriptor));
+		writes.emplace_back(imageFilteringDescriptorSetBindings.makeWrite(imageFilteringDescriptorSets[descriptorIndex +2], 2, &rtOutputNormal.descriptor));
+		vkUpdateDescriptorSets(devices.device, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
 	}
 
 	/*
@@ -922,10 +1126,15 @@ private:
 	* update post descriptor set - sampler references offscreen color buffer
 	*/
 	void updatePostDescriptorSet(size_t currentFrame) {
+		VkDescriptorImageInfo imageInfo{ 
+			rtOutputColor.descriptor.sampler,
+			pingpongFramebuffer[currentFrame * MAX_FRAMES_IN_FLIGHT].attachments[0].imageView,
+			VK_IMAGE_LAYOUT_GENERAL
+		};
 		VkWriteDescriptorSet wd = postDescriptorSetBindings.makeWrite(
 			postDescriptorSets[currentFrame],
 			0,
-			&rtOutputColor.descriptor);
+			&imageInfo);
 		vkUpdateDescriptorSets(devices.device, 1, &wd, 0, nullptr);
 	}
 
@@ -963,10 +1172,6 @@ private:
 	* @param descriptorSetIndex
 	*/
 	void raytrace(VkCommandBuffer cmdBuf, size_t descriptorSetIndex) {
-		/*if (rtPushConstants.frame > 2000) {
-			return;
-		}*/
-
 		vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, rtPipeline);
 
 		std::vector<VkDescriptorSet> descSets{ rtDescriptorSets[descriptorSetIndex], descriptorSets[descriptorSetIndex] };

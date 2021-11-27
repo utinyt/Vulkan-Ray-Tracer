@@ -145,7 +145,7 @@ void main() {
 
 	if(prdDirectLightConnection && p > 0) {
 		vec3 f = textureColor * evalScattering(normal, rayDirection, material.baseColorFactor.xyz); // = NL * kd / PI
-		prd.hitValue += 1.0 * prd.weight * f / p * pc.lightIntensity;
+		prd.hitValue += 1.f * prd.weight * f / p * pc.lightIntensity;
 	}
 
 	/*
@@ -162,7 +162,7 @@ void main() {
 	prd.weight *= f/p;
 
 	if(length(emittance) > 0){
-		prd.hitValue += 0.5f * prd.weight * emittance;
+		prd.hitValue += 1.0f * prd.weight * emittance;
 	}
 	
 	prd.rayOrigin = rayOrigin + rayDirection * EPSILON;
