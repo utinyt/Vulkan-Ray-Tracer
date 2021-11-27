@@ -10,6 +10,7 @@ struct hitPayload{
 	vec3 rayOrigin;
 	vec3 rayDirection;
 	vec3 normal;
+	vec3 albedo;
 	float p;
 };
 

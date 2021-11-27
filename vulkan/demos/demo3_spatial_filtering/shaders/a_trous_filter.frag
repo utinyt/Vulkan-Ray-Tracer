@@ -16,11 +16,11 @@ layout(push_constant) uniform PuchConstant {
 };
 
 const float kernel[25] = float[25](
-	1.0 / 256.0,	4.0 / 256.0,	6.0 / 256.0,	4.0 / 256.0,	1.0 / 256.0,
-	4.0 / 256.0,	16.0 / 256.0,	24.0 / 256.0,	16.0 / 256.0,	4.0 / 256.0,
-	6.0 / 256.0,	24.0 / 256.0,	36.0 / 256.0,	24.0 / 256.0,	6.0 / 256.0,
-	4.0 / 256.0,	16.0 / 256.0,	24.0 / 256.0,	16.0 / 256.0,	4.0 / 256.0,
-	1.0 / 256.0,	4.0 / 256.0,	6.0 / 256.0,	4.0 / 256.0,	1.0 / 256.0
+	1.0 / 256.0,	4.0 / 256.0,	6.0 / 256.0,	4.0 / 256.0,	1.0 / 256.0, //16
+	4.0 / 256.0,	16.0 / 256.0,	24.0 / 256.0,	16.0 / 256.0,	4.0 / 256.0, //64
+	6.0 / 256.0,	24.0 / 256.0,	36.0 / 256.0,	24.0 / 256.0,	6.0 / 256.0, //96
+	4.0 / 256.0,	16.0 / 256.0,	24.0 / 256.0,	16.0 / 256.0,	4.0 / 256.0, //64
+	1.0 / 256.0,	4.0 / 256.0,	6.0 / 256.0,	4.0 / 256.0,	1.0 / 256.0 //16
 );
 
 const vec2 offsets[25] = vec2[25](
@@ -40,17 +40,20 @@ void main(){
 	vec4 sum = vec4(0.0);			//sum of hi(q) * w(p, q) * ci(p)
 	float normalizationFactor = 0;	//k
 
+	float stepScale = 1 << int(stepSize);
+	float colorScale = pow(2, -stepSize);
+
 	for(int i = 0; i < 25; ++i){
-		vec2 uv = inUV + offsets[i] * step * stepSize;
+		vec2 uv = inUV + offsets[i] * step * stepScale;
 
 		vec4 q_color = texture(color, uv);
 		vec4 color_diff = p_color - q_color;
 		float dist2 = dot(color_diff, color_diff);
-		float color_weight = min(exp(-(dist2)/cphi), 1.0);
+		float color_weight = min(exp(-(dist2)/(cphi*cphi*colorScale)), 1.0);
 
 		vec4 q_normal = texture(normal, uv);
 		vec4 normal_diff = p_normal - q_normal; 
-		dist2 = max(dot(normal_diff, normal_diff) / (stepSize * stepSize), 0.0);
+		dist2 = max(dot(normal_diff, normal_diff), 0.0);
 		float normal_weight = min(exp(-(dist2)/nphi), 1.0);
 
 		vec4 q_pos = texture(pos, uv);

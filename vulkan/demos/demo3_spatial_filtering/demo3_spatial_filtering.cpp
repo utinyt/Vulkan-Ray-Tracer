@@ -62,11 +62,11 @@ public:
 		}
 		ImGui::NewLine();
 
-		static glm::vec3 scale = { 0.125f, 0.125f, 0.125f };
+		static glm::vec3 scale = { 38.398f, 0.610f, 0.315f };
 		ImGui::Text("Scale");
-		ImGui::SliderFloat("X [0.01, 30]", &scale.x, 0.01f, 30.0f);
-		ImGui::SliderFloat("Y [0.01, 30]", &scale.y, 0.01f, 30.0f);
-		ImGui::SliderFloat("Z [0.01, 30]", &scale.z, 0.01f, 30.0f);
+		ImGui::SliderFloat("X [0.01, 200]", &scale.x, 0.01f, 200.0f);
+		ImGui::SliderFloat("Y [0.01, 1]", &scale.y, 0.01f, 1.0f);
+		ImGui::SliderFloat("Z [0.01, 1]", &scale.z, 0.01f, 1.0f);
 		if (scale != userInput.scale) {
 			userInput.scale = scale;
 			frameReset = true;
@@ -84,7 +84,7 @@ public:
 		float lightInternsity = 100;
 		int shadow = 0;
 		glm::vec3 lightPos{ 24.382f, 30.f, 0.1f };
-		glm::vec3 scale{ 0.125f, 0.125f, 0.125f };
+		glm::vec3 scale{ 38.398f, 0.610f, 0.315f };
 	}userInput;
 
 	bool frameReset = false;
@@ -168,6 +168,7 @@ public:
 		rtOutputColor.cleanup();
 		rtOutputPos.cleanup();
 		rtOutputNormal.cleanup();
+		rtOutputAlbedo.cleanup();
 
 		//descriptors
 		vkDestroyDescriptorPool(devices.device, descriptorPool, nullptr);
@@ -408,11 +409,7 @@ public:
 				vkCmdBeginRenderPass(commandBuffers[i], &iamgeFileringRenderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 				vktools::setViewportScissorDynamicStates(commandBuffers[i], swapchain.extent);
 
-				float dist = 0;
-				for (int a = 0; a < currenrtFilter; ++a) {
-					dist += 1 << a;
-				}
-				imageFilteringPushConstant.x = dist;
+				imageFilteringPushConstant.x = static_cast<float>(currenrtFilter - 1);
 				imageFilteringPushConstant.y = imgui->userInput.scale.x;
 				imageFilteringPushConstant.z = imgui->userInput.scale.y;
 				imageFilteringPushConstant.w = imgui->userInput.scale.z;
@@ -562,6 +559,8 @@ private:
 	Texture2D rtOutputPos;
 	/** raytracing output image - normal */
 	Texture2D rtOutputNormal;
+	/** raytracing output image - albedo */
+	Texture2D rtOutputAlbedo;
 	/*
 	* descriptors for raytracer
 	* 1 acceleration structure - tlas
@@ -709,6 +708,7 @@ private:
 		rtOutputColor.cleanup();
 		rtOutputPos.cleanup();
 		rtOutputNormal.cleanup();
+		rtOutputAlbedo.cleanup();
 
 		//output #1 - rt color image
 		rtOutputColor.createEmptyTexture(&devices,
@@ -730,6 +730,15 @@ private:
 		);
 		//output #3 - normal (gbuffer)
 		rtOutputNormal.createEmptyTexture(&devices,
+			swapchain.extent,
+			VK_FORMAT_R32G32B32A32_SFLOAT,
+			VK_IMAGE_TILING_OPTIMAL,
+			VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
+			VK_IMAGE_LAYOUT_GENERAL,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
+		);
+		//output #4 - albedo (gbuffer)
+		rtOutputAlbedo.createEmptyTexture(&devices,
 			swapchain.extent,
 			VK_FORMAT_R32G32B32A32_SFLOAT,
 			VK_IMAGE_TILING_OPTIMAL,
@@ -908,8 +917,13 @@ private:
 			VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
 			1,
 			VK_SHADER_STAGE_RAYGEN_BIT_KHR);
-		//primitive info
+		//rt output albedo
 		rtDescriptorSetBindings.addBinding(4,
+			VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+			1,
+			VK_SHADER_STAGE_RAYGEN_BIT_KHR);
+		//primitive info
+		rtDescriptorSetBindings.addBinding(5,
 			VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 			1,
 			VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR);
@@ -934,7 +948,8 @@ private:
 			writes.emplace_back(rtDescriptorSetBindings.makeWrite(rtDescriptorSets[i], 1, &rtOutputColor.descriptor));
 			writes.emplace_back(rtDescriptorSetBindings.makeWrite(rtDescriptorSets[i], 2, &rtOutputPos.descriptor));
 			writes.emplace_back(rtDescriptorSetBindings.makeWrite(rtDescriptorSets[i], 3, &rtOutputNormal.descriptor));
-			writes.emplace_back(rtDescriptorSetBindings.makeWrite(rtDescriptorSets[i], 4, &primitiveInfo));
+			writes.emplace_back(rtDescriptorSetBindings.makeWrite(rtDescriptorSets[i], 4, &rtOutputAlbedo.descriptor));
+			writes.emplace_back(rtDescriptorSetBindings.makeWrite(rtDescriptorSets[i], 5, &primitiveInfo));
 			vkUpdateDescriptorSets(devices.device, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
 		}
 	}
@@ -950,6 +965,7 @@ private:
 		writes.emplace_back(rtDescriptorSetBindings.makeWrite(rtDescriptorSets[currentFrame], 1, &rtOutputColor.descriptor));
 		writes.emplace_back(rtDescriptorSetBindings.makeWrite(rtDescriptorSets[currentFrame], 2, &rtOutputPos.descriptor));
 		writes.emplace_back(rtDescriptorSetBindings.makeWrite(rtDescriptorSets[currentFrame], 3, &rtOutputNormal.descriptor));
+		writes.emplace_back(rtDescriptorSetBindings.makeWrite(rtDescriptorSets[currentFrame], 4, &rtOutputAlbedo.descriptor));
 		vkUpdateDescriptorSets(devices.device, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
 	}
 
@@ -1114,6 +1130,8 @@ private:
 	void createPostDescriptorSet() {
 		postDescriptorSetBindings.addBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 			1, VK_SHADER_STAGE_FRAGMENT_BIT);
+		postDescriptorSetBindings.addBinding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			1, VK_SHADER_STAGE_FRAGMENT_BIT);
 
 		uint32_t nbDescriptorSet = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
 		postDescriptorSetLayout = postDescriptorSetBindings.createDescriptorSetLayout(devices.device);
@@ -1131,11 +1149,10 @@ private:
 			pingpongFramebuffer[currentFrame * MAX_FRAMES_IN_FLIGHT].attachments[0].imageView,
 			VK_IMAGE_LAYOUT_GENERAL
 		};
-		VkWriteDescriptorSet wd = postDescriptorSetBindings.makeWrite(
-			postDescriptorSets[currentFrame],
-			0,
-			&imageInfo);
-		vkUpdateDescriptorSets(devices.device, 1, &wd, 0, nullptr);
+		std::vector<VkWriteDescriptorSet> writes{};
+		writes.emplace_back(postDescriptorSetBindings.makeWrite(postDescriptorSets[currentFrame], 0, &imageInfo));
+		writes.emplace_back(postDescriptorSetBindings.makeWrite(postDescriptorSets[currentFrame], 1, &rtOutputAlbedo.descriptor));
+		vkUpdateDescriptorSets(devices.device, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
 	}
 
 	/*

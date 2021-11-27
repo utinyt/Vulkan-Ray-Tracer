@@ -4,8 +4,11 @@
 layout(location = 0) in vec2 outUV;
 layout(location = 0) out vec4 col;
 
-layout(set = 0, binding = 0) uniform sampler2D tex;
+layout(binding = 0) uniform sampler2D lighting;
+layout(binding = 1) uniform sampler2D albedo;
 
 void main(){
-	col = texture(tex, outUV);
+	col = texture(lighting, outUV);
+	//col.xyz *= col.xyz;
+	col.xyz *= texture(albedo, outUV).xyz;
 }
