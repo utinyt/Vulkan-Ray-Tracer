@@ -40,8 +40,14 @@ void main(){
 	vec4 sum = vec4(0.0);			//sum of hi(q) * w(p, q) * ci(p)
 	float normalizationFactor = 0;	//k
 
-	float stepScale = 1 << int(stepSize);
-	float colorScale = pow(2, -stepSize);
+	//stepSize [0, 4]
+	float stepScale = 0;
+	for(int i = 0; i < stepSize; ++i){
+		stepScale += 1 << i;
+	}
+
+	//float stepScale = 1 << int(stepSize);
+	//float colorScale = pow(2, -stepScale);
 
 	for(int i = 0; i < 25; ++i){
 		vec2 uv = inUV + offsets[i] * step * stepScale;
@@ -49,11 +55,11 @@ void main(){
 		vec4 q_color = texture(color, uv);
 		vec4 color_diff = p_color - q_color;
 		float dist2 = dot(color_diff, color_diff);
-		float color_weight = min(exp(-(dist2)/(cphi*cphi*colorScale)), 1.0);
+		float color_weight = min(exp(-(dist2)/(cphi)), 1.0);
 
 		vec4 q_normal = texture(normal, uv);
 		vec4 normal_diff = p_normal - q_normal; 
-		dist2 = max(dot(normal_diff, normal_diff), 0.0);
+		dist2 = max(dot(normal_diff, normal_diff) / (stepScale*stepScale), 0.0);
 		float normal_weight = min(exp(-(dist2)/nphi), 1.0);
 
 		vec4 q_pos = texture(pos, uv);

@@ -39,8 +39,8 @@ public:
 		}
 		ImGui::NewLine();
 
-		static float radius = 6, lightIntensity = 100;
-		static int depth = 5, rayPerPixel = 1;
+		static float radius = 3, lightIntensity = 70;
+		static int depth = 3, rayPerPixel = 2;
 		
 		ImGui::Text("Light sphere radius");
 		ImGui::SliderFloat("[1, 10]", &radius, 1, 10);
@@ -62,7 +62,7 @@ public:
 		}
 		ImGui::NewLine();
 
-		static glm::vec3 scale = { 38.398f, 0.610f, 0.315f };
+		static glm::vec3 scale = { 129.398f, 1.f, 0.01f };
 		ImGui::Text("Scale");
 		ImGui::SliderFloat("X [0.01, 200]", &scale.x, 0.01f, 200.0f);
 		ImGui::SliderFloat("Y [0.01, 1]", &scale.y, 0.01f, 1.0f);
@@ -663,7 +663,7 @@ private:
 		VkBufferUsageFlags rtFlags = 
 			VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
 			VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
-		gltfDioramaModel.loadScene(&devices, "../../meshes/scene.gltf", rtFlags);
+		gltfDioramaModel.loadScene(&devices, "../../meshes/pica_pica_mini_diorama/scene.gltf", rtFlags);
 
 		std::vector<BlasGeometries> allBlas{}; //array of blas
 		allBlas.reserve(gltfDioramaModel.primitives.size());

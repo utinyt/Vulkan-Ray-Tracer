@@ -147,7 +147,7 @@ void main() {
 
 	if(prdDirectLightConnection && p > 0) {
 		vec3 f = evalScattering(normal, rayDirection, vec3(1.0)/*material.baseColorFactor.xyz*/); // = NL * kd / PI
-		prd.hitValue += 0.f * prd.weight * f / p * pc.lightIntensity;
+		prd.hitValue += 1.f * prd.weight * f / p * pc.lightIntensity;
 	}
 
 	/*
