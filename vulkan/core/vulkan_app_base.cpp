@@ -56,7 +56,7 @@ VulkanAppBase::~VulkanAppBase() {
 
 	devices.cleanup();
 	vkDestroySurfaceKHR(instance, surface, nullptr);
-	destroyDebugUtilsMessengerEXT(instance, nullptr);
+	vkdebug::messenger::destroyDebugUtilsMessengerEXT(instance, nullptr);
 	vkDestroyInstance(instance, nullptr);
 
 	glfwDestroyWindow(window);
@@ -113,13 +113,13 @@ void VulkanAppBase::initWindow() {
 void VulkanAppBase::initVulkan() {
 	//instance
 	createInstance();
-	vkfp::init(instance);
+	vkfp::init(instance); //raytracing function pointers
 
 	//debug messenger
 	if (enableValidationLayer) {
 		VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo{};
-		setupDebugMessengerCreateInfo(debugCreateInfo);
-		VK_CHECK_RESULT(createDebugUtilsMessengerEXT(instance, &debugCreateInfo, nullptr));
+		vkdebug::messenger::setupDebugMessengerCreateInfo(debugCreateInfo);
+		VK_CHECK_RESULT(vkdebug::messenger::createDebugUtilsMessengerEXT(instance, &debugCreateInfo, nullptr));
 		LOG("created:\tdebug utils messenger");
 	}
 
@@ -131,6 +131,7 @@ void VulkanAppBase::initVulkan() {
 	devices.pickPhysicalDevice(instance, surface, enabledDeviceExtensions);
 	devices.createLogicalDevice();
 	devices.createCommandPool(commandPoolFlags);
+	vkdebug::marker::init(devices.device); //debug utils function pointers
 
 	swapchain.init(&devices, window);
 	swapchain.create();
@@ -426,7 +427,7 @@ void VulkanAppBase::createInstance() {
 		else {
 			enabledLayerCount++;
 			enabledLayerNames.push_back(requiredValidationLayer);
-			setupDebugMessengerCreateInfo(debugCreateInfo);
+			vkdebug::messenger::setupDebugMessengerCreateInfo(debugCreateInfo);
 			instanceInfo.pNext = &debugCreateInfo;
 		}
 	}
@@ -458,9 +459,8 @@ void VulkanAppBase::createInstance() {
 	// -- required extensions specified by user --
 	requiredInstanceExtensions.insert(requiredInstanceExtensions.end(),
 		enabledInstanceExtensions.begin(), enabledInstanceExtensions.end());
-	if (enableValidationLayer) {
-		requiredInstanceExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-	}
+	//debug utils also can be used in release mode - perf makers
+	requiredInstanceExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 
 	uint32_t availableInstanceExtensionCount = 0;
 	vkEnumerateInstanceExtensionProperties(nullptr, &availableInstanceExtensionCount, nullptr);
@@ -475,6 +475,10 @@ void VulkanAppBase::createInstance() {
 			});
 
 		if (extensionIt == availableInstanceExtensions.end()) {
+			if (strcmp(extensionIt->extensionName,VK_EXT_DEBUG_UTILS_EXTENSION_NAME) == 0) {
+				LOG("debug utils are not supported - continue without perf markers");
+				continue;
+			}
 			throw std::runtime_error(std::string(requiredEXT)+" instance extension is not supported");
 		}
 	}

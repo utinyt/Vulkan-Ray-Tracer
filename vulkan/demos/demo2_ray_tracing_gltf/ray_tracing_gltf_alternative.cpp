@@ -8,6 +8,7 @@
 #include "core/vulkan_pipeline.h"
 #include "core/vulkan_framebuffer.h"
 #include "core/vulkan_gltf.h"
+#include "core/vulkan_debug.h"
 
 /*
 * derived imgui class - define newFrame();
@@ -400,17 +401,22 @@ public:
 
 			//#1 raytracing
 			if (static_cast<Imgui*>(imguiBase)->userInput.renderMode == Imgui::RENDER_MODE::RAYRACE) {
+				vkdebug::marker::beginLabel(commandBuffers[i], "raytrace");
 				raytrace(commandBuffers[i], currentFrame);
+				vkdebug::marker::endLabel(commandBuffers[i]);
 			}
 			//#1 or rasterization
 			else {
+				vkdebug::marker::beginLabel(commandBuffers[i], "rasterize");
 				offscreenRenderPassBeginInfo.framebuffer = offscreenFramebuffers[currentFrame].framebuffer;
 				vkCmdBeginRenderPass(commandBuffers[i], &offscreenRenderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 				rasterize(commandBuffers[i], currentFrame);
 				vkCmdEndRenderPass(commandBuffers[i]);
+				vkdebug::marker::endLabel(commandBuffers[i]);
 			}
 
 			//#2 full screen quad
+			vkdebug::marker::beginLabel(commandBuffers[i], "full screen quad");
 			size_t framebufferIndex = i % framebuffers.size();
 			postRenderPassBeginInfo.framebuffer = framebuffers[framebufferIndex];
 			vkCmdBeginRenderPass(commandBuffers[i], &postRenderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
@@ -421,9 +427,10 @@ public:
 				&postDescriptorSets[currentFrame], 0, nullptr);
 			vkCmdDraw(commandBuffers[i], 3, 1, 0, 0); //full screen triangle
 
-			imguiBase->drawFrame(commandBuffers[i], currentFrame);
+			//imguiBase->drawFrame(commandBuffers[i], currentFrame);
 
 			vkCmdEndRenderPass(commandBuffers[i]);
+			vkdebug::marker::endLabel(commandBuffers[i]);
 			VK_CHECK_RESULT(vkEndCommandBuffer(commandBuffers[i]));
 		}
 	}
@@ -1130,4 +1137,4 @@ private:
 };
 
 //entry point
-RUN_APPLICATION_MAIN(VulkanApp, 1920, 1080, "ray tracing");
+RUN_APPLICATION_MAIN(VulkanApp, 1200, 800, "ray tracing");
