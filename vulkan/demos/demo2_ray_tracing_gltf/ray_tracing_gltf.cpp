@@ -1107,10 +1107,11 @@ private:
 		devices.createImage(offscreenColorImage, { swapchain.extent.width,swapchain.extent.height, 1 },
 			offscreenColorFormat,
 			VK_IMAGE_TILING_OPTIMAL,
-			VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
+			VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT, 
+			1,
 			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 		VkImageView offscreenColorImageView = vktools::createImageView(devices.device, offscreenColorImage,
-			VK_IMAGE_VIEW_TYPE_2D, offscreenColorFormat, VK_IMAGE_ASPECT_COLOR_BIT);
+			VK_IMAGE_VIEW_TYPE_2D, offscreenColorFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1);
 		VkSampler sampler;
 		VkSamplerCreateInfo samplerInfo = vktools::initializers::samplerCreateInfo(
 			devices.availableFeatures, devices.properties);
@@ -1123,10 +1124,11 @@ private:
 		devices.createImage(offscreenDepthImage, { swapchain.extent.width,swapchain.extent.height, 1 },
 			offscreenDepthFormat,
 			VK_IMAGE_TILING_OPTIMAL,
-			VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+			VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, 
+			1,
 			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 		VkImageView offscreenDepthImageView = vktools::createImageView(devices.device, offscreenDepthImage,
-			VK_IMAGE_VIEW_TYPE_2D, offscreenDepthFormat, VK_IMAGE_ASPECT_DEPTH_BIT);
+			VK_IMAGE_VIEW_TYPE_2D, offscreenDepthFormat, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
 
 		images.offscreenDepthBuffer.init(&devices, offscreenDepthImage, offscreenDepthImageView,
 			VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
@@ -1134,7 +1136,7 @@ private:
 		//setting image layout
 		VkCommandBuffer cmdBuf = devices.beginCommandBuffer();
 		vktools::setImageLayout(cmdBuf, images.offscreenColorBuffer.image,
-			VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+			VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, 1);
 		vktools::setImageLayout(cmdBuf, images.offscreenDepthBuffer.image,
 			VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, { VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1 });
 		devices.endCommandBuffer(cmdBuf);

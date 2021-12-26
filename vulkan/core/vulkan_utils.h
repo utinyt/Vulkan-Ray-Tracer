@@ -119,8 +119,14 @@ namespace vktools {
 	VkShaderModule createShaderModule(VkDevice device, const std::vector<char>& code);
 	/** @brief transit image layout */
 	void setImageLayout(VkCommandBuffer commandBuffer, VkImage image,
-		VkImageLayout oldLayout, VkImageLayout newLayout,
-		VkImageSubresourceRange subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1});
+		VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels,
+		VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT);
+	void setImageLayout(VkCommandBuffer commandBuffer, VkImage image,
+		VkImageLayout oldLayout, VkImageLayout newLayout, VkImageSubresourceRange subresourceRange);
+	/** @brief generate mipmaps */
+	void generateMipmaps(VkCommandBuffer cmdBuf, VkPhysicalDevice physicalDevice, VkImage image,
+		VkFormat format, int32_t texWidth, int32_t texHeight, uint32_t mipLevels,
+		VkFilter filter);
 	/** @brief insert image memory barrier (general version of setImageLayout) */
 	void insertImageMemoryBarrier(VkCommandBuffer cmdBuf,
 		VkImage image,
@@ -133,7 +139,7 @@ namespace vktools {
 		VkImageSubresourceRange subresourceRange);
 	/** @brief create & return image view */
 	VkImageView createImageView(VkDevice device, VkImage image, VkImageViewType viewType,
-		VkFormat format, VkImageAspectFlags aspectFlags);
+		VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels);
 	/** @brief return suitable image format */
 	VkFormat findSupportedFormat(VkPhysicalDevice physicalDevice, const std::vector<VkFormat>& candidates,
 		VkImageTiling tiling, VkFormatFeatureFlags features);
@@ -179,6 +185,7 @@ namespace vktools {
 			VkFormat format,
 			VkImageTiling tiling,
 			VkImageUsageFlags usage,
+			uint32_t mipLevels,
 			VkSampleCountFlagBits numSamples = VK_SAMPLE_COUNT_1_BIT) {
 			VkImageCreateInfo info{};
 			info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -192,7 +199,7 @@ namespace vktools {
 				info.imageType = VK_IMAGE_TYPE_3D;
 			}
 			info.extent = extent;
-			info.mipLevels = 1;
+			info.mipLevels = mipLevels;
 			info.arrayLayers = 1;
 			info.format = format;
 			info.tiling = tiling;
@@ -207,7 +214,8 @@ namespace vktools {
 			VkPhysicalDeviceFeatures2 availableFeatures,
 			VkPhysicalDeviceProperties properties,
 			VkFilter filter = VK_FILTER_LINEAR,
-			VkSamplerAddressMode mode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE) {
+			VkSamplerAddressMode mode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+			uint32_t mipLevels = 1) {
 
 			VkSamplerCreateInfo samplerInfo{};
 			samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
@@ -231,7 +239,7 @@ namespace vktools {
 			samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
 			samplerInfo.mipLodBias = 0.f;
 			samplerInfo.minLod = 0.f;
-			samplerInfo.maxLod = 1.f;
+			samplerInfo.maxLod = static_cast<float>(mipLevels);
 			return samplerInfo;
 		}
 

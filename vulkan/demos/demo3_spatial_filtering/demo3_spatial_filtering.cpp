@@ -765,7 +765,8 @@ private:
 				vktools::initializers::imageCreateInfo({ swapchain.extent.width, swapchain.extent.height, 1 },
 					VK_FORMAT_R32G32B32A32_SFLOAT,
 					VK_IMAGE_TILING_OPTIMAL,
-					VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT
+					VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
+					1
 			);
 			pingpongFramebuffer[i].addAttachment(imageCreateInfo, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 				VK_IMAGE_LAYOUT_GENERAL, true);

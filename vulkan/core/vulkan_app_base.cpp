@@ -564,7 +564,7 @@ void VulkanAppBase::createDepthStencilImage(VkSampleCountFlagBits sampleCount) {
 	devices.createImage(depthImage, { swapchain.extent.width,swapchain.extent.height, 1 },
 		depthFormat,
 		VK_IMAGE_TILING_OPTIMAL,
-		VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+		VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, 1,
 		devices.lazilyAllocatedMemoryTypeExist ? VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT : VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 		sampleCount
 	);
@@ -578,11 +578,11 @@ void VulkanAppBase::createDepthStencilImage(VkSampleCountFlagBits sampleCount) {
 	}
 
 	depthImageView = vktools::createImageView(devices.device, depthImage,
-		VK_IMAGE_VIEW_TYPE_2D, depthFormat, aspectMask);
+		VK_IMAGE_VIEW_TYPE_2D, depthFormat, aspectMask, 1);
 
 	VkCommandBuffer cmdBuf = devices.beginCommandBuffer();
 	vktools::setImageLayout(cmdBuf, depthImage, VK_IMAGE_LAYOUT_UNDEFINED,
-		VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, { aspectMask, 0, 1, 0, 1});
+		VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, 1, aspectMask);
 	devices.endCommandBuffer(cmdBuf);
 
 	LOG("created:\tdepth stencil image");
@@ -611,7 +611,7 @@ void VulkanAppBase::createMultisampleColorBuffer(VkSampleCountFlagBits sampleCou
 		{ swapchain.extent.width,swapchain.extent.height, 1 },
 		swapchain.surfaceFormat.format,
 		VK_IMAGE_TILING_OPTIMAL,
-		VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+		VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, 1, 
 		devices.lazilyAllocatedMemoryTypeExist ? VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT : VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 		sampleCount
 	);
@@ -620,7 +620,8 @@ void VulkanAppBase::createMultisampleColorBuffer(VkSampleCountFlagBits sampleCou
 		multisampleColorImage,
 		VK_IMAGE_VIEW_TYPE_2D,
 		swapchain.surfaceFormat.format,
-		VK_IMAGE_ASPECT_COLOR_BIT
+		VK_IMAGE_ASPECT_COLOR_BIT,
+		1
 	);
 }
 
@@ -690,6 +691,7 @@ void VulkanAppBase::saveScreenshot(const std::string& filename) {
 		VK_FORMAT_R8G8B8A8_UNORM,
 		VK_IMAGE_TILING_LINEAR,
 		VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+		1,
 		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
 	);
 	

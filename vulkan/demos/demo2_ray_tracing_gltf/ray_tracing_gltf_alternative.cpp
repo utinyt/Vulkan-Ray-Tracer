@@ -54,7 +54,7 @@ public:
 		ImGui::NewLine();
 
 		static float radius = 6, lightIntensity = 100;
-		static int depth = 5, rayPerPixel = 8;
+		static int depth = 5, rayPerPixel = 1;
 		if (userInput.renderMode == RENDER_MODE::RAYRACE) {
 			ImGui::Text("Light sphere radius");
 			ImGui::SliderFloat("[1, 10]", &radius, 1, 10);
@@ -90,7 +90,7 @@ public:
 	struct UserInput {
 		int renderMode = RAYRACE;
 		int maxRayDepth = 5;
-		int rayPerPixel = 8;
+		int rayPerPixel = 1;
 		float radius = 6;
 		float lightInternsity = 100;
 		int shadow = 0;
@@ -688,7 +688,8 @@ private:
 				vktools::initializers::imageCreateInfo({ swapchain.extent.width, swapchain.extent.height, 1 },
 					VK_FORMAT_R32G32B32A32_SFLOAT,
 					VK_IMAGE_TILING_OPTIMAL,
-					VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT
+					VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT, 
+					1
 				);
 
 			//color attachment

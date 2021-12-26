@@ -24,7 +24,7 @@ void TextureBase::cleanup() {
 */
 void Texture2D::load(VulkanDevice* devices, const std::string& path, VkFilter filter, VkSamplerAddressMode mode) {
 	this->devices = devices;
-	
+
 	//image load
 	int width, height, channels;
 	stbi_uc* pixels = stbi_load(path.c_str(), &width, &height, &channels, STBI_rgb_alpha);
@@ -53,18 +53,30 @@ void Texture2D::load(VulkanDevice* devices, unsigned char* data,
 	VkFilter filter, VkSamplerAddressMode mode) {
 	//image creation
 	this->devices = devices;
+	cleanup();
 
+	//mip level
+	mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(texWidth, texHeight)))) + 1; // +1 for original image
+
+	/*
+	* create image (empty)
+	*/
 	devices->createImage(image, { texWidth, texHeight, 1 },
 		format,
 		VK_IMAGE_TILING_OPTIMAL,
-		VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+		VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+		mipLevels,
 		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 	
-	//image view creation
+	/*
+	* create image view
+	*/
 	descriptor.imageView = vktools::createImageView(devices->device, image,
-		VK_IMAGE_VIEW_TYPE_2D, format, VK_IMAGE_ASPECT_COLOR_BIT);
+		VK_IMAGE_VIEW_TYPE_2D, format, VK_IMAGE_ASPECT_COLOR_BIT, mipLevels);
 
-	//staging
+	/*
+	* staging - create starging buffer
+	*/
 	VkBuffer stagingBuffer;
 	VkBufferCreateInfo stagingBufferCreateInfo = vktools::initializers::bufferCreateInfo(
 		imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
@@ -75,13 +87,19 @@ void Texture2D::load(VulkanDevice* devices, unsigned char* data,
 		stagingBuffer, properties);
 	hostVisibleMemory.mapData(devices->device, data);
 
-	//image transfer
+	/*
+	* undefined -> transfer dst optimal
+	*/
 	VkCommandBuffer cmdBuf = devices->beginCommandBuffer();
 	vktools::setImageLayout(cmdBuf,
 		image,
 		VK_IMAGE_LAYOUT_UNDEFINED,
-		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+		mipLevels);
 
+	/*
+	* image copy from staging buffer to the iamge
+	*/
 	VkBufferImageCopy copy = vktools::initializers::bufferCopyRegion({ texWidth, texHeight, 1 });
 	vkCmdCopyBufferToImage(cmdBuf,
 		stagingBuffer,
@@ -90,18 +108,24 @@ void Texture2D::load(VulkanDevice* devices, unsigned char* data,
 		1,
 		&copy
 	);
-	
-	vktools::setImageLayout(cmdBuf, image,
-		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
+	/*
+	* generate mipmaps
+	*/
+	vktools::generateMipmaps(cmdBuf, devices->physicalDevice, image, format, texWidth, texHeight, mipLevels, filter);
 	devices->endCommandBuffer(cmdBuf);
+
+	/*
+	* cleanup
+	*/
 	devices->memoryAllocator.freeBufferMemory(stagingBuffer, properties);
 	vkDestroyBuffer(devices->device, stagingBuffer, nullptr);
 
-	//sampler
+	/*
+	* create sampler
+	*/
 	VkSamplerCreateInfo samplerInfo = vktools::initializers::samplerCreateInfo(
-		devices->availableFeatures, devices->properties, filter, mode);
+		devices->availableFeatures, devices->properties, filter, mode, mipLevels);
 	VK_CHECK_RESULT(vkCreateSampler(devices->device, &samplerInfo, nullptr, &descriptor.sampler));
 	descriptor.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 }
@@ -117,8 +141,13 @@ void Texture2D::createEmptyTexture(VulkanDevice* devices,
 	VkImageLayout layout,
 	VkMemoryPropertyFlags memProperties) {
 	this->devices = devices;
+	cleanup();
+
+	//mip level
+	//mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(extent.width, extent.height)))) + 1; // +1 for original image
+
 	//create image
-	devices->createImage(image, { extent.width, extent.height, 1 }, format, tiling, usage, memProperties);
+	devices->createImage(image, { extent.width, extent.height, 1 }, format, tiling, usage, mipLevels, memProperties);
 
 	//check image aspect
 	VkImageAspectFlags imageAspect = 0;
@@ -135,12 +164,12 @@ void Texture2D::createEmptyTexture(VulkanDevice* devices,
 	}
 
 	//create image view
-	descriptor.imageView = vktools::createImageView(devices->device, image, VK_IMAGE_VIEW_TYPE_2D, format, imageAspect);
+	descriptor.imageView = vktools::createImageView(devices->device, image, VK_IMAGE_VIEW_TYPE_2D, format, imageAspect, mipLevels);
 	descriptor.imageLayout = layout;
 	
 	//image layout trasition
 	VkCommandBuffer cmdBuf = devices->beginCommandBuffer();
-	vktools::setImageLayout(cmdBuf, image, VK_IMAGE_LAYOUT_UNDEFINED, layout);
+	vktools::setImageLayout(cmdBuf, image, VK_IMAGE_LAYOUT_UNDEFINED, layout, mipLevels);
 	devices->endCommandBuffer(cmdBuf);
 
 	//sampler
@@ -156,6 +185,7 @@ void Texture2D::createEmptyTexture(VulkanDevice* devices,
 */
 void TextureCube::load(VulkanDevice* devices, const std::string& path, VkFilter filter, VkSamplerAddressMode mode){
 	this->devices = devices;
+	cleanup();
 	//6 texture paths
 	std::vector<std::string> paths = {
 		path + "/posx.jpg",
@@ -177,6 +207,9 @@ void TextureCube::load(VulkanDevice* devices, const std::string& path, VkFilter 
 		pixelData[i] = data;
 	}
 
+	//mip level
+	//mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(width, height)))) + 1; // +1 for original image
+
 	VkDeviceSize imageSize = width * height * 4 * 6;
 	VkDeviceSize layerSize = imageSize / 6;
 
@@ -185,7 +218,7 @@ void TextureCube::load(VulkanDevice* devices, const std::string& path, VkFilter 
 	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 	imageInfo.imageType = VK_IMAGE_TYPE_2D;
 	imageInfo.extent = { static_cast<VkDeviceSize>(width), static_cast<VkDeviceSize>(height), 1 };
-	imageInfo.mipLevels = 1;
+	imageInfo.mipLevels = mipLevels;
 	imageInfo.arrayLayers = 6; //cube faces
 	imageInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
 	imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
@@ -222,7 +255,7 @@ void TextureCube::load(VulkanDevice* devices, const std::string& path, VkFilter 
 	VkImageSubresourceRange subresourceRange{};
 	subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 	subresourceRange.baseMipLevel = 0;
-	subresourceRange.levelCount = 1;
+	subresourceRange.levelCount = mipLevels;
 	subresourceRange.baseArrayLayer = 0;
 	subresourceRange.layerCount = 6;
 	
