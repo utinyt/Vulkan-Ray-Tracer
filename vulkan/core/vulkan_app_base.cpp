@@ -273,7 +273,7 @@ void VulkanAppBase::update() {
 		if (imguiBase->rerecordcommandBuffer) {
 			imguiBase->rerecordcommandBuffer = false;
 		}
-		if (buildCommandBuffersEveryFrame = true) {
+		if (buildCommandBuffersEveryFrame == true) {
 			return;
 		}
 		resetCommandBuffer();

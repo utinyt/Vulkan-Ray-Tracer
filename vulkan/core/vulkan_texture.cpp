@@ -11,9 +11,12 @@ void TextureBase::cleanup() {
 		return;
 	}
 	vkDestroySampler(devices->device, descriptor.sampler, nullptr);
+	descriptor.sampler = VK_NULL_HANDLE;
 	vkDestroyImageView(devices->device, descriptor.imageView, nullptr);
+	descriptor.imageView = VK_NULL_HANDLE;
 	devices->memoryAllocator.freeImageMemory(image, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 	vkDestroyImage(devices->device, image, nullptr);
+	image = VK_NULL_HANDLE;
 }
 
 /*

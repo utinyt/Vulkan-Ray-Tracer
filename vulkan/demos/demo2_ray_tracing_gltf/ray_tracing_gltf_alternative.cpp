@@ -427,7 +427,7 @@ public:
 				&postDescriptorSets[currentFrame], 0, nullptr);
 			vkCmdDraw(commandBuffers[i], 3, 1, 0, 0); //full screen triangle
 
-			//imguiBase->drawFrame(commandBuffers[i], currentFrame);
+			imguiBase->drawFrame(commandBuffers[i], currentFrame);
 
 			vkCmdEndRenderPass(commandBuffers[i]);
 			vkdebug::marker::endLabel(commandBuffers[i]);
@@ -1138,4 +1138,4 @@ private:
 };
 
 //entry point
-RUN_APPLICATION_MAIN(VulkanApp, 1200, 800, "ray tracing");
+RUN_APPLICATION_MAIN(VulkanApp, 1920, 1080, "ray tracing");
