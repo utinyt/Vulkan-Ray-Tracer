@@ -561,6 +561,9 @@ void VulkanAppBase::createDepthStencilImage(VkSampleCountFlagBits sampleCount) {
 		VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT
 	);
 
+	if (createDefaultDepthBuffer == false)
+		return;
+
 	devices.createImage(depthImage, { swapchain.extent.width,swapchain.extent.height, 1 },
 		depthFormat,
 		VK_IMAGE_TILING_OPTIMAL,
@@ -592,6 +595,9 @@ void VulkanAppBase::createDepthStencilImage(VkSampleCountFlagBits sampleCount) {
 * destroy depth & stencil related resources
 */
 void VulkanAppBase::destroyDepthStencilImage() {
+	if (createDefaultDepthBuffer == false)
+		return;
+
 	vkDestroyImageView(devices.device, depthImageView, nullptr);
 	devices.memoryAllocator.freeImageMemory(depthImage,
 		devices.lazilyAllocatedMemoryTypeExist ? VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT : VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);

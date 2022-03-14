@@ -188,7 +188,7 @@ public:
 		vkDestroyDescriptorSetLayout(devices.device, postDescriptorSetLayout, nullptr);
 
 		//uniform buffers
-		for (auto& uniformBuffer : uniformBuffers) {
+		for (auto& uniformBuffer : matricesUniformBuffer) {
 			devices.memoryAllocator.freeBufferMemory(uniformBuffer,
 				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 			vkDestroyBuffer(devices.device, uniformBuffer, nullptr);
@@ -424,7 +424,7 @@ public:
 			vktools::setViewportScissorDynamicStates(commandBuffers[i], swapchain.extent);
 			vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, postPipeline);
 			vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, postPipelineLayout, 0, 1,
-				&postDescriptorSets[currentFrame], 0, nullptr);
+				&postDescriptorSet[currentFrame], 0, nullptr);
 			vkCmdDraw(commandBuffers[i], 3, 1, 0, 0); //full screen triangle
 
 			imguiBase->drawFrame(commandBuffers[i], currentFrame);
@@ -466,9 +466,9 @@ private:
 	/** instance buffer for tlas */
 	VkBuffer instanceBuffer = VK_NULL_HANDLE;
 	/** uniform buffers for camera matrices */
-	std::vector<VkBuffer> uniformBuffers;
+	std::vector<VkBuffer> matricesUniformBuffer;
 	/** uniform buffer memories */
-	std::vector<MemoryAllocator::HostVisibleMemory> uniformBufferMemories;
+	std::vector<MemoryAllocator::HostVisibleMemory> matricesUniformBufferMemory;
 	/** gltf model */
 	VulkanGLTF gltfDioramaModel;
 	/** view matrix of previous frame */
@@ -579,7 +579,7 @@ private:
 	/** decriptor pool */
 	VkDescriptorPool postDescriptorPool = VK_NULL_HANDLE;
 	/** descriptor sets */
-	std::vector<VkDescriptorSet> postDescriptorSets;
+	std::vector<VkDescriptorSet> postDescriptorSet;
 	/** full quad pipeline */
 	VkPipeline postPipeline = VK_NULL_HANDLE;
 	/** full quad pipeline layout */
@@ -784,7 +784,7 @@ private:
 		}
 
 		for (size_t i = 0; i < static_cast<size_t>(MAX_FRAMES_IN_FLIGHT); ++i) {
-			VkDescriptorBufferInfo camMatricesInfo{ uniformBuffers[i], 0, sizeof(CameraMatrices) };
+			VkDescriptorBufferInfo camMatricesInfo{ matricesUniformBuffer[i], 0, sizeof(CameraMatrices) };
 			VkDescriptorBufferInfo sceneBufferInfo{ sceneBuffer, 0, objInstances.size() * sizeof(ObjInstance) };
 
 			std::vector<VkWriteDescriptorSet> writes;
@@ -1016,7 +1016,7 @@ private:
 		uint32_t nbDescriptorSet = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
 		postDescriptorSetLayout = postDescriptorSetBindings.createDescriptorSetLayout(devices.device);
 		postDescriptorPool = postDescriptorSetBindings.createDescriptorPool(devices.device, nbDescriptorSet);
-		postDescriptorSets = vktools::allocateDescriptorSets(devices.device, postDescriptorSetLayout,
+		postDescriptorSet = vktools::allocateDescriptorSets(devices.device, postDescriptorSetLayout,
 			postDescriptorPool, nbDescriptorSet);
 	}
 
@@ -1030,7 +1030,7 @@ private:
 			VK_IMAGE_LAYOUT_GENERAL
 		};
 		VkWriteDescriptorSet wd = postDescriptorSetBindings.makeWrite(
-			postDescriptorSets[currentFrame],
+			postDescriptorSet[currentFrame],
 			0,
 			&colorInfo);
 		vkUpdateDescriptorSets(devices.device, 1, &wd, 0, nullptr);
@@ -1041,15 +1041,15 @@ private:
 	*/
 	void createUniformbuffer() {
 		VkDeviceSize size = sizeof(CameraMatrices);
-		uniformBuffers.resize(MAX_FRAMES_IN_FLIGHT);
-		uniformBufferMemories.resize(MAX_FRAMES_IN_FLIGHT);
+		matricesUniformBuffer.resize(MAX_FRAMES_IN_FLIGHT);
+		matricesUniformBufferMemory.resize(MAX_FRAMES_IN_FLIGHT);
 
 		VkBufferCreateInfo info = vktools::initializers::bufferCreateInfo(size,
 			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
 
 		for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
-			VK_CHECK_RESULT(vkCreateBuffer(devices.device, &info, nullptr, &uniformBuffers[i]));
-			uniformBufferMemories[i] = devices.memoryAllocator.allocateBufferMemory(uniformBuffers[i],
+			VK_CHECK_RESULT(vkCreateBuffer(devices.device, &info, nullptr, &matricesUniformBuffer[i]));
+			matricesUniformBufferMemory[i] = devices.memoryAllocator.allocateBufferMemory(matricesUniformBuffer[i],
 				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 		}
 	}
@@ -1060,7 +1060,7 @@ private:
 	* @param currentFrame - index of uniform buffer (0 <= currentFrame < MAX_FRAMES_IN_FLIGHT)
 	*/
 	void updateUniformBuffer(size_t currentFrame) {
-		uniformBufferMemories[currentFrame].mapData(devices.device, &cameraMatrices);
+		matricesUniformBufferMemory[currentFrame].mapData(devices.device, &cameraMatrices);
 	}
 
 	/*

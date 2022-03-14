@@ -11,19 +11,19 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="demo2_ray_tracing_gltf_alternative.cpp" />
+    <ClCompile Include="demo4_svgf.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="shaders\brdf.glsl" />
     <None Include="shaders\full_quad.frag" />
     <None Include="shaders\full_quad.vert" />
     <None Include="shaders\pathtrace.rchit" />
     <None Include="shaders\pathtrace.rgen" />
     <None Include="shaders\pathtrace.rmiss" />
     <None Include="shaders\pathtrace_shadow.rmiss" />
-    <None Include="shaders\brdf.glsl" />
     <None Include="shaders\random.glsl" />
-    <None Include="shaders\rasterizer.frag" />
-    <None Include="shaders\rasterizer.vert" />
+    <None Include="shaders\gbuffer.frag" />
+    <None Include="shaders\gbuffer.vert" />
     <None Include="shaders\raytrace.rchit" />
     <None Include="shaders\raytrace.rgen" />
     <None Include="shaders\raytrace.rmiss" />
@@ -34,8 +34,8 @@
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
-    <ProjectGuid>{c4cc7b86-32fd-4a22-b879-0dd9a594ea42}</ProjectGuid>
-    <RootNamespace>demo2raytracinggltf</RootNamespace>
+    <ProjectGuid>{071034e1-38be-43a3-ba7f-5f71b8319345}</ProjectGuid>
+    <RootNamespace>demo4svgf</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />

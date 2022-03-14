@@ -100,6 +100,8 @@ protected:
 	VkCommandPoolCreateFlags commandPoolFlags = 0;
 	/** indicate app using pre-recoreded command buffers or re-reocrd every frame */
 	bool buildCommandBuffersEveryFrame = false;
+	/** set default depth buffer */
+	bool createDefaultDepthBuffer = true;
 	/** frame time & elapsed time*/
 	float dt = 0, oldTime = 0;
 

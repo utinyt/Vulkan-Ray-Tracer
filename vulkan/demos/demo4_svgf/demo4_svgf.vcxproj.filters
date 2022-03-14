@@ -14,62 +14,62 @@
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
     <Filter Include="Source Files\shaders">
-      <UniqueIdentifier>{bf9122ab-2e4e-4c77-b929-1a6e867d2138}</UniqueIdentifier>
+      <UniqueIdentifier>{4b047e8a-6c58-463f-8982-d5b29f18dfc3}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <None Include="shaders\pathtrace.rchit">
-      <Filter>Source Files\shaders</Filter>
-    </None>
-    <None Include="shaders\pathtrace.rgen">
-      <Filter>Source Files\shaders</Filter>
-    </None>
-    <None Include="shaders\pathtrace.rmiss">
-      <Filter>Source Files\shaders</Filter>
-    </None>
-    <None Include="shaders\rasterizer.frag">
-      <Filter>Source Files\shaders</Filter>
-    </None>
-    <None Include="shaders\rasterizer.vert">
-      <Filter>Source Files\shaders</Filter>
-    </None>
-    <None Include="shaders\ray_common.glsl">
-      <Filter>Source Files\shaders</Filter>
-    </None>
-    <None Include="shaders\raytrace.rchit">
-      <Filter>Source Files\shaders</Filter>
-    </None>
-    <None Include="shaders\raytrace.rgen">
-      <Filter>Source Files\shaders</Filter>
-    </None>
+    <ClCompile Include="demo4_svgf.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
     <None Include="shaders\raytrace.rmiss">
-      <Filter>Source Files\shaders</Filter>
-    </None>
-    <None Include="shaders\wavefront.glsl">
-      <Filter>Source Files\shaders</Filter>
-    </None>
-    <None Include="shaders\full_quad.frag">
       <Filter>Source Files\shaders</Filter>
     </None>
     <None Include="shaders\full_quad.vert">
       <Filter>Source Files\shaders</Filter>
     </None>
-    <None Include="shaders\random.glsl">
-      <Filter>Source Files\shaders</Filter>
-    </None>
-    <None Include="shaders\sampling.glsl">
-      <Filter>Source Files\shaders</Filter>
-    </None>
-    <None Include="shaders\pathtrace_shadow.rmiss">
+    <None Include="shaders\full_quad.frag">
       <Filter>Source Files\shaders</Filter>
     </None>
     <None Include="shaders\brdf.glsl">
       <Filter>Source Files\shaders</Filter>
     </None>
-  </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="demo2_ray_tracing_gltf_alternative.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
+    <None Include="shaders\random.glsl">
+      <Filter>Source Files\shaders</Filter>
+    </None>
+    <None Include="shaders\ray_common.glsl">
+      <Filter>Source Files\shaders</Filter>
+    </None>
+    <None Include="shaders\sampling.glsl">
+      <Filter>Source Files\shaders</Filter>
+    </None>
+    <None Include="shaders\wavefront.glsl">
+      <Filter>Source Files\shaders</Filter>
+    </None>
+    <None Include="shaders\pathtrace.rchit">
+      <Filter>Source Files\shaders</Filter>
+    </None>
+    <None Include="shaders\raytrace.rchit">
+      <Filter>Source Files\shaders</Filter>
+    </None>
+    <None Include="shaders\pathtrace.rgen">
+      <Filter>Source Files\shaders</Filter>
+    </None>
+    <None Include="shaders\raytrace.rgen">
+      <Filter>Source Files\shaders</Filter>
+    </None>
+    <None Include="shaders\pathtrace.rmiss">
+      <Filter>Source Files\shaders</Filter>
+    </None>
+    <None Include="shaders\pathtrace_shadow.rmiss">
+      <Filter>Source Files\shaders</Filter>
+    </None>
+    <None Include="shaders\gbuffer.vert">
+      <Filter>Source Files\shaders</Filter>
+    </None>
+    <None Include="shaders\gbuffer.frag">
+      <Filter>Source Files\shaders</Filter>
+    </None>
   </ItemGroup>
 </Project>
