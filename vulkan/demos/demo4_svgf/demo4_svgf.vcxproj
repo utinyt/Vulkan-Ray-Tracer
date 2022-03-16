@@ -30,6 +30,7 @@
     <None Include="shaders\ray_common.glsl" />
     <None Include="shaders\reprojection.comp" />
     <None Include="shaders\sampling.glsl" />
+    <None Include="shaders\update_history.comp" />
     <None Include="shaders\wavefront.glsl" />
   </ItemGroup>
   <PropertyGroup Label="Globals">

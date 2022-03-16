@@ -10,4 +10,5 @@
 ..\..\glslc.exe pathtrace.rmiss -o pathtrace_rmiss.spv --target-env=vulkan1.2 -g
 ..\..\glslc.exe pathtrace_shadow.rmiss -o pathtrace_shadow_rmiss.spv --target-env=vulkan1.2 -g
 ..\..\glslc.exe reprojection.comp -o reprojection_comp.spv --target-env=vulkan1.2 -g
+..\..\glslc.exe update_history.comp -o update_history_comp.spv --target-env=vulkan1.2 -g
 pause

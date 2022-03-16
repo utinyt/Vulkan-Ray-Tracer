@@ -1,0 +1,23 @@
+#version 450
+//#extension GL_ARB_separate_shader_objects : enable
+
+layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
+
+/** src */
+layout(binding = 0, rg32f) uniform readonly image2D integratedMomentsImage;
+layout(binding = 1, r32f) uniform readonly image2D updatedHistoryLengthImage;
+
+/** dst */
+layout(binding = 2, rg32f) uniform writeonly image2D momentHistory;
+layout(binding = 3, r32f) uniform writeonly image2D historyLengthImage;
+
+//???
+layout(binding = 4, rgba32f) uniform readonly image2D integratedCol;
+layout(binding = 5, rgba32f) uniform writeonly image2D colHistory;
+
+void main(){
+	ivec2 pos = ivec2(gl_GlobalInvocationID.xy);
+	imageStore(momentHistory, pos, imageLoad(integratedMomentsImage, pos));
+	imageStore(historyLengthImage, pos, imageLoad(updatedHistoryLengthImage, pos));
+	imageStore(colHistory, pos, imageLoad(integratedCol, pos));
+}

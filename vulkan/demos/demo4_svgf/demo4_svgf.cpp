@@ -124,7 +124,8 @@ public:
 		vkDestroyRenderPass(devices.device, postRenderPass, nullptr);
 		vkDestroyPipeline(devices.device, reprojectionComputePipeline, nullptr);
 		vkDestroyPipelineLayout(devices.device, reprojectionComputePipelineLayout, nullptr);
-		
+		vkDestroyPipeline(devices.device, updateHistoryComputePipeline, nullptr);
+		vkDestroyPipelineLayout(devices.device, updateHistoryComputePipelineLayout, nullptr);
 
 		devices.memoryAllocator.freeBufferMemory(sceneBuffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 		vkDestroyBuffer(devices.device, sceneBuffer, nullptr);
@@ -154,6 +155,9 @@ public:
 		devices.memoryAllocator.freeImageMemory(historyLengthImage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 		vkDestroyImage(devices.device, historyLengthImage, nullptr);
 		vkDestroyImageView(devices.device, historyLengthImageView, nullptr);
+		devices.memoryAllocator.freeImageMemory(updatedHistoryLengthImage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		vkDestroyImage(devices.device, updatedHistoryLengthImage, nullptr);
+		vkDestroyImageView(devices.device, updatedHistoryLengthImageView, nullptr);
 		devices.memoryAllocator.freeImageMemory(momentHistoryImage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 		vkDestroyImage(devices.device, momentHistoryImage, nullptr);
 		vkDestroyImageView(devices.device, momentHistoryImageView, nullptr);
@@ -195,6 +199,8 @@ public:
 		vkDestroyDescriptorSetLayout(devices.device, postDescriptorSetLayout, nullptr);
 		vkDestroyDescriptorPool(devices.device, reprojectionDescPool, nullptr);
 		vkDestroyDescriptorSetLayout(devices.device, reprojectionDescLayout, nullptr);
+		vkDestroyDescriptorPool(devices.device, updateHistoryDescPool, nullptr);
+		vkDestroyDescriptorSetLayout(devices.device, updateHistoryDescLayout, nullptr);
 
 		//uniform buffers
 		devices.memoryAllocator.freeBufferMemory(matricesUniformBuffer,
@@ -260,6 +266,7 @@ public:
 		* history data & integrated images
 		*/
 		createStorageImage(historyLengthImage, historyLengthImageView, VK_FORMAT_R32_SFLOAT, VK_IMAGE_USAGE_TRANSFER_DST_BIT); //length
+		createStorageImage(updatedHistoryLengthImage, updatedHistoryLengthImageView, VK_FORMAT_R32_SFLOAT); //length
 		initHistoryLengthImage();
 		createStorageImage(colorHistoryImage, colorHistoryImageView, VK_FORMAT_R32G32B32A32_SFLOAT); //color
 		createStorageImage(momentHistoryImage, momentHistoryImageView, VK_FORMAT_R32G32_SFLOAT); //vec2(moment1, moment2)
@@ -278,12 +285,11 @@ public:
 		createRtShaderBindingTable();
 
 		/*
-		* reprojection
+		* compute (reprojection / history update)
 		*/
-		createReprojectionDescSet();
-		createReprojectionComputePipeline();
-		updateReprojectionDescSet();
-		
+		createComputeDescSet();
+		createComputePipeline();
+		updateComputeDescSet();
 
 		/*
 		* full-quad
@@ -420,6 +426,9 @@ public:
 		postRenderPassBeginInfo.renderPass = postRenderPass;
 		postRenderPassBeginInfo.renderArea = { {0, 0},swapchain.extent };
 
+		cam.oldView = oldViewMatrix;
+		cam.proj = cameraMatrices.proj;
+
 		for (size_t i = 0; i < framebuffers.size(); ++i) {
 			VK_CHECK_RESULT(vkBeginCommandBuffer(commandBuffers[i], &cmdBufBeginInfo));
 
@@ -446,9 +455,10 @@ public:
 			vkdebug::marker::beginLabel(commandBuffers[i], "reproject");
 			vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_COMPUTE, reprojectionComputePipeline);
 			vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_COMPUTE, reprojectionComputePipelineLayout, 0, 1, &reprojectionDescSet, 0, nullptr);
+			vkCmdPushConstants(commandBuffers[i], reprojectionComputePipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(glm::mat4) * 2, &cam);
 			vkCmdDispatch(commandBuffers[i], swapchain.extent.width / 32, swapchain.extent.height / 32, 1);
 
-			std::array<VkImageMemoryBarrier, 2> barriers{};
+			std::array<VkImageMemoryBarrier, 4> barriers{};
 			barriers[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
 			barriers[0].pNext = nullptr;
 			barriers[0].oldLayout = VK_IMAGE_LAYOUT_GENERAL;
@@ -461,13 +471,42 @@ public:
 			barriers[0].image = integratedColorImage;
 			barriers[1] = barriers[0];
 			barriers[1].image = integratedMomentsImage;
+			barriers[2] = barriers[0];
+			barriers[2].image = updatedHistoryLengthImage;
+			barriers[3] = barriers[0];
+			barriers[3].image = varianceImage;
 
-			vkCmdPipelineBarrier(commandBuffers[i], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 2, barriers.data());
-
+			vkCmdPipelineBarrier(commandBuffers[i],
+				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+				0,
+				0, nullptr,
+				0, nullptr,
+				static_cast<uint32_t>(barriers.size()), barriers.data()
+			);
 			vkdebug::marker::endLabel(commandBuffers[i]);
 
 			/*
-			* #4 full screen quad
+			* #4 update history
+			*/
+			vkdebug::marker::beginLabel(commandBuffers[i], "update history");
+			vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_COMPUTE, updateHistoryComputePipeline);
+			vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_COMPUTE, updateHistoryComputePipelineLayout, 0, 1, &updateHistoryDescSet, 0, nullptr);
+			vkCmdDispatch(commandBuffers[i], swapchain.extent.width / 32, swapchain.extent.height / 32, 1);
+
+			VkImageMemoryBarrier barrier = barriers[0];
+			vkCmdPipelineBarrier(commandBuffers[i],
+				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+				VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+				0,
+				0, nullptr,
+				0, nullptr,
+				1, &barrier
+			);
+			vkdebug::marker::endLabel(commandBuffers[i]);
+
+			/*
+			* #5 full screen quad
 			*/
 			vkdebug::marker::beginLabel(commandBuffers[i], "full screen quad");
 			size_t framebufferIndex = i % framebuffers.size();
@@ -496,6 +535,7 @@ public:
 		createGBufferResources(true);
 
 		createStorageImage(historyLengthImage, historyLengthImageView, VK_FORMAT_R32_SFLOAT, VK_IMAGE_USAGE_TRANSFER_DST_BIT); //length
+		createStorageImage(updatedHistoryLengthImage, updatedHistoryLengthImageView, VK_FORMAT_R32_SFLOAT); //length
 		initHistoryLengthImage();
 		createStorageImage(colorHistoryImage, colorHistoryImageView, VK_FORMAT_R32G32B32A32_SFLOAT); //color
 		createStorageImage(momentHistoryImage, momentHistoryImageView, VK_FORMAT_R32G32_SFLOAT); //vec2(moment1, moment2)
@@ -506,7 +546,7 @@ public:
 
 		createRaytraceDestinationImage();
 		updateRtDescriptorSet();
-		updateReprojectionDescSet();
+		updateComputeDescSet();
 		updatePostDescriptorSet();
 		recordCommandBuffer();
 	}
@@ -535,7 +575,7 @@ private:
 	/** gltf model */
 	VulkanGLTF gltfDioramaModel;
 	/** view matrix of previous frame */
-	glm::mat4 oldViewMatrix;
+	glm::mat4 oldViewMatrix = glm::mat4(1.f);
 
 	/*
 	* object instances - scene descriptor
@@ -602,12 +642,19 @@ private:
 	/** length -> integer  */
 	VkImage historyLengthImage = VK_NULL_HANDLE;
 	VkImageView historyLengthImageView = VK_NULL_HANDLE;
+	VkImage updatedHistoryLengthImage = VK_NULL_HANDLE;
+	VkImageView updatedHistoryLengthImageView = VK_NULL_HANDLE;
 	/** color history */
 	VkImage colorHistoryImage = VK_NULL_HANDLE;
 	VkImageView colorHistoryImageView = VK_NULL_HANDLE;
 	/** moment history */
 	VkImage momentHistoryImage = VK_NULL_HANDLE;
 	VkImageView momentHistoryImageView = VK_NULL_HANDLE;
+
+	struct Cam {
+		glm::mat4 oldView;
+		glm::mat4 proj;
+	} cam;
 
 	/*
 	* integrated data
@@ -674,6 +721,18 @@ private:
 	VkDescriptorPool reprojectionDescPool = VK_NULL_HANDLE;
 	VkDescriptorSetLayout reprojectionDescLayout = VK_NULL_HANDLE;
 	VkDescriptorSet reprojectionDescSet = VK_NULL_HANDLE;
+
+	/*
+	* update history (compute) resources
+	*/
+	/** compute pipeline */
+	VkPipeline updateHistoryComputePipeline = VK_NULL_HANDLE;
+	VkPipelineLayout updateHistoryComputePipelineLayout = VK_NULL_HANDLE;
+	/** descriptor set */
+	DescriptorSetBindings updateHistoryDescBindings;
+	VkDescriptorPool updateHistoryDescPool = VK_NULL_HANDLE;
+	VkDescriptorSetLayout updateHistoryDescLayout = VK_NULL_HANDLE;
+	VkDescriptorSet updateHistoryDescSet = VK_NULL_HANDLE;
 
 	/*
 	* full-quad pipeline resources
@@ -930,6 +989,13 @@ private:
 			1
 		);
 
+		vktools::setImageLayout(cmdBuf,
+			updatedHistoryLengthImage,
+			VK_IMAGE_LAYOUT_UNDEFINED,
+			VK_IMAGE_LAYOUT_GENERAL,
+			1
+		);
+
 		devices.endCommandBuffer(cmdBuf);
 
 		/*
@@ -955,9 +1021,12 @@ private:
 	/*
 	* create reprojection compute pipeline
 	*/
-	void createReprojectionComputePipeline() {
+	void createComputePipeline() {
+		/*
+		* reprojection pipeline
+		*/
 		std::vector<VkDescriptorSetLayout> layouts{ reprojectionDescLayout};
-		std::vector<VkPushConstantRange> ranges{ {VK_SHADER_STAGE_COMPUTE_BIT, 0, static_cast<uint32_t>(sizeof(glm::mat4))} };
+		std::vector<VkPushConstantRange> ranges{ {VK_SHADER_STAGE_COMPUTE_BIT, 0, static_cast<uint32_t>(sizeof(glm::mat4) * 2)} };
 		VkPipelineLayoutCreateInfo reprojectionComputePipelineLayoutCreateInfo = vktools::initializers::pipelineLayoutCreateInfo(layouts, ranges);
 		VK_CHECK_RESULT(vkCreatePipelineLayout(devices.device, &reprojectionComputePipelineLayoutCreateInfo, nullptr, &reprojectionComputePipelineLayout));
 
@@ -968,12 +1037,26 @@ private:
 		VK_CHECK_RESULT(vkCreateComputePipelines(devices.device, VK_NULL_HANDLE, 1, &reprojectionComputePipelineCreateInfo, nullptr, &reprojectionComputePipeline));
 
 		vkDestroyShaderModule(devices.device, reprojectionShaderModule, nullptr);
+
+		/*
+		* history update pipeline
+		*/
+		VkPipelineLayoutCreateInfo  updateHistoryComputePipelineLayoutCreateInfo = vktools::initializers::pipelineLayoutCreateInfo(&updateHistoryDescLayout, 1);
+		VK_CHECK_RESULT(vkCreatePipelineLayout(devices.device, &updateHistoryComputePipelineLayoutCreateInfo, nullptr, &updateHistoryComputePipelineLayout));
+
+		VkComputePipelineCreateInfo updateHistoryComputePipelineCreateInfo{ VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO };
+		updateHistoryComputePipelineCreateInfo.layout = updateHistoryComputePipelineLayout;
+		VkShaderModule updateHistoryShaderModule = vktools::createShaderModule(devices.device, vktools::readFile("shaders/update_history_comp.spv"));
+		updateHistoryComputePipelineCreateInfo.stage = vktools::initializers::pipelineShaderStageCreateInfo(VK_SHADER_STAGE_COMPUTE_BIT, updateHistoryShaderModule);
+		VK_CHECK_RESULT(vkCreateComputePipelines(devices.device, VK_NULL_HANDLE, 1, &updateHistoryComputePipelineCreateInfo, nullptr, &updateHistoryComputePipeline));
+
+		vkDestroyShaderModule(devices.device, updateHistoryShaderModule, nullptr);
 	}
 
 	/*
 	* create reprojection descriptor set
 	*/
-	void createReprojectionDescSet() {
+	void createComputeDescSet() {
 		/*
 		* current frame data 
 		*/
@@ -993,25 +1076,57 @@ private:
 		reprojectionDescBindings.addBinding(4, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT);
 		/** history length */
 		reprojectionDescBindings.addBinding(5, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT);
+		/** color history */
+		reprojectionDescBindings.addBinding(6, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT);
+		/** moment history */
+		reprojectionDescBindings.addBinding(7, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT);
 
 		/*
 		* integrated images (output)
 		*/
 		/** integrated color */
-		reprojectionDescBindings.addBinding(6, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT);
+		reprojectionDescBindings.addBinding(8, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT);
 		/** integrated moments */
-		reprojectionDescBindings.addBinding(7, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT);
+		reprojectionDescBindings.addBinding(9, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT);
+		/** udpated history length destination */
+		reprojectionDescBindings.addBinding(10, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT);
+		/** variance destination */
+		reprojectionDescBindings.addBinding(11, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT);
 
 		/** create resources */
 		reprojectionDescPool = reprojectionDescBindings.createDescriptorPool(devices.device);
 		reprojectionDescLayout = reprojectionDescBindings.createDescriptorSetLayout(devices.device);
 		reprojectionDescSet = vktools::allocateDescriptorSets(devices.device, reprojectionDescLayout, reprojectionDescPool, 1).front();
+
+		/*
+		* source
+		*/
+		/** integrated moments */
+		updateHistoryDescBindings.addBinding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT);
+		/** updated history length */
+		updateHistoryDescBindings.addBinding(1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT);
+
+		/*
+		* destination
+		*/
+		/** moment history */
+		updateHistoryDescBindings.addBinding(2, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT);
+		/** history length */
+		updateHistoryDescBindings.addBinding(3, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT);
+
+		updateHistoryDescBindings.addBinding(4, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT);
+		updateHistoryDescBindings.addBinding(5, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT);
+
+		/** create resources */
+		updateHistoryDescPool = updateHistoryDescBindings.createDescriptorPool(devices.device);
+		updateHistoryDescLayout = updateHistoryDescBindings.createDescriptorSetLayout(devices.device);
+		updateHistoryDescSet = vktools::allocateDescriptorSets(devices.device, updateHistoryDescLayout, updateHistoryDescPool, 1).front();
 	}
 
 	/*
 	* update reprojection descriptor set
 	*/
-	void updateReprojectionDescSet() {
+	void updateComputeDescSet() {
 		std::vector<VkWriteDescriptorSet> writes;
 
 		VkDescriptorImageInfo rtImageInfo{imageSampler, rtDestinationImageView, VK_IMAGE_LAYOUT_GENERAL};
@@ -1022,9 +1137,13 @@ private:
 		VkDescriptorImageInfo previousGBufferPositionInfo{ imageSampler, gbuffers[previousGBufferIndex].attachments[0].imageView, VK_IMAGE_LAYOUT_GENERAL };
 		VkDescriptorImageInfo previousGBufferNormalPrimIDInfo{ imageSampler, gbuffers[previousGBufferIndex].attachments[1].imageView, VK_IMAGE_LAYOUT_GENERAL };
 		VkDescriptorImageInfo historyLengthInfo{ imageSampler, historyLengthImageView, VK_IMAGE_LAYOUT_GENERAL };
+		VkDescriptorImageInfo colorHistoryInfo{ imageSampler, colorHistoryImageView, VK_IMAGE_LAYOUT_GENERAL };
+		VkDescriptorImageInfo momentHistoryInfo{ imageSampler, momentHistoryImageView, VK_IMAGE_LAYOUT_GENERAL };
 
 		VkDescriptorImageInfo integratedColorInfo{ imageSampler, integratedColorImageView, VK_IMAGE_LAYOUT_GENERAL };
 		VkDescriptorImageInfo integratedMomentInfo{ imageSampler, integratedMomentsImageView, VK_IMAGE_LAYOUT_GENERAL };
+		VkDescriptorImageInfo updatedHistoryLengthInfo{ imageSampler, updatedHistoryLengthImageView, VK_IMAGE_LAYOUT_GENERAL };
+		VkDescriptorImageInfo varianceInfo{ imageSampler, varianceImageView, VK_IMAGE_LAYOUT_GENERAL };
 
 		writes.push_back(reprojectionDescBindings.makeWrite(reprojectionDescSet, 0, &rtImageInfo));
 		writes.push_back(reprojectionDescBindings.makeWrite(reprojectionDescSet, 1, &currentGBufferPositionInfo));
@@ -1032,8 +1151,19 @@ private:
 		writes.push_back(reprojectionDescBindings.makeWrite(reprojectionDescSet, 3, &previousGBufferPositionInfo));
 		writes.push_back(reprojectionDescBindings.makeWrite(reprojectionDescSet, 4, &previousGBufferNormalPrimIDInfo));
 		writes.push_back(reprojectionDescBindings.makeWrite(reprojectionDescSet, 5, &historyLengthInfo));
-		writes.push_back(reprojectionDescBindings.makeWrite(reprojectionDescSet, 6, &integratedColorInfo));
-		writes.push_back(reprojectionDescBindings.makeWrite(reprojectionDescSet, 7, &integratedMomentInfo));
+		writes.push_back(reprojectionDescBindings.makeWrite(reprojectionDescSet, 6, &colorHistoryInfo));
+		writes.push_back(reprojectionDescBindings.makeWrite(reprojectionDescSet, 7, &momentHistoryInfo));
+		writes.push_back(reprojectionDescBindings.makeWrite(reprojectionDescSet, 8, &integratedColorInfo));
+		writes.push_back(reprojectionDescBindings.makeWrite(reprojectionDescSet, 9, &integratedMomentInfo));
+		writes.push_back(reprojectionDescBindings.makeWrite(reprojectionDescSet, 10, &updatedHistoryLengthInfo));
+		writes.push_back(reprojectionDescBindings.makeWrite(reprojectionDescSet, 11, &varianceInfo));
+
+		writes.push_back(updateHistoryDescBindings.makeWrite(updateHistoryDescSet, 0, &integratedMomentInfo));
+		writes.push_back(updateHistoryDescBindings.makeWrite(updateHistoryDescSet, 1, &updatedHistoryLengthInfo));
+		writes.push_back(updateHistoryDescBindings.makeWrite(updateHistoryDescSet, 2, &momentHistoryInfo));
+		writes.push_back(updateHistoryDescBindings.makeWrite(updateHistoryDescSet, 3, &historyLengthInfo));
+		writes.push_back(updateHistoryDescBindings.makeWrite(updateHistoryDescSet, 4, &integratedColorInfo));
+		writes.push_back(updateHistoryDescBindings.makeWrite(updateHistoryDescSet, 5, &colorHistoryInfo));
 
 		vkUpdateDescriptorSets(devices.device, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
 	}

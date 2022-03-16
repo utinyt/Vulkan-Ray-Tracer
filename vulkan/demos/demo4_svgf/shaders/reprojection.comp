@@ -11,19 +11,182 @@ layout(binding = 2, rgba32f) uniform readonly image2D currentGNormalPrimID;
 /** history */
 layout(binding = 3, rgba32f) uniform readonly image2D previousGPos;
 layout(binding = 4, rgba32f) uniform readonly image2D previousGNormalPrimID;
-layout(binding = 5, r32f) uniform image2D historyLength;
+layout(binding = 5, r32f) uniform readonly image2D historyLengthImage;
+layout(binding = 6, rgba32f) uniform readonly image2D colorHistory;
+layout(binding = 7, rg32f) uniform readonly image2D momentHistory;
 
 /** output */
-layout(binding = 6, rgba32f) uniform image2D integratedColor;
-layout(binding = 7, rg32f) uniform image2D integratedMoments;
+layout(binding = 8, rgba32f) uniform writeonly image2D integratedColorImage;
+layout(binding = 9, rg32f) uniform writeonly image2D integratedMomentsImage;
+layout(binding = 10, r32f) uniform writeonly image2D updatedHistoryLengthImage;
+layout(binding = 11, r32f) uniform writeonly image2D varianceImage;
 
 layout(push_constant) uniform PushConstant {
-	mat4 previoudViewMatrix;
+	mat4 previousViewMatrix;
+	mat4 proj;
 };
 
+float distanceSquared(vec3 v1, vec3 v2){
+	float xdiff = v1.x - v2.x;
+	float ydiff = v1.y - v2.y;
+	float zdiff = v1.z - v2.z;
+	return xdiff * xdiff + ydiff * ydiff + zdiff * zdiff;
+}
+
+bool isReprojectionValid(ivec2 res, ivec2 currLoc, ivec2 prevLoc, vec4 currNormalPrimID){
+	//range check
+	if(prevLoc.x < 0 || prevLoc.x >= res.x || prevLoc.y < 0 || prevLoc.y >= res.y){
+		return false;
+	}
+
+	//check if both samples indicate the same primitive
+	vec4 prevNormalPrimId = imageLoad(previousGNormalPrimID, prevLoc);
+	if(prevNormalPrimId.w == -1.f || (currNormalPrimID.w != prevNormalPrimId.w)){
+		return false;
+	}
+
+	//check if both normals are identical
+	if(distance(currNormalPrimID.xyz, prevNormalPrimId.xyz) > 0.01f){
+		return false;
+	}
+	return true;
+}
+
 void main(){
-	ivec2 pos = ivec2(gl_GlobalInvocationID.xy);
-	vec4 gpos = imageLoad(rtImage, pos);
-	imageStore(integratedColor, pos, gpos);
-	//imageStore(integratedColor, pos, gpos);
+	ivec2 sampleLocation = ivec2(gl_GlobalInvocationID.xy);
+	float historyLength = imageLoad(historyLengthImage, sampleLocation).x;
+	vec4 currCol = imageLoad(rtImage, sampleLocation);
+	float currLuminance = 0.2126 * currCol.x + 0.7152 * currCol.y + 0.0722 * currCol.z;
+	vec4 currNormalPrimID = imageLoad(currentGNormalPrimID, sampleLocation);
+
+	if(historyLength > 0 && currNormalPrimID.w > -1){
+		/*
+		* get world position from current gbuffer and project it using previous view matrix 
+		* to get the sample from previous gbuffer
+		*/
+		vec4 oldClipPos = proj * previousViewMatrix * imageLoad(currentGPos, sampleLocation);
+
+		float ndcx = oldClipPos.x / oldClipPos.w;
+		float ndcy = oldClipPos.y / oldClipPos.w;
+		ndcx += 1.f;
+		ndcx /= 2.f;
+		ndcy += 1.f;
+		ndcy /= 2.f;
+//		float ndcx = -clipx * 0.5f + 0.5f;
+//		float ndcy = -clipy * 0.5f + 0.5f;
+		ivec2 res = imageSize(rtImage);
+		float prevx = ndcx * res.x - 0.5f;
+		float prevy = ndcy * res.y - 0.5f;
+
+		bool v[4];
+		float floorx = floor(prevx);
+		float floory = floor(prevy);
+		float fracx = prevx - floorx;
+		float fracy = prevy - floory;
+
+		bool valid = (floorx >= 0 && floorx < res.x && floory >= 0 && floory < res.y);
+
+		//2x2 tap bilinear filter
+		ivec2 offset[4] = {ivec2(0, 0), ivec2(1, 0), ivec2(0, 1), ivec2(1, 1)};
+
+		//check validity
+		for(int i = 0; i < 4; ++i){
+			ivec2 loc = ivec2(floorx, floory) + offset[i];
+			v[i] = isReprojectionValid(res, sampleLocation, loc, currNormalPrimID);
+			valid = valid && v[i];
+		}
+
+		vec3 prevCol = vec3(0.0);
+		vec2 prevMoments = vec2(0.0);
+		float prevHistoryLength = 0.0;
+
+		if(valid){
+			/*
+			* interpolate
+			*/
+			float sumw = 0.f;
+			float w[4] = {
+				(1 - fracx) * (1 - fracy),
+				fracx * (1 - fracy),
+				(1 - fracx) * fracy,
+				fracx * fracy
+			};
+
+			for(int i = 0; i < 4; ++i){
+				ivec2 loc = ivec2(floorx, floory) + offset[i];
+				if(v[i]){
+					prevCol += w[i] * imageLoad(colorHistory, loc).xyz;
+					prevMoments += w[i] * imageLoad(momentHistory, loc).xy;
+					prevHistoryLength += w[i] * imageLoad(historyLengthImage, loc).x;
+					sumw += w[i];
+				}
+			}
+
+			if(sumw >= 0.01){
+				prevCol /= sumw;
+				prevMoments /= sumw;
+				prevHistoryLength /= sumw;
+				valid = true;
+			}
+		}
+
+		if(!valid){
+			float count = 0;
+			const int radius = 1;
+			for(int yy = -radius; yy <= radius; ++yy){
+				for(int xx = -radius; xx <= radius; ++xx){
+					vec2 loc = vec2(floorx, floory) + vec2(xx, yy);
+					if(isReprojectionValid(res, sampleLocation, ivec2(loc), currNormalPrimID)){
+						prevCol += imageLoad(colorHistory, ivec2(loc)).xyz;
+						prevMoments += imageLoad(momentHistory, ivec2(loc)).xy;
+						prevHistoryLength += imageLoad(historyLengthImage, ivec2(loc)).x;
+						count++;
+					}
+				}
+			}
+
+			if(count > 0){
+				prevCol /= count;
+				prevMoments /= count;
+				prevHistoryLength /=count;
+				valid = true;
+			}
+			else{
+				imageStore(updatedHistoryLengthImage, sampleLocation, vec4(1, 0, 0, 0));
+				imageStore(integratedColorImage, sampleLocation, currCol);
+				imageStore(integratedMomentsImage, sampleLocation, vec4(currLuminance, currLuminance*currLuminance, 0, 0));
+				imageStore(varianceImage, sampleLocation, vec4(100.f, 0, 0, 0));
+			}
+		}
+
+		if(valid){
+			const float alpha = 1.f / (historyLength + 1);
+
+			//increment history length
+			imageStore(updatedHistoryLengthImage, sampleLocation, 
+				vec4(imageLoad(historyLengthImage, sampleLocation).x + 1, 0, 0, 0));
+
+			/*
+			* accumulate color / moment
+			*/
+			imageStore(integratedColorImage, sampleLocation, currCol * alpha + vec4(prevCol, 1.f) * (1.f - alpha));
+			//imageStore(integratedColorImage, sampleLocation, vec4(1.f, 0, 0, 1));
+			float m1 = prevMoments.x * alpha + (1.f - alpha) * currLuminance;
+			float m2 = prevMoments.y * alpha + (1.f - alpha) * currLuminance * currLuminance;
+			imageStore(integratedMomentsImage, sampleLocation, vec4(m1, m2, 0, 0));
+
+			//variance
+			float variance = m2 - m1 * m1;
+			imageStore(varianceImage, sampleLocation, vec4((variance > 0 ? variance : 0), 0, 0, 0));
+		}
+	}
+	else{
+		/*
+		* if history is empty
+		*/
+		imageStore(updatedHistoryLengthImage, sampleLocation, vec4(1, 0, 0, 0));
+		imageStore(integratedColorImage, sampleLocation, currCol);
+		imageStore(integratedMomentsImage, sampleLocation, vec4(currLuminance, currLuminance*currLuminance, 0, 0));
+		imageStore(varianceImage, sampleLocation, vec4(100.f, 0, 0, 0));
+	}
 }
