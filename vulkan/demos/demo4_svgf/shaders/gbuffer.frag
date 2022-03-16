@@ -13,7 +13,6 @@ layout(location = 2) in vec2 inUV;
 layout(location = 0) out vec4 gPos;
 layout(location = 1) out vec4 gNormal;
 layout(location = 2) out vec4 gAlbedo;
-layout(location = 3) out float gPrimitiveID;
 
 layout(push_constant) uniform GBufferPushConstant{
 	mat4 modelMatrix;
@@ -42,5 +41,5 @@ void main(){
 	if(material.baseColorTextureIndex > -1){
 		gAlbedo *= texture(textures[material.baseColorTextureIndex], inUV);
 	}
-	gPrimitiveID = primitiveId;
+	gNormal.w = primitiveId;
 }

@@ -28,6 +28,7 @@
     <None Include="shaders\raytrace.rgen" />
     <None Include="shaders\raytrace.rmiss" />
     <None Include="shaders\ray_common.glsl" />
+    <None Include="shaders\reprojection.comp" />
     <None Include="shaders\sampling.glsl" />
     <None Include="shaders\wavefront.glsl" />
   </ItemGroup>

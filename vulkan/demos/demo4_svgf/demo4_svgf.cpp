@@ -122,6 +122,9 @@ public:
 		vkDestroyPipeline(devices.device, postPipeline, nullptr);
 		vkDestroyPipelineLayout(devices.device, postPipelineLayout, nullptr);
 		vkDestroyRenderPass(devices.device, postRenderPass, nullptr);
+		vkDestroyPipeline(devices.device, reprojectionComputePipeline, nullptr);
+		vkDestroyPipelineLayout(devices.device, reprojectionComputePipelineLayout, nullptr);
+		
 
 		devices.memoryAllocator.freeBufferMemory(sceneBuffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 		vkDestroyBuffer(devices.device, sceneBuffer, nullptr);
@@ -147,13 +150,35 @@ public:
 		vkDestroyImage(devices.device, rtDestinationImage, nullptr);
 		vkDestroyImageView(devices.device, rtDestinationImageView, nullptr);
 
+		//history images & integrated images
+		devices.memoryAllocator.freeImageMemory(historyLengthImage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		vkDestroyImage(devices.device, historyLengthImage, nullptr);
+		vkDestroyImageView(devices.device, historyLengthImageView, nullptr);
+		devices.memoryAllocator.freeImageMemory(momentHistoryImage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		vkDestroyImage(devices.device, momentHistoryImage, nullptr);
+		vkDestroyImageView(devices.device, momentHistoryImageView, nullptr);
+		devices.memoryAllocator.freeImageMemory(colorHistoryImage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		vkDestroyImage(devices.device, colorHistoryImage, nullptr);
+		vkDestroyImageView(devices.device, colorHistoryImageView, nullptr);
+		devices.memoryAllocator.freeImageMemory(integratedColorImage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		vkDestroyImage(devices.device, integratedColorImage, nullptr);
+		vkDestroyImageView(devices.device, integratedColorImageView, nullptr);
+		devices.memoryAllocator.freeImageMemory(integratedMomentsImage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		vkDestroyImage(devices.device, integratedMomentsImage, nullptr);
+		vkDestroyImageView(devices.device, integratedMomentsImageView, nullptr);
+		devices.memoryAllocator.freeImageMemory(varianceImage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		vkDestroyImage(devices.device, varianceImage, nullptr);
+		vkDestroyImageView(devices.device, varianceImageView, nullptr);
+
 		//swapchain framebuffers
 		for (auto& framebuffer : framebuffers) {
 			vkDestroyFramebuffer(devices.device, framebuffer, nullptr);
 		}
 
 		//gbuffer
-		gbuffer.cleanup();
+		for (auto& gbuffer : gbuffers) {
+			gbuffer.cleanup();
+		}
 
 		//sampler
 		vkDestroySampler(devices.device, imageSampler, nullptr);
@@ -168,6 +193,8 @@ public:
 		vkDestroyDescriptorSetLayout(devices.device, rtDescriptorSetLayout, nullptr);
 		vkDestroyDescriptorPool(devices.device, postDescriptorPool, nullptr);
 		vkDestroyDescriptorSetLayout(devices.device, postDescriptorSetLayout, nullptr);
+		vkDestroyDescriptorPool(devices.device, reprojectionDescPool, nullptr);
+		vkDestroyDescriptorSetLayout(devices.device, reprojectionDescLayout, nullptr);
 
 		//uniform buffers
 		devices.memoryAllocator.freeBufferMemory(matricesUniformBuffer,
@@ -230,6 +257,18 @@ public:
 		createGBufferPipeline();
 
 		/*
+		* history data & integrated images
+		*/
+		createStorageImage(historyLengthImage, historyLengthImageView, VK_FORMAT_R32_SFLOAT, VK_IMAGE_USAGE_TRANSFER_DST_BIT); //length
+		initHistoryLengthImage();
+		createStorageImage(colorHistoryImage, colorHistoryImageView, VK_FORMAT_R32G32B32A32_SFLOAT); //color
+		createStorageImage(momentHistoryImage, momentHistoryImageView, VK_FORMAT_R32G32_SFLOAT); //vec2(moment1, moment2)
+		createStorageImage(integratedColorImage, integratedColorImageView, VK_FORMAT_R32G32B32A32_SFLOAT); //color
+		createStorageImage(integratedMomentsImage, integratedMomentsImageView, VK_FORMAT_R32G32_SFLOAT); //vec2(moment1, moment2)
+		createStorageImage(varianceImage, varianceImageView, VK_FORMAT_R32_SFLOAT); //vec2(moment1, moment2)
+		imageLayoutTransition();
+
+		/*
 		* ray tracing
 		*/
 		createRaytraceDestinationImage();
@@ -237,6 +276,14 @@ public:
 		updateRtDescriptorSet();
 		createRtPipeline();
 		createRtShaderBindingTable();
+
+		/*
+		* reprojection
+		*/
+		createReprojectionDescSet();
+		createReprojectionComputePipeline();
+		updateReprojectionDescSet();
+		
 
 		/*
 		* full-quad
@@ -289,18 +336,22 @@ public:
 		VK_CHECK_RESULT(vkQueueSubmit(devices.graphicsQueue, 1, &submitInfo, frameLimitFences[currentFrame]));
 
 		submitFrame(imageIndex);
+
+		currentGBufferIndex = (currentGBufferIndex + 1) % 2;
+		oldViewMatrix = cameraMatrices.view;
 	}
 
 	virtual void update() override {
 		VulkanAppBase::update();
-		Imgui* imgui = static_cast<Imgui*>(imguiBase);
+
+		/*Imgui* imgui = static_cast<Imgui*>(imguiBase);
 		if (oldViewMatrix != cameraMatrices.view || imgui->frameReset) {
 			rtPushConstants.frame = -1;
 			oldViewMatrix = cameraMatrices.view;
 			if (imgui->frameReset)
 				imgui->frameReset = false;
 		}
-		rtPushConstants.frame++;
+		rtPushConstants.frame++;*/
 
 		buildCommandBuffer();
 	}
@@ -343,10 +394,9 @@ public:
 		const int clearValueCount = 5;
 		std::array<VkClearValue, clearValueCount> clearValues{};
 		clearValues[0].color = { 0.00f, 0.00f, 0.00f, 1.f }; //position
-		clearValues[1].color = { 0.00f, 0.00f, 0.00f, 1.f }; //normal
+		clearValues[1].color = { 0.00f, 0.00f, 0.00f, -1.f }; //normal
 		clearValues[2].color = { 0.00f, 0.00f, 0.00f, 1.f }; //albedo
-		clearValues[3].color = { 0.00f }; //primitive id
-		clearValues[4].depthStencil = { 1.f, 0 }; //depth
+		clearValues[3].depthStencil = { 1.f, 0 }; //depth
 
 		Imgui* imgui = static_cast<Imgui*>(imguiBase);
 		rtPushConstants.lightPos = imgui->userInput.lightPos;
@@ -377,7 +427,7 @@ public:
 			* #1 gbuffer pass
 			*/
 			vkdebug::marker::beginLabel(commandBuffers[i], "gbuffer pass");
-			gbufferRenderPassBeginInfo.framebuffer = gbuffer.framebuffer;
+			gbufferRenderPassBeginInfo.framebuffer = gbuffers[currentGBufferIndex].framebuffer;
 			vkCmdBeginRenderPass(commandBuffers[i], &gbufferRenderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 			rasterize(commandBuffers[i]);
 			vkCmdEndRenderPass(commandBuffers[i]);
@@ -391,7 +441,33 @@ public:
 			vkdebug::marker::endLabel(commandBuffers[i]);
 
 			/*
-			* #3 full screen quad
+			* #3 reprojection
+			*/
+			vkdebug::marker::beginLabel(commandBuffers[i], "reproject");
+			vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_COMPUTE, reprojectionComputePipeline);
+			vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_COMPUTE, reprojectionComputePipelineLayout, 0, 1, &reprojectionDescSet, 0, nullptr);
+			vkCmdDispatch(commandBuffers[i], swapchain.extent.width / 32, swapchain.extent.height / 32, 1);
+
+			std::array<VkImageMemoryBarrier, 2> barriers{};
+			barriers[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+			barriers[0].pNext = nullptr;
+			barriers[0].oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+			barriers[0].newLayout = VK_IMAGE_LAYOUT_GENERAL;
+			barriers[0].subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
+			barriers[0].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+			barriers[0].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+			barriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			barriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			barriers[0].image = integratedColorImage;
+			barriers[1] = barriers[0];
+			barriers[1].image = integratedMomentsImage;
+
+			vkCmdPipelineBarrier(commandBuffers[i], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 2, barriers.data());
+
+			vkdebug::marker::endLabel(commandBuffers[i]);
+
+			/*
+			* #4 full screen quad
 			*/
 			vkdebug::marker::beginLabel(commandBuffers[i], "full screen quad");
 			size_t framebufferIndex = i % framebuffers.size();
@@ -418,8 +494,19 @@ public:
 	virtual void resizeWindow(bool /*recordCmdBuf*/) override {
 		VulkanAppBase::resizeWindow(false);
 		createGBufferResources(true);
+
+		createStorageImage(historyLengthImage, historyLengthImageView, VK_FORMAT_R32_SFLOAT, VK_IMAGE_USAGE_TRANSFER_DST_BIT); //length
+		initHistoryLengthImage();
+		createStorageImage(colorHistoryImage, colorHistoryImageView, VK_FORMAT_R32G32B32A32_SFLOAT); //color
+		createStorageImage(momentHistoryImage, momentHistoryImageView, VK_FORMAT_R32G32_SFLOAT); //vec2(moment1, moment2)
+		createStorageImage(integratedColorImage, integratedColorImageView, VK_FORMAT_R32G32B32A32_SFLOAT); //color
+		createStorageImage(integratedMomentsImage, integratedMomentsImageView, VK_FORMAT_R32G32_SFLOAT); //vec2(moment1, moment2)
+		createStorageImage(varianceImage, varianceImageView, VK_FORMAT_R32_SFLOAT); //vec2(moment1, moment2)
+		imageLayoutTransition();
+
 		createRaytraceDestinationImage();
 		updateRtDescriptorSet();
+		updateReprojectionDescSet();
 		updatePostDescriptorSet();
 		recordCommandBuffer();
 	}
@@ -491,7 +578,9 @@ private:
 	/*
 	* gbuffer creation resources
 	*/
-	Framebuffer gbuffer;
+	std::array<Framebuffer, 2> gbuffers; //current & previous
+	/** current gbuffer index */
+	int currentGBufferIndex = 0;
 	/** offscreen renderpass */
 	VkRenderPass gbufferRenderPass = VK_NULL_HANDLE;
 	/** image sampler */
@@ -507,6 +596,31 @@ private:
 		uint32_t primitiveId = 0;
 	} gbufferPushConstants;
 	
+	/*
+	* history data
+	*/
+	/** length -> integer  */
+	VkImage historyLengthImage = VK_NULL_HANDLE;
+	VkImageView historyLengthImageView = VK_NULL_HANDLE;
+	/** color history */
+	VkImage colorHistoryImage = VK_NULL_HANDLE;
+	VkImageView colorHistoryImageView = VK_NULL_HANDLE;
+	/** moment history */
+	VkImage momentHistoryImage = VK_NULL_HANDLE;
+	VkImageView momentHistoryImageView = VK_NULL_HANDLE;
+
+	/*
+	* integrated data
+	*/
+	/** integrated color */
+	VkImage integratedColorImage = VK_NULL_HANDLE;
+	VkImageView integratedColorImageView = VK_NULL_HANDLE;
+	/** integrated moments */
+	VkImage integratedMomentsImage = VK_NULL_HANDLE;
+	VkImageView integratedMomentsImageView = VK_NULL_HANDLE;
+	/** variance */
+	VkImage varianceImage = VK_NULL_HANDLE;
+	VkImageView varianceImageView = VK_NULL_HANDLE;
 
 	/*
 	* ray trace pipeline
@@ -549,6 +663,17 @@ private:
 	/** descriptor sets */
 	VkDescriptorSet rtDescriptorSet;
 
+	/*
+	* reprojection (compute) resources
+	*/
+	/** compute pipeline */
+	VkPipeline reprojectionComputePipeline = VK_NULL_HANDLE;
+	VkPipelineLayout reprojectionComputePipelineLayout = VK_NULL_HANDLE;
+	/** descriptor set */
+	DescriptorSetBindings reprojectionDescBindings;
+	VkDescriptorPool reprojectionDescPool = VK_NULL_HANDLE;
+	VkDescriptorSetLayout reprojectionDescLayout = VK_NULL_HANDLE;
+	VkDescriptorSet reprojectionDescSet = VK_NULL_HANDLE;
 
 	/*
 	* full-quad pipeline resources
@@ -658,38 +783,35 @@ private:
 	* create offscreen images & render pass & framebuffers
 	*/
 	void createGBufferResources(bool createFramebufferOnly = false) {
-		gbuffer.init(&devices);
-		gbuffer.cleanup();
+		for (auto& gbuffer : gbuffers) {
+			gbuffer.init(&devices);
+			gbuffer.cleanup();
 
-		VkImageCreateInfo imageCreateInfo =
-			vktools::initializers::imageCreateInfo({ swapchain.extent.width, swapchain.extent.height, 1 },
-				VK_FORMAT_R32G32B32A32_SFLOAT,
-				VK_IMAGE_TILING_OPTIMAL,
-				VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT, 
-				1
-			);
+			VkImageCreateInfo imageCreateInfo =
+				vktools::initializers::imageCreateInfo({ swapchain.extent.width, swapchain.extent.height, 1 },
+					VK_FORMAT_R32G32B32A32_SFLOAT,
+					VK_IMAGE_TILING_OPTIMAL,
+					VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
+					1
+				);
 
-		//position.xyz
-		gbuffer.addAttachment(imageCreateInfo, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-			VK_IMAGE_LAYOUT_GENERAL, true);
+			//position.xyz
+			gbuffer.addAttachment(imageCreateInfo, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+				VK_IMAGE_LAYOUT_GENERAL, true);
 
-		//normal.xyz
-		gbuffer.addAttachment(imageCreateInfo, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-			VK_IMAGE_LAYOUT_GENERAL, true);
+			//normal.xyz & prim id
+			gbuffer.addAttachment(imageCreateInfo, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+				VK_IMAGE_LAYOUT_GENERAL, true);
 
-		//albedo
-		gbuffer.addAttachment(imageCreateInfo, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-			VK_IMAGE_LAYOUT_GENERAL, true);
+			//albedo
+			gbuffer.addAttachment(imageCreateInfo, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+				VK_IMAGE_LAYOUT_GENERAL, true);
 
-		//primitive id
-		imageCreateInfo.format = VK_FORMAT_R32_SFLOAT;
-		gbuffer.addAttachment(imageCreateInfo, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-			VK_IMAGE_LAYOUT_GENERAL, true);
-
-		//depth attachment
-		imageCreateInfo.format = depthFormat;
-		imageCreateInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-		gbuffer.addAttachment(imageCreateInfo, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+			//depth attachment
+			imageCreateInfo.format = depthFormat;
+			imageCreateInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+			gbuffer.addAttachment(imageCreateInfo, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		}
 
 		if (createFramebufferOnly == false) {
 			//renderpass
@@ -709,7 +831,7 @@ private:
 			dependencies[1].dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 			dependencies[1].dstAccessMask = VK_ACCESS_SHADER_READ_BIT; //primary ray
 
-			gbufferRenderPass = gbuffer.createRenderPass(dependencies);
+			gbufferRenderPass = gbuffers[0].createRenderPass(dependencies);
 
 			//image sampler
 			VkSamplerCreateInfo samplerInfo =
@@ -718,7 +840,202 @@ private:
 		}
 
 		//create framebuffer
-		gbuffer.createFramebuffer(swapchain.extent, gbufferRenderPass);
+		for (auto& gbuffer : gbuffers) {
+			gbuffer.createFramebuffer(swapchain.extent, gbufferRenderPass);
+		}
+	}
+
+	/*
+	* history image creation (history length / color / moment)
+	*/
+	void createStorageImage(VkImage& historyImage, VkImageView& historyImageView, VkFormat format, VkFlags usage = 0) {
+		/** destroy */
+		devices.memoryAllocator.freeImageMemory(historyImage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		vkDestroyImage(devices.device, historyImage, nullptr);
+		vkDestroyImageView(devices.device, historyImageView, nullptr);
+
+		/** image */
+		devices.createImage(historyImage,
+			{ swapchain.extent.width, swapchain.extent.height, 1 },
+			format,
+			VK_IMAGE_TILING_OPTIMAL,
+			VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | usage,
+			1,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
+		);
+
+		/** image view */
+		historyImageView = vktools::createImageView(devices.device,
+			historyImage,
+			VK_IMAGE_VIEW_TYPE_2D,
+			format,
+			VK_IMAGE_ASPECT_COLOR_BIT,
+			1
+		);
+	}
+
+
+
+	/*
+	* init history length image
+	*/
+	void initHistoryLengthImage() {
+		/*
+		* staging - create starging buffer
+		*/
+		const int imageSize = swapchain.extent.width * swapchain.extent.height * sizeof(float);
+		VkBuffer stagingBuffer;
+		VkBufferCreateInfo stagingBufferCreateInfo = vktools::initializers::bufferCreateInfo(
+			imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+		VK_CHECK_RESULT(vkCreateBuffer(devices.device, &stagingBufferCreateInfo, nullptr, &stagingBuffer));
+
+		VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+		MemoryAllocator::HostVisibleMemory hostVisibleMemory = devices.memoryAllocator.allocateBufferMemory(
+			stagingBuffer, properties);
+
+		std::vector<uint32_t> data(imageSize);
+		memset(data.data(), 0, imageSize);
+		hostVisibleMemory.mapData(devices.device, data.data());
+
+		/*
+		* undefined -> transfer dst optimal
+		*/
+		VkCommandBuffer cmdBuf = devices.beginCommandBuffer();
+		vktools::setImageLayout(cmdBuf,
+			historyLengthImage,
+			VK_IMAGE_LAYOUT_UNDEFINED,
+			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			1
+		);
+
+		/*
+		* image copy from staging buffer to the iamge
+		*/
+		VkBufferImageCopy copy = vktools::initializers::bufferCopyRegion({ swapchain.extent.width , swapchain.extent.height, 1 });
+		vkCmdCopyBufferToImage(cmdBuf,
+			stagingBuffer,
+			historyLengthImage,
+			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			1,
+			&copy
+		);
+
+		/*
+		* transfer dst optimal -> general
+		*/
+		vktools::setImageLayout(cmdBuf,
+			historyLengthImage,
+			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			VK_IMAGE_LAYOUT_GENERAL,
+			1
+		);
+
+		devices.endCommandBuffer(cmdBuf);
+
+		/*
+		* cleanup
+		*/
+		devices.memoryAllocator.freeBufferMemory(stagingBuffer, properties);
+		vkDestroyBuffer(devices.device, stagingBuffer, nullptr);
+	}
+
+	/*
+	* image data layout transition (undefined -> general)
+	*/
+	void imageLayoutTransition() {
+		VkCommandBuffer cmdBuf = devices.beginCommandBuffer();
+		vktools::setImageLayout(cmdBuf, colorHistoryImage, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, 1);
+		vktools::setImageLayout(cmdBuf, momentHistoryImage, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, 1);
+		vktools::setImageLayout(cmdBuf, integratedColorImage, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, 1);
+		vktools::setImageLayout(cmdBuf, integratedMomentsImage, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, 1);
+		vktools::setImageLayout(cmdBuf, varianceImage, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, 1);
+		devices.endCommandBuffer(cmdBuf);
+	}
+
+	/*
+	* create reprojection compute pipeline
+	*/
+	void createReprojectionComputePipeline() {
+		std::vector<VkDescriptorSetLayout> layouts{ reprojectionDescLayout};
+		std::vector<VkPushConstantRange> ranges{ {VK_SHADER_STAGE_COMPUTE_BIT, 0, static_cast<uint32_t>(sizeof(glm::mat4))} };
+		VkPipelineLayoutCreateInfo reprojectionComputePipelineLayoutCreateInfo = vktools::initializers::pipelineLayoutCreateInfo(layouts, ranges);
+		VK_CHECK_RESULT(vkCreatePipelineLayout(devices.device, &reprojectionComputePipelineLayoutCreateInfo, nullptr, &reprojectionComputePipelineLayout));
+
+		VkComputePipelineCreateInfo reprojectionComputePipelineCreateInfo{ VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO };
+		reprojectionComputePipelineCreateInfo.layout = reprojectionComputePipelineLayout;
+		VkShaderModule reprojectionShaderModule = vktools::createShaderModule(devices.device, vktools::readFile("shaders/reprojection_comp.spv"));
+		reprojectionComputePipelineCreateInfo.stage = vktools::initializers::pipelineShaderStageCreateInfo(VK_SHADER_STAGE_COMPUTE_BIT, reprojectionShaderModule);
+		VK_CHECK_RESULT(vkCreateComputePipelines(devices.device, VK_NULL_HANDLE, 1, &reprojectionComputePipelineCreateInfo, nullptr, &reprojectionComputePipeline));
+
+		vkDestroyShaderModule(devices.device, reprojectionShaderModule, nullptr);
+	}
+
+	/*
+	* create reprojection descriptor set
+	*/
+	void createReprojectionDescSet() {
+		/*
+		* current frame data 
+		*/
+		/** raytraced image */
+		reprojectionDescBindings.addBinding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT);
+		/** gbuffer - position */
+		reprojectionDescBindings.addBinding(1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT);
+		/** gbuffer - normal & prim id */
+		reprojectionDescBindings.addBinding(2, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT);
+
+		/*
+		* history data
+		*/
+		/** gbuffer - position */
+		reprojectionDescBindings.addBinding(3, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT);
+		/** gbuffer - normal & prim id*/
+		reprojectionDescBindings.addBinding(4, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT);
+		/** history length */
+		reprojectionDescBindings.addBinding(5, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT);
+
+		/*
+		* integrated images (output)
+		*/
+		/** integrated color */
+		reprojectionDescBindings.addBinding(6, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT);
+		/** integrated moments */
+		reprojectionDescBindings.addBinding(7, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT);
+
+		/** create resources */
+		reprojectionDescPool = reprojectionDescBindings.createDescriptorPool(devices.device);
+		reprojectionDescLayout = reprojectionDescBindings.createDescriptorSetLayout(devices.device);
+		reprojectionDescSet = vktools::allocateDescriptorSets(devices.device, reprojectionDescLayout, reprojectionDescPool, 1).front();
+	}
+
+	/*
+	* update reprojection descriptor set
+	*/
+	void updateReprojectionDescSet() {
+		std::vector<VkWriteDescriptorSet> writes;
+
+		VkDescriptorImageInfo rtImageInfo{imageSampler, rtDestinationImageView, VK_IMAGE_LAYOUT_GENERAL};
+		VkDescriptorImageInfo currentGBufferPositionInfo{imageSampler, gbuffers[currentGBufferIndex].attachments[0].imageView, VK_IMAGE_LAYOUT_GENERAL };
+		VkDescriptorImageInfo currentGBufferNormalPrimIDInfo{imageSampler, gbuffers[currentGBufferIndex].attachments[1].imageView, VK_IMAGE_LAYOUT_GENERAL };
+
+		uint32_t previousGBufferIndex = (currentGBufferIndex + 1) % 2;
+		VkDescriptorImageInfo previousGBufferPositionInfo{ imageSampler, gbuffers[previousGBufferIndex].attachments[0].imageView, VK_IMAGE_LAYOUT_GENERAL };
+		VkDescriptorImageInfo previousGBufferNormalPrimIDInfo{ imageSampler, gbuffers[previousGBufferIndex].attachments[1].imageView, VK_IMAGE_LAYOUT_GENERAL };
+		VkDescriptorImageInfo historyLengthInfo{ imageSampler, historyLengthImageView, VK_IMAGE_LAYOUT_GENERAL };
+
+		VkDescriptorImageInfo integratedColorInfo{ imageSampler, integratedColorImageView, VK_IMAGE_LAYOUT_GENERAL };
+		VkDescriptorImageInfo integratedMomentInfo{ imageSampler, integratedMomentsImageView, VK_IMAGE_LAYOUT_GENERAL };
+
+		writes.push_back(reprojectionDescBindings.makeWrite(reprojectionDescSet, 0, &rtImageInfo));
+		writes.push_back(reprojectionDescBindings.makeWrite(reprojectionDescSet, 1, &currentGBufferPositionInfo));
+		writes.push_back(reprojectionDescBindings.makeWrite(reprojectionDescSet, 2, &currentGBufferNormalPrimIDInfo));
+		writes.push_back(reprojectionDescBindings.makeWrite(reprojectionDescSet, 3, &previousGBufferPositionInfo));
+		writes.push_back(reprojectionDescBindings.makeWrite(reprojectionDescSet, 4, &previousGBufferNormalPrimIDInfo));
+		writes.push_back(reprojectionDescBindings.makeWrite(reprojectionDescSet, 5, &historyLengthInfo));
+		writes.push_back(reprojectionDescBindings.makeWrite(reprojectionDescSet, 6, &integratedColorInfo));
+		writes.push_back(reprojectionDescBindings.makeWrite(reprojectionDescSet, 7, &integratedMomentInfo));
+
+		vkUpdateDescriptorSets(devices.device, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
 	}
 
 	/*
@@ -742,7 +1059,7 @@ private:
 			VK_SHADER_STAGE_VERTEX_BIT);
 		gen.addShader(vktools::createShaderModule(devices.device, vktools::readFile("shaders/gbuffer_frag.spv")),
 			VK_SHADER_STAGE_FRAGMENT_BIT);
-		gen.setColorBlendInfo(VK_FALSE, 4);
+		gen.setColorBlendInfo(VK_FALSE, 3);
 		gen.generate(gbufferRenderPass, &gbufferPipeline, &gbufferPipelineLayout);
 	}
 
@@ -1050,7 +1367,7 @@ private:
 	void updatePostDescriptorSet() {
 		VkDescriptorImageInfo colorInfo{
 			imageSampler,
-			rtDestinationImageView,
+			integratedColorImageView,
 			VK_IMAGE_LAYOUT_GENERAL
 		};
 		VkWriteDescriptorSet wd = postDescriptorSetBindings.makeWrite(
@@ -1156,4 +1473,4 @@ private:
 };
 
 //entry point
-RUN_APPLICATION_MAIN(VulkanApp, 1200, 800, "svgf");
+RUN_APPLICATION_MAIN(VulkanApp, 1024, 768, "svgf");

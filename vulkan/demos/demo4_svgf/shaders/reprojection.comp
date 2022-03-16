@@ -1,0 +1,29 @@
+#version 450
+//#extension GL_ARB_separate_shader_objects : enable
+
+layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
+
+/** input */
+layout(binding = 0, rgba32f) uniform readonly image2D rtImage;
+layout(binding = 1, rgba32f) uniform readonly image2D currentGPos;
+layout(binding = 2, rgba32f) uniform readonly image2D currentGNormalPrimID;
+
+/** history */
+layout(binding = 3, rgba32f) uniform readonly image2D previousGPos;
+layout(binding = 4, rgba32f) uniform readonly image2D previousGNormalPrimID;
+layout(binding = 5, r32f) uniform image2D historyLength;
+
+/** output */
+layout(binding = 6, rgba32f) uniform image2D integratedColor;
+layout(binding = 7, rg32f) uniform image2D integratedMoments;
+
+layout(push_constant) uniform PushConstant {
+	mat4 previoudViewMatrix;
+};
+
+void main(){
+	ivec2 pos = ivec2(gl_GlobalInvocationID.xy);
+	vec4 gpos = imageLoad(rtImage, pos);
+	imageStore(integratedColor, pos, gpos);
+	//imageStore(integratedColor, pos, gpos);
+}

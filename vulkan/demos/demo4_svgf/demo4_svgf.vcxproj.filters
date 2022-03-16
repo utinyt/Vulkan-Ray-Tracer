@@ -71,5 +71,8 @@
     <None Include="shaders\gbuffer.frag">
       <Filter>Source Files\shaders</Filter>
     </None>
+    <None Include="shaders\reprojection.comp">
+      <Filter>Source Files\shaders</Filter>
+    </None>
   </ItemGroup>
 </Project>
