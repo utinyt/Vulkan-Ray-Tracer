@@ -101,14 +101,17 @@ void main(){
 	}
 
 	if(weightSum > 0.00001f){
-		imageStore(dstColor, sampleLoc, vec4(colSum / weightSum, 1.f));
+		vec4 col = vec4(colSum / weightSum, 1.f);
+		imageStore(dstColor, sampleLoc, col);
 		imageStore(dstVariance, sampleLoc, vec4(varianceSum / weightSquaredSum, 0, 0, 0));
+		if(iteration == 0){
+			imageStore(colorHistory, sampleLoc, col);
+		}
 	}
 	else{
 		imageStore(dstColor, sampleLoc, srcCol);
-	}
-
-	if(iteration == 0){
-		imageStore(colorHistory, sampleLoc, imageLoad(srcColor, sampleLoc));
+		if(iteration == 0){
+			imageStore(colorHistory, sampleLoc, srcCol);
+		}
 	}
 }

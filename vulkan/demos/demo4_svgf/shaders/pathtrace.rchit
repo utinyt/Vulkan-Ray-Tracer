@@ -102,8 +102,8 @@ void main() {
 	vec3 emittance = material.emissiveFactor;
 	
 	vec3 textureColor = vec3(1.f);
-	if(material.baseColorTextureIndex > -1)
-		textureColor = texture(textures[material.baseColorTextureIndex], texcoord0).xyz;
+//	if(material.baseColorTextureIndex > -1)
+//		textureColor = texture(textures[material.baseColorTextureIndex], texcoord0).xyz;
 
 	//new ray -> wi
 	vec3 rayOrigin = worldPos;
@@ -143,7 +143,7 @@ void main() {
 	);
 
 	if(prdDirectLightConnection && p > 0) {
-		vec3 f = textureColor * evalScattering(normal, rayDirection, material.baseColorFactor.xyz); // = NL * kd / PI
+		vec3 f = textureColor * evalScattering(normal, rayDirection, vec3(1.f)); // = NL * kd / PI
 		prd.hitValue += 1.0 * prd.weight * f / p * pc.lightIntensity;
 	}
 
@@ -152,7 +152,7 @@ void main() {
 	*/
 	rayDirection = sampleBRDF(normal, rnd(prd.seed), rnd(prd.seed)); // = wi
 
-	vec3 f = textureColor * evalScattering(normal, rayDirection, material.baseColorFactor.xyz); // = NL * kd / PI
+	vec3 f = textureColor * evalScattering(normal, rayDirection, vec3(1.f)); // = NL * kd / PI
 	p = pdfBRDF(normal, rayDirection) * russianRoulette;
 	prd.p = p;
 	if(p < EPSILON)

@@ -154,7 +154,8 @@ void main(){
 		}
 
 		if(valid){
-			const float alpha = 1.f / (historyLength + 1);
+			const float colAlpha = max(1.f / (historyLength + 1), 0.15);
+			const float momentAlpha = max(1.f / (historyLength + 1), 0.2);
 
 			//increment history length
 			imageStore(updatedHistoryLengthImage, sampleLocation, 
@@ -163,10 +164,10 @@ void main(){
 			/*
 			* accumulate color / moment
 			*/
-			imageStore(integratedColorImage, sampleLocation, currCol * alpha + vec4(prevCol, 1.f) * (1.f - alpha));
+			imageStore(integratedColorImage, sampleLocation, currCol * colAlpha + vec4(prevCol, 1.f) * (1.f - colAlpha));
 			//imageStore(integratedColorImage, sampleLocation, vec4(1.f, 0, 0, 1));
-			float m1 = prevMoments.x * alpha + (1.f - alpha) * currLuminance;
-			float m2 = prevMoments.y * alpha + (1.f - alpha) * currLuminance * currLuminance;
+			float m1 = prevMoments.x * momentAlpha + (1.f - momentAlpha) * currLuminance;
+			float m2 = prevMoments.y * momentAlpha + (1.f - momentAlpha) * currLuminance * currLuminance;
 			imageStore(integratedMomentsImage, sampleLocation, vec4(m1, m2, 0, 0));
 
 			//variance

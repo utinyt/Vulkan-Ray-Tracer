@@ -20,9 +20,9 @@ public:
 		ImGui::Begin("Settings", 0, flags);
 
 		ImGui::Text("Edge stopping function parameters");
-		ImGui::SliderFloat("wl", &userInput.edgeStoppingFunctionParams.x, 0.0f, 128.0f);
-		ImGui::SliderFloat("wn", &userInput.edgeStoppingFunctionParams.y, 0.0f, 128.0f);
-		ImGui::SliderFloat("wp", &userInput.edgeStoppingFunctionParams.z, 0.0f, 128.0f);
+		ImGui::SliderFloat("wl", &userInput.edgeStoppingFunctionParams.x, 0.0f, 5.0f);
+		ImGui::SliderFloat("wn", &userInput.edgeStoppingFunctionParams.y, 0.0f, 5.0f);
+		ImGui::SliderFloat("wp", &userInput.edgeStoppingFunctionParams.z, 0.0f, 5.0f);
 		ImGui::NewLine();
 
 		ImGui::Text("Shadow");
@@ -538,8 +538,87 @@ public:
 			vkCmdPushConstants(commandBuffers[i], atrousComputePipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(AtrousPushConstant), &atrousPushConstant);
 			vkCmdDispatch(commandBuffers[i], swapchain.extent.width / 32, swapchain.extent.height / 32, 1);
 
-			VkImageMemoryBarrier barrier = barrier2[0];
-			barrier.image = filteredImages[0];
+			barrier2[0].image = filteredImages[0];
+			barrier2[1].image = varianceImages[1];
+
+			vkCmdPipelineBarrier(commandBuffers[i],
+				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+				0,
+				0, nullptr,
+				0, nullptr,
+				2, barrier2.data()
+			);
+
+			vkdebug::marker::endLabel(commandBuffers[i]);
+
+			vkdebug::marker::beginLabel(commandBuffers[i], "atrous filtering #2");
+			vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_COMPUTE, atrousComputePipelineLayout, 0, 1, &atrousDescSet[1], 0, nullptr);
+			atrousPushConstant.iteration = 1;
+			vkCmdPushConstants(commandBuffers[i], atrousComputePipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(AtrousPushConstant), &atrousPushConstant);
+			vkCmdDispatch(commandBuffers[i], swapchain.extent.width / 32, swapchain.extent.height / 32, 1);
+
+			barrier2[0].image = filteredImages[1];
+			barrier2[1].image = varianceImages[0];
+
+			vkCmdPipelineBarrier(commandBuffers[i],
+				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+				0,
+				0, nullptr,
+				0, nullptr,
+				2, barrier2.data()
+			);
+
+			vkdebug::marker::endLabel(commandBuffers[i]);
+
+			vkdebug::marker::beginLabel(commandBuffers[i], "atrous filtering #3");
+			vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_COMPUTE, atrousComputePipelineLayout, 0, 1, &atrousDescSet[2], 0, nullptr);
+			atrousPushConstant.iteration = 2;
+			vkCmdPushConstants(commandBuffers[i], atrousComputePipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(AtrousPushConstant), &atrousPushConstant);
+			vkCmdDispatch(commandBuffers[i], swapchain.extent.width / 32, swapchain.extent.height / 32, 1);
+
+			barrier2[0].image = filteredImages[0];
+			barrier2[1].image = varianceImages[1];
+
+			vkCmdPipelineBarrier(commandBuffers[i],
+				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+				0,
+				0, nullptr,
+				0, nullptr,
+				2, barrier2.data()
+			);
+
+			vkdebug::marker::endLabel(commandBuffers[i]);
+
+			vkdebug::marker::beginLabel(commandBuffers[i], "atrous filtering #4");
+			vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_COMPUTE, atrousComputePipelineLayout, 0, 1, &atrousDescSet[1], 0, nullptr);
+			atrousPushConstant.iteration = 3;
+			vkCmdPushConstants(commandBuffers[i], atrousComputePipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(AtrousPushConstant), &atrousPushConstant);
+			vkCmdDispatch(commandBuffers[i], swapchain.extent.width / 32, swapchain.extent.height / 32, 1);
+
+			barrier2[0].image = filteredImages[1];
+			barrier2[1].image = varianceImages[0];
+
+			vkCmdPipelineBarrier(commandBuffers[i],
+				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+				0,
+				0, nullptr,
+				0, nullptr,
+				2, barrier2.data()
+			);
+
+			vkdebug::marker::endLabel(commandBuffers[i]);
+
+			vkdebug::marker::beginLabel(commandBuffers[i], "atrous filtering #5");
+			vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_COMPUTE, atrousComputePipelineLayout, 0, 1, &atrousDescSet[2], 0, nullptr);
+			atrousPushConstant.iteration = 4;
+			vkCmdPushConstants(commandBuffers[i], atrousComputePipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(AtrousPushConstant), &atrousPushConstant);
+			vkCmdDispatch(commandBuffers[i], swapchain.extent.width / 32, swapchain.extent.height / 32, 1);
+
+			barrier2[0].image = filteredImages[0];
 
 			vkCmdPipelineBarrier(commandBuffers[i],
 				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -547,7 +626,7 @@ public:
 				0,
 				0, nullptr,
 				0, nullptr,
-				1, &barrier
+				1, barrier2.data()
 			);
 
 			vkdebug::marker::endLabel(commandBuffers[i]);
