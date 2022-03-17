@@ -46,7 +46,7 @@ bool isReprojectionValid(ivec2 res, ivec2 currLoc, ivec2 prevLoc, vec4 currNorma
 	}
 
 	//check if both normals are identical
-	if(distance(currNormalPrimID.xyz, prevNormalPrimId.xyz) > 0.01f){
+	if(distanceSquared(currNormalPrimID.xyz, prevNormalPrimId.xyz) > 0.0001f){
 		return false;
 	}
 	return true;
@@ -66,17 +66,11 @@ void main(){
 		*/
 		vec4 oldClipPos = proj * previousViewMatrix * imageLoad(currentGPos, sampleLocation);
 
-		float ndcx = oldClipPos.x / oldClipPos.w;
-		float ndcy = oldClipPos.y / oldClipPos.w;
-		ndcx += 1.f;
-		ndcx /= 2.f;
-		ndcy += 1.f;
-		ndcy /= 2.f;
-//		float ndcx = -clipx * 0.5f + 0.5f;
-//		float ndcy = -clipy * 0.5f + 0.5f;
+		vec2 ndc = vec2(oldClipPos.x / oldClipPos.w, oldClipPos.y / oldClipPos.w);
+		ndc = (ndc + 1) / 2.f;
 		ivec2 res = imageSize(rtImage);
-		float prevx = ndcx * res.x - 0.5f;
-		float prevy = ndcy * res.y - 0.5f;
+		float prevx = ndc.x * res.x - 0.5f;
+		float prevy = ndc.y * res.y - 0.5f;
 
 		bool v[4];
 		float floorx = floor(prevx);

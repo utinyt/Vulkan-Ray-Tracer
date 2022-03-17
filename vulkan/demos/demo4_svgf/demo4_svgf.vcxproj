@@ -14,6 +14,7 @@
     <ClCompile Include="demo4_svgf.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="shaders\atrous.comp" />
     <None Include="shaders\brdf.glsl" />
     <None Include="shaders\full_quad.frag" />
     <None Include="shaders\full_quad.vert" />

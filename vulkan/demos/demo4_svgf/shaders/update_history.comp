@@ -11,13 +11,8 @@ layout(binding = 1, r32f) uniform readonly image2D updatedHistoryLengthImage;
 layout(binding = 2, rg32f) uniform writeonly image2D momentHistory;
 layout(binding = 3, r32f) uniform writeonly image2D historyLengthImage;
 
-//???
-layout(binding = 4, rgba32f) uniform readonly image2D integratedCol;
-layout(binding = 5, rgba32f) uniform writeonly image2D colHistory;
-
 void main(){
 	ivec2 pos = ivec2(gl_GlobalInvocationID.xy);
 	imageStore(momentHistory, pos, imageLoad(integratedMomentsImage, pos));
 	imageStore(historyLengthImage, pos, imageLoad(updatedHistoryLengthImage, pos));
-	imageStore(colHistory, pos, imageLoad(integratedCol, pos));
 }

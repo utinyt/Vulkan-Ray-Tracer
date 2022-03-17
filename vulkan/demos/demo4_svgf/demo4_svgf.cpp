@@ -19,6 +19,12 @@ public:
 		ImGui::NewFrame();
 		ImGui::Begin("Settings", 0, flags);
 
+		ImGui::Text("Edge stopping function parameters");
+		ImGui::SliderFloat("wl", &userInput.edgeStoppingFunctionParams.x, 0.0f, 128.0f);
+		ImGui::SliderFloat("wn", &userInput.edgeStoppingFunctionParams.y, 0.0f, 128.0f);
+		ImGui::SliderFloat("wp", &userInput.edgeStoppingFunctionParams.z, 0.0f, 128.0f);
+		ImGui::NewLine();
+
 		ImGui::Text("Shadow");
 		static int shadow = 0;
 		ImGui::RadioButton("Soft shadow", &shadow, 0); ImGui::SameLine();
@@ -74,6 +80,7 @@ public:
 		float lightInternsity = 100;
 		int shadow = 0;
 		glm::vec3 lightPos{ 24.382f, 30.f, 0.1f };
+		glm::vec3 edgeStoppingFunctionParams{ 4, 128, 1 };
 	}userInput;
 
 	bool frameReset = false;
@@ -126,6 +133,8 @@ public:
 		vkDestroyPipelineLayout(devices.device, reprojectionComputePipelineLayout, nullptr);
 		vkDestroyPipeline(devices.device, updateHistoryComputePipeline, nullptr);
 		vkDestroyPipelineLayout(devices.device, updateHistoryComputePipelineLayout, nullptr);
+		vkDestroyPipeline(devices.device, atrousComputePipeline, nullptr);
+		vkDestroyPipelineLayout(devices.device, atrousComputePipelineLayout, nullptr);
 
 		devices.memoryAllocator.freeBufferMemory(sceneBuffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 		vkDestroyBuffer(devices.device, sceneBuffer, nullptr);
@@ -170,9 +179,14 @@ public:
 		devices.memoryAllocator.freeImageMemory(integratedMomentsImage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 		vkDestroyImage(devices.device, integratedMomentsImage, nullptr);
 		vkDestroyImageView(devices.device, integratedMomentsImageView, nullptr);
-		devices.memoryAllocator.freeImageMemory(varianceImage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-		vkDestroyImage(devices.device, varianceImage, nullptr);
-		vkDestroyImageView(devices.device, varianceImageView, nullptr);
+		for (int i = 0; i < 2; ++i) {
+			devices.memoryAllocator.freeImageMemory(varianceImages[i], VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+			vkDestroyImage(devices.device, varianceImages[i], nullptr);
+			vkDestroyImageView(devices.device, varianceImageViews[i], nullptr);
+			devices.memoryAllocator.freeImageMemory(filteredImages[i], VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+			vkDestroyImage(devices.device, filteredImages[i], nullptr);
+			vkDestroyImageView(devices.device, filteredImageViews[i], nullptr);
+		}
 
 		//swapchain framebuffers
 		for (auto& framebuffer : framebuffers) {
@@ -201,6 +215,8 @@ public:
 		vkDestroyDescriptorSetLayout(devices.device, reprojectionDescLayout, nullptr);
 		vkDestroyDescriptorPool(devices.device, updateHistoryDescPool, nullptr);
 		vkDestroyDescriptorSetLayout(devices.device, updateHistoryDescLayout, nullptr);
+		vkDestroyDescriptorPool(devices.device, atrousDescPool, nullptr);
+		vkDestroyDescriptorSetLayout(devices.device, atrousDescLayout, nullptr);
 
 		//uniform buffers
 		devices.memoryAllocator.freeBufferMemory(matricesUniformBuffer,
@@ -272,7 +288,11 @@ public:
 		createStorageImage(momentHistoryImage, momentHistoryImageView, VK_FORMAT_R32G32_SFLOAT); //vec2(moment1, moment2)
 		createStorageImage(integratedColorImage, integratedColorImageView, VK_FORMAT_R32G32B32A32_SFLOAT); //color
 		createStorageImage(integratedMomentsImage, integratedMomentsImageView, VK_FORMAT_R32G32_SFLOAT); //vec2(moment1, moment2)
-		createStorageImage(varianceImage, varianceImageView, VK_FORMAT_R32_SFLOAT); //vec2(moment1, moment2)
+		createStorageImage(varianceImages[0], varianceImageViews[0], VK_FORMAT_R32_SFLOAT); //vec2(moment1, moment2)
+		createStorageImage(varianceImages[1], varianceImageViews[1], VK_FORMAT_R32_SFLOAT); //vec2(moment1, moment2)
+		createStorageImage(filteredImages[0], filteredImageViews[0], VK_FORMAT_R32G32B32A32_SFLOAT);
+		createStorageImage(filteredImages[1], filteredImageViews[1], VK_FORMAT_R32G32B32A32_SFLOAT);
+		
 		imageLayoutTransition();
 
 		/*
@@ -428,6 +448,10 @@ public:
 
 		cam.oldView = oldViewMatrix;
 		cam.proj = cameraMatrices.proj;
+		atrousPushConstant.iteration = 0;
+		atrousPushConstant.wl = imgui->userInput.edgeStoppingFunctionParams.x;
+		atrousPushConstant.wn = imgui->userInput.edgeStoppingFunctionParams.y;
+		atrousPushConstant.wp = imgui->userInput.edgeStoppingFunctionParams.z;
 
 		for (size_t i = 0; i < framebuffers.size(); ++i) {
 			VK_CHECK_RESULT(vkBeginCommandBuffer(commandBuffers[i], &cmdBufBeginInfo));
@@ -458,23 +482,23 @@ public:
 			vkCmdPushConstants(commandBuffers[i], reprojectionComputePipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(glm::mat4) * 2, &cam);
 			vkCmdDispatch(commandBuffers[i], swapchain.extent.width / 32, swapchain.extent.height / 32, 1);
 
-			std::array<VkImageMemoryBarrier, 4> barriers{};
-			barriers[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-			barriers[0].pNext = nullptr;
-			barriers[0].oldLayout = VK_IMAGE_LAYOUT_GENERAL;
-			barriers[0].newLayout = VK_IMAGE_LAYOUT_GENERAL;
-			barriers[0].subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
-			barriers[0].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-			barriers[0].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-			barriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-			barriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-			barriers[0].image = integratedColorImage;
-			barriers[1] = barriers[0];
-			barriers[1].image = integratedMomentsImage;
-			barriers[2] = barriers[0];
-			barriers[2].image = updatedHistoryLengthImage;
-			barriers[3] = barriers[0];
-			barriers[3].image = varianceImage;
+			std::array<VkImageMemoryBarrier, 4> barriers4{};
+			barriers4[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+			barriers4[0].pNext = nullptr;
+			barriers4[0].oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+			barriers4[0].newLayout = VK_IMAGE_LAYOUT_GENERAL;
+			barriers4[0].subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
+			barriers4[0].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+			barriers4[0].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+			barriers4[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			barriers4[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			barriers4[0].image = integratedColorImage;
+			barriers4[1] = barriers4[0];
+			barriers4[1].image = integratedMomentsImage;
+			barriers4[2] = barriers4[0];
+			barriers4[2].image = updatedHistoryLengthImage;
+			barriers4[3] = barriers4[0];
+			barriers4[3].image = varianceImages[0];
 
 			vkCmdPipelineBarrier(commandBuffers[i],
 				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -482,7 +506,7 @@ public:
 				0,
 				0, nullptr,
 				0, nullptr,
-				static_cast<uint32_t>(barriers.size()), barriers.data()
+				static_cast<uint32_t>(barriers4.size()), barriers4.data()
 			);
 			vkdebug::marker::endLabel(commandBuffers[i]);
 
@@ -494,7 +518,29 @@ public:
 			vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_COMPUTE, updateHistoryComputePipelineLayout, 0, 1, &updateHistoryDescSet, 0, nullptr);
 			vkCmdDispatch(commandBuffers[i], swapchain.extent.width / 32, swapchain.extent.height / 32, 1);
 
-			VkImageMemoryBarrier barrier = barriers[0];
+			std::array<VkImageMemoryBarrier, 2> barrier2 = { barriers4[0], barriers4[3] };
+			vkCmdPipelineBarrier(commandBuffers[i],
+				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+				0,
+				0, nullptr,
+				0, nullptr,
+				2, barrier2.data()
+			);
+			vkdebug::marker::endLabel(commandBuffers[i]);
+
+			/*
+			* #5 atrous filtering
+			*/
+			vkdebug::marker::beginLabel(commandBuffers[i], "atrous filtering #1");
+			vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_COMPUTE, atrousComputePipeline);
+			vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_COMPUTE, atrousComputePipelineLayout, 0, 1, &atrousDescSet[0], 0, nullptr);
+			vkCmdPushConstants(commandBuffers[i], atrousComputePipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(AtrousPushConstant), &atrousPushConstant);
+			vkCmdDispatch(commandBuffers[i], swapchain.extent.width / 32, swapchain.extent.height / 32, 1);
+
+			VkImageMemoryBarrier barrier = barrier2[0];
+			barrier.image = filteredImages[0];
+
 			vkCmdPipelineBarrier(commandBuffers[i],
 				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
 				VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
@@ -503,10 +549,11 @@ public:
 				0, nullptr,
 				1, &barrier
 			);
+
 			vkdebug::marker::endLabel(commandBuffers[i]);
 
 			/*
-			* #5 full screen quad
+			* #6 full screen quad
 			*/
 			vkdebug::marker::beginLabel(commandBuffers[i], "full screen quad");
 			size_t framebufferIndex = i % framebuffers.size();
@@ -541,7 +588,10 @@ public:
 		createStorageImage(momentHistoryImage, momentHistoryImageView, VK_FORMAT_R32G32_SFLOAT); //vec2(moment1, moment2)
 		createStorageImage(integratedColorImage, integratedColorImageView, VK_FORMAT_R32G32B32A32_SFLOAT); //color
 		createStorageImage(integratedMomentsImage, integratedMomentsImageView, VK_FORMAT_R32G32_SFLOAT); //vec2(moment1, moment2)
-		createStorageImage(varianceImage, varianceImageView, VK_FORMAT_R32_SFLOAT); //vec2(moment1, moment2)
+		createStorageImage(varianceImages[0], varianceImageViews[0], VK_FORMAT_R32_SFLOAT); //vec2(moment1, moment2)
+		createStorageImage(varianceImages[1], varianceImageViews[1], VK_FORMAT_R32_SFLOAT); //vec2(moment1, moment2)
+		createStorageImage(filteredImages[0], filteredImageViews[0], VK_FORMAT_R32G32B32A32_SFLOAT);
+		createStorageImage(filteredImages[1], filteredImageViews[1], VK_FORMAT_R32G32B32A32_SFLOAT);
 		imageLayoutTransition();
 
 		createRaytraceDestinationImage();
@@ -666,8 +716,8 @@ private:
 	VkImage integratedMomentsImage = VK_NULL_HANDLE;
 	VkImageView integratedMomentsImageView = VK_NULL_HANDLE;
 	/** variance */
-	VkImage varianceImage = VK_NULL_HANDLE;
-	VkImageView varianceImageView = VK_NULL_HANDLE;
+	std::array<VkImage, 2> varianceImages;
+	std::array<VkImageView, 2> varianceImageViews;
 
 	/*
 	* ray trace pipeline
@@ -733,6 +783,28 @@ private:
 	VkDescriptorPool updateHistoryDescPool = VK_NULL_HANDLE;
 	VkDescriptorSetLayout updateHistoryDescLayout = VK_NULL_HANDLE;
 	VkDescriptorSet updateHistoryDescSet = VK_NULL_HANDLE;
+
+	/*
+	* spatial filtering
+	*/
+	/** compute pipeline */
+	VkPipeline atrousComputePipeline = VK_NULL_HANDLE;
+	VkPipelineLayout atrousComputePipelineLayout = VK_NULL_HANDLE;
+	/** descriptor set */
+	DescriptorSetBindings atrousDescBindings;
+	VkDescriptorPool atrousDescPool = VK_NULL_HANDLE;
+	VkDescriptorSetLayout atrousDescLayout = VK_NULL_HANDLE;
+	std::vector<VkDescriptorSet> atrousDescSet;
+	/** filtered image destination */
+	std::array<VkImage, 2> filteredImages;
+	std::array<VkImageView, 2> filteredImageViews;
+	/** push constants */
+	struct AtrousPushConstant {
+		float iteration = 0;
+		float wl = 4;
+		float wn = 128;
+		float wp = 1;
+	} atrousPushConstant;
 
 	/*
 	* full-quad pipeline resources
@@ -1014,7 +1086,10 @@ private:
 		vktools::setImageLayout(cmdBuf, momentHistoryImage, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, 1);
 		vktools::setImageLayout(cmdBuf, integratedColorImage, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, 1);
 		vktools::setImageLayout(cmdBuf, integratedMomentsImage, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, 1);
-		vktools::setImageLayout(cmdBuf, varianceImage, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, 1);
+		vktools::setImageLayout(cmdBuf, varianceImages[0], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, 1);
+		vktools::setImageLayout(cmdBuf, varianceImages[1], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, 1);
+		vktools::setImageLayout(cmdBuf, filteredImages[0], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, 1);
+		vktools::setImageLayout(cmdBuf, filteredImages[1], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, 1);
 		devices.endCommandBuffer(cmdBuf);
 	}
 
@@ -1051,6 +1126,22 @@ private:
 		VK_CHECK_RESULT(vkCreateComputePipelines(devices.device, VK_NULL_HANDLE, 1, &updateHistoryComputePipelineCreateInfo, nullptr, &updateHistoryComputePipeline));
 
 		vkDestroyShaderModule(devices.device, updateHistoryShaderModule, nullptr);
+
+		/*
+		* atrous filtering pipeline
+		*/
+		layouts = { atrousDescLayout };
+		ranges = { {VK_SHADER_STAGE_COMPUTE_BIT, 0, static_cast<uint32_t>(sizeof(AtrousPushConstant))} };
+		VkPipelineLayoutCreateInfo atrousComputePipelineLayoutCreateInfo = vktools::initializers::pipelineLayoutCreateInfo(layouts, ranges);
+		VK_CHECK_RESULT(vkCreatePipelineLayout(devices.device, &atrousComputePipelineLayoutCreateInfo, nullptr, &atrousComputePipelineLayout));
+
+		VkComputePipelineCreateInfo atrousComputePipelineCreateInfo{ VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO };
+		atrousComputePipelineCreateInfo.layout = atrousComputePipelineLayout;
+		VkShaderModule atrousShaderModule = vktools::createShaderModule(devices.device, vktools::readFile("shaders/atrous_comp.spv"));
+		atrousComputePipelineCreateInfo.stage = vktools::initializers::pipelineShaderStageCreateInfo(VK_SHADER_STAGE_COMPUTE_BIT, atrousShaderModule);
+		VK_CHECK_RESULT(vkCreateComputePipelines(devices.device, VK_NULL_HANDLE, 1, &atrousComputePipelineCreateInfo, nullptr, &atrousComputePipeline));
+
+		vkDestroyShaderModule(devices.device, atrousShaderModule, nullptr);
 	}
 
 	/*
@@ -1114,13 +1205,37 @@ private:
 		/** history length */
 		updateHistoryDescBindings.addBinding(3, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT);
 
-		updateHistoryDescBindings.addBinding(4, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT);
-		updateHistoryDescBindings.addBinding(5, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT);
-
 		/** create resources */
 		updateHistoryDescPool = updateHistoryDescBindings.createDescriptorPool(devices.device);
 		updateHistoryDescLayout = updateHistoryDescBindings.createDescriptorSetLayout(devices.device);
 		updateHistoryDescSet = vktools::allocateDescriptorSets(devices.device, updateHistoryDescLayout, updateHistoryDescPool, 1).front();
+
+		/*
+		* atrous input
+		*/
+		/** integrated color */
+		atrousDescBindings.addBinding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT);
+		/** variance */
+		atrousDescBindings.addBinding(1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT);
+		/** current gbuffer position */
+		atrousDescBindings.addBinding(2, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT);
+		/** current gbuffer normal */
+		atrousDescBindings.addBinding(3, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT);
+
+		/*
+		* atrous output
+		*/
+		/** atrous filter output */
+		atrousDescBindings.addBinding(4, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT);
+		/** updated variance */
+		atrousDescBindings.addBinding(5, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT);
+		/** color history (only for 1st iteration) */
+		atrousDescBindings.addBinding(6, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT);
+
+		/** create resources */
+		atrousDescPool = atrousDescBindings.createDescriptorPool(devices.device, 3);
+		atrousDescLayout = atrousDescBindings.createDescriptorSetLayout(devices.device);
+		atrousDescSet = vktools::allocateDescriptorSets(devices.device, atrousDescLayout, atrousDescPool, 3);
 	}
 
 	/*
@@ -1143,7 +1258,8 @@ private:
 		VkDescriptorImageInfo integratedColorInfo{ imageSampler, integratedColorImageView, VK_IMAGE_LAYOUT_GENERAL };
 		VkDescriptorImageInfo integratedMomentInfo{ imageSampler, integratedMomentsImageView, VK_IMAGE_LAYOUT_GENERAL };
 		VkDescriptorImageInfo updatedHistoryLengthInfo{ imageSampler, updatedHistoryLengthImageView, VK_IMAGE_LAYOUT_GENERAL };
-		VkDescriptorImageInfo varianceInfo{ imageSampler, varianceImageView, VK_IMAGE_LAYOUT_GENERAL };
+		VkDescriptorImageInfo firstVarianceStorageInfo{ imageSampler, varianceImageViews[0], VK_IMAGE_LAYOUT_GENERAL };
+		VkDescriptorImageInfo secondVarianceStorageInfo{ imageSampler, varianceImageViews[1], VK_IMAGE_LAYOUT_GENERAL };
 
 		writes.push_back(reprojectionDescBindings.makeWrite(reprojectionDescSet, 0, &rtImageInfo));
 		writes.push_back(reprojectionDescBindings.makeWrite(reprojectionDescSet, 1, &currentGBufferPositionInfo));
@@ -1156,14 +1272,42 @@ private:
 		writes.push_back(reprojectionDescBindings.makeWrite(reprojectionDescSet, 8, &integratedColorInfo));
 		writes.push_back(reprojectionDescBindings.makeWrite(reprojectionDescSet, 9, &integratedMomentInfo));
 		writes.push_back(reprojectionDescBindings.makeWrite(reprojectionDescSet, 10, &updatedHistoryLengthInfo));
-		writes.push_back(reprojectionDescBindings.makeWrite(reprojectionDescSet, 11, &varianceInfo));
+		writes.push_back(reprojectionDescBindings.makeWrite(reprojectionDescSet, 11, &firstVarianceStorageInfo));
 
 		writes.push_back(updateHistoryDescBindings.makeWrite(updateHistoryDescSet, 0, &integratedMomentInfo));
 		writes.push_back(updateHistoryDescBindings.makeWrite(updateHistoryDescSet, 1, &updatedHistoryLengthInfo));
 		writes.push_back(updateHistoryDescBindings.makeWrite(updateHistoryDescSet, 2, &momentHistoryInfo));
 		writes.push_back(updateHistoryDescBindings.makeWrite(updateHistoryDescSet, 3, &historyLengthInfo));
-		writes.push_back(updateHistoryDescBindings.makeWrite(updateHistoryDescSet, 4, &integratedColorInfo));
-		writes.push_back(updateHistoryDescBindings.makeWrite(updateHistoryDescSet, 5, &colorHistoryInfo));
+
+		VkDescriptorImageInfo firstFilteredImageDestinationInfo{ imageSampler, filteredImageViews[0], VK_IMAGE_LAYOUT_GENERAL };
+		VkDescriptorImageInfo secondFilteredImageDestinationInfo{ imageSampler, filteredImageViews[1], VK_IMAGE_LAYOUT_GENERAL };
+
+		/** atrous desc index 0 (integrated -> 1st filtered image) */
+		writes.push_back(atrousDescBindings.makeWrite(atrousDescSet[0], 0, &integratedColorInfo));
+		writes.push_back(atrousDescBindings.makeWrite(atrousDescSet[0], 1, &firstVarianceStorageInfo));
+		writes.push_back(atrousDescBindings.makeWrite(atrousDescSet[0], 2, &currentGBufferPositionInfo));
+		writes.push_back(atrousDescBindings.makeWrite(atrousDescSet[0], 3, &currentGBufferNormalPrimIDInfo));
+		writes.push_back(atrousDescBindings.makeWrite(atrousDescSet[0], 4, &firstFilteredImageDestinationInfo));
+		writes.push_back(atrousDescBindings.makeWrite(atrousDescSet[0], 5, &secondVarianceStorageInfo));
+		writes.push_back(atrousDescBindings.makeWrite(atrousDescSet[0], 6, &colorHistoryInfo));
+
+		/** atrous desc index 1 (1st filtered image storage -> 2nd filtered image storage) */
+		writes.push_back(atrousDescBindings.makeWrite(atrousDescSet[1], 0, &firstFilteredImageDestinationInfo));
+		writes.push_back(atrousDescBindings.makeWrite(atrousDescSet[1], 1, &secondVarianceStorageInfo));
+		writes.push_back(atrousDescBindings.makeWrite(atrousDescSet[1], 2, &currentGBufferPositionInfo));
+		writes.push_back(atrousDescBindings.makeWrite(atrousDescSet[1], 3, &currentGBufferNormalPrimIDInfo));
+		writes.push_back(atrousDescBindings.makeWrite(atrousDescSet[1], 4, &secondFilteredImageDestinationInfo));
+		writes.push_back(atrousDescBindings.makeWrite(atrousDescSet[1], 5, &firstVarianceStorageInfo));
+		writes.push_back(atrousDescBindings.makeWrite(atrousDescSet[1], 6, &colorHistoryInfo));
+
+		/** atrous desc index 2 (2st filtered image storage -> 1nd filtered image storage) */
+		writes.push_back(atrousDescBindings.makeWrite(atrousDescSet[2], 0, &secondFilteredImageDestinationInfo));
+		writes.push_back(atrousDescBindings.makeWrite(atrousDescSet[2], 1, &firstVarianceStorageInfo));
+		writes.push_back(atrousDescBindings.makeWrite(atrousDescSet[2], 2, &currentGBufferPositionInfo));
+		writes.push_back(atrousDescBindings.makeWrite(atrousDescSet[2], 3, &currentGBufferNormalPrimIDInfo));
+		writes.push_back(atrousDescBindings.makeWrite(atrousDescSet[2], 4, &firstFilteredImageDestinationInfo));
+		writes.push_back(atrousDescBindings.makeWrite(atrousDescSet[2], 5, &secondVarianceStorageInfo));
+		writes.push_back(atrousDescBindings.makeWrite(atrousDescSet[2], 6, &colorHistoryInfo));
 
 		vkUpdateDescriptorSets(devices.device, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
 	}
@@ -1497,7 +1641,7 @@ private:
 	void updatePostDescriptorSet() {
 		VkDescriptorImageInfo colorInfo{
 			imageSampler,
-			integratedColorImageView,
+			filteredImageViews[0],
 			VK_IMAGE_LAYOUT_GENERAL
 		};
 		VkWriteDescriptorSet wd = postDescriptorSetBindings.makeWrite(
