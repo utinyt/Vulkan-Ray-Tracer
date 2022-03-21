@@ -26,7 +26,11 @@ void main() {
     //anti-aliasing
     uint seed = tea(gl_LaunchIDEXT.y * gl_LaunchSizeEXT.x + gl_LaunchIDEXT.x, int(clockARB()));
 
-    vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy); //gl_LaunchIDEXT - integer coordinate of current pixel
+    float r1 = rnd(seed);
+    float r2 = rnd(seed);
+    vec2 jitter = pc.frame == 0 ? vec2(0.5f, 0.5f) : vec2(r1, r2);
+
+    vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + jitter; //gl_LaunchIDEXT - integer coordinate of current pixel
     vec2 inUV = pixelCenter / vec2(gl_LaunchSizeEXT.xy); //gl_LaunchSizeEXT - image size
     vec2 d = inUV * 2.0 - 1.0;
 
@@ -73,6 +77,20 @@ void main() {
         }
         //acummulate color
         indirect += prd.indirect;
+
+        //anti-aliasing
+        seed = tea(gl_LaunchIDEXT.y * gl_LaunchSizeEXT.x + gl_LaunchIDEXT.x, int(clockARB()));
+
+        r1 = rnd(seed);
+        r2 = rnd(seed);
+        jitter = pc.frame == 0 ? vec2(0.5f, 0.5f) : vec2(r1, r2);
+
+        pixelCenter = vec2(gl_LaunchIDEXT.xy) + jitter; //gl_LaunchIDEXT - integer coordinate of current pixel
+        inUV = pixelCenter / vec2(gl_LaunchSizeEXT.xy); //gl_LaunchSizeEXT - image size
+        d = inUV * 2.0 - 1.0;
+
+        target = cam.projInverse * vec4(d.x, d.y, 1, 1);
+        direction = cam.viewInverse * vec4(normalize(target.xyz), 0);
 
         //reset payload
         prd.direct = vec3(0.f);

@@ -25,52 +25,59 @@ public:
 		if (userInput.denoise) {
 			ImGui::Text("Edge stopping function parameters");
 			ImGui::SliderFloat("wl", &userInput.edgeStoppingFunctionParams.x, 0.1f, 16.0f);
-			ImGui::SliderFloat("wn", &userInput.edgeStoppingFunctionParams.y, 0.1f, 128.0f);
+			ImGui::SliderFloat("wn", &userInput.edgeStoppingFunctionParams.y, 0.1f, 4.f);
 			ImGui::SliderFloat("wp", &userInput.edgeStoppingFunctionParams.z, 0.001f, 100.f);
 			ImGui::NewLine();
 		}
 
-		ImGui::Text("Shadow");
-		static int shadow = 0;
-		ImGui::RadioButton("Soft shadow", &shadow, 0); ImGui::SameLine();
-		ImGui::RadioButton("Hard shadow", &shadow, 1);
-		if (shadow != userInput.shadow) {
-			userInput.shadow = shadow;
-			frameReset = true;
-		}
-		ImGui::NewLine();
-
-		static glm::vec3 lightPos = { 24.382f, 30.f, 0.1f };
-		ImGui::Text("Light sphere position");
-		ImGui::SliderFloat("X [-30, 30]", &lightPos.x, -30.0f, 30.0f);
-		ImGui::SliderFloat("Y [-30, 30]", &lightPos.y, -30.0f, 30.0f);
-		ImGui::SliderFloat("Z [-30, 30]", &lightPos.z, -30.0f, 30.0f);
-		if (lightPos != userInput.lightPos) {
-			userInput.lightPos = lightPos;
-			frameReset = true;
-		}
-		ImGui::NewLine();
-
 		static float radius = 6, lightIntensity = 100;
 		static int depth = 5, rayPerPixel = 1;
-
-		ImGui::Text("Light sphere radius");
-		ImGui::SliderFloat("[1, 10]", &radius, 1, 10);
-		ImGui::Text("Light intensity");
-		ImGui::SliderFloat("[1, 100]", &lightIntensity, 1, 100);
 		ImGui::Text("Maximum ray depth");
 		ImGui::SliderInt("[1, 30]", &depth, 1, 30);
 		ImGui::Text("Ray per pixel (!Warning: drastic frame drop)");
 		ImGui::SliderInt("[1, 32]", &rayPerPixel, 1, 32);
-		if (radius != userInput.radius || 
-			depth != userInput.maxRayDepth || 
-			lightIntensity != userInput.lightInternsity || 
+		if (radius != userInput.radius ||
+			depth != userInput.maxRayDepth ||
+			lightIntensity != userInput.lightInternsity ||
 			rayPerPixel != userInput.rayPerPixel) {
 			userInput.radius = radius;
 			userInput.maxRayDepth = depth;
 			userInput.lightInternsity = lightIntensity;
 			userInput.rayPerPixel = rayPerPixel;
 			frameReset = true;
+		}
+		ImGui::NewLine();
+
+		static bool modifyLight = false;
+		ImGui::Checkbox("Show light setting", &modifyLight);
+		ImGui::NewLine();
+
+		if (modifyLight) {
+			ImGui::Text("Shadow");
+			static int shadow = 0;
+			ImGui::RadioButton("Soft shadow", &shadow, 0); ImGui::SameLine();
+			ImGui::RadioButton("Hard shadow", &shadow, 1);
+			if (shadow != userInput.shadow) {
+				userInput.shadow = shadow;
+				frameReset = true;
+			}
+			ImGui::NewLine();
+
+			static glm::vec3 lightPos = { 24.382f, 30.f, 0.1f };
+			ImGui::Text("Light sphere position");
+			ImGui::SliderFloat("X [-30, 30]", &lightPos.x, -30.0f, 30.0f);
+			ImGui::SliderFloat("Y [-30, 30]", &lightPos.y, -30.0f, 30.0f);
+			ImGui::SliderFloat("Z [-30, 30]", &lightPos.z, -30.0f, 30.0f);
+			if (lightPos != userInput.lightPos) {
+				userInput.lightPos = lightPos;
+				frameReset = true;
+			}
+			ImGui::NewLine();
+
+			ImGui::Text("Light sphere radius");
+			ImGui::SliderFloat("[1, 10]", &radius, 1, 10);
+			ImGui::Text("Light intensity");
+			ImGui::SliderFloat("[1, 100]", &lightIntensity, 1, 100);
 		}
 
 		ImGui::End();
@@ -85,7 +92,7 @@ public:
 		float lightInternsity = 100;
 		int shadow = 0;
 		glm::vec3 lightPos{ 24.382f, 30.f, 0.1f };
-		glm::vec3 edgeStoppingFunctionParams{ 4, 128, 1 };
+		glm::vec3 edgeStoppingFunctionParams{ 4, 2, 100 };
 		bool denoise = false;
 	}userInput;
 
@@ -391,6 +398,9 @@ public:
 
 	virtual void update() override {
 		VulkanAppBase::update();
+		updateRtDescriptorSet();
+		updateComputeDescSet();
+		updatePostDescriptorSet();
 
 		/*Imgui* imgui = static_cast<Imgui*>(imguiBase);
 		if (oldViewMatrix != cameraMatrices.view || imgui->frameReset) {
