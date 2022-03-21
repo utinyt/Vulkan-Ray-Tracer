@@ -37,9 +37,9 @@ void main(){
 	//fill gbuffer
 	gPos = inWorldPos;
 	gNormal = inWorldNormal;
-	gAlbedo = material.baseColorFactor;
+	gAlbedo.xyz = material.baseColorFactor.xyz;
 	if(material.baseColorTextureIndex > -1){
-		gAlbedo *= texture(textures[material.baseColorTextureIndex], inUV);
+		gAlbedo.xyz *= texture(textures[material.baseColorTextureIndex], inUV).xyz;
 	}
 	gNormal.w = primitiveId;
 }

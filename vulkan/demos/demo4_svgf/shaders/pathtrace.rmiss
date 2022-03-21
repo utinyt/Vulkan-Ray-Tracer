@@ -11,10 +11,12 @@ layout(push_constant) uniform PushConstant {
 
 void main() {
     if(prd.depth == 0){
-        prd.hitValue = pc.clearColor.xyz * 0.8;
+        prd.direct = pc.clearColor.xyz * 0.8;
+        prd.indirect = pc.clearColor.xyz * 0.8;
     }
     else{
-        prd.hitValue = vec3(0.01);
+        prd.direct = vec3(0.01);
+        prd.indirect = vec3(0.01);
     }
     prd.depth = 100;
 }

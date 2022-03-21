@@ -3,7 +3,8 @@
 * struct definition - thie file is to be included
 */
 struct hitPayload{
-	vec3 hitValue;
+	vec3 direct;
+	vec3 indirect;
 	uint seed;
 	uint depth;
 	vec3 weight;

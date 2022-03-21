@@ -7,5 +7,6 @@ layout(location = 0) out vec4 col;
 layout(set = 0, binding = 0) uniform sampler2D tex;
 
 void main(){
-	col = texture(tex, outUV);
+	col = vec4(texture(tex, outUV).xyz, 1.f);
+	//col.xyz = col.xyz / (col.xyz + vec3(1.f));
 }

@@ -32,7 +32,7 @@ layout(buffer_reference, scalar) readonly buffer Materials {
 
 //ray tracing descriptors
 layout(binding = 0, set = 0) uniform accelerationStructureEXT topLevelAS;
-layout(binding = 2, set = 0) readonly  buffer Primitives {
+layout(binding = 3, set = 0) readonly  buffer Primitives {
 	Primitive prim[]; //triangle indices
 };
 

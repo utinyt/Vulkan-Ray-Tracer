@@ -45,7 +45,7 @@ layout(buffer_reference, scalar) readonly buffer Materials {
 */
 //ray tracing descriptors
 layout(binding = 0, set = 0) uniform accelerationStructureEXT topLevelAS;
-layout(binding = 2, set = 0) readonly  buffer Primitives {
+layout(binding = 3, set = 0) readonly  buffer Primitives {
 	Primitive prim[]; //triangle indices
 };
 
@@ -143,8 +143,13 @@ void main() {
 	);
 
 	if(prdDirectLightConnection && p > 0) {
-		vec3 f = textureColor * evalScattering(normal, rayDirection, vec3(1.f)); // = NL * kd / PI
-		prd.hitValue += 1.0 * prd.weight * f / p * pc.lightIntensity;
+		vec3 f = textureColor * evalScattering(normal, rayDirection, vec3(1.f)/*material.baseColorFactor.xyz*/); // = NL * kd / PI
+		if(prd.depth == 0){
+			prd.direct += 1.0 * prd.weight * f / p * pc.lightIntensity;
+		}
+		else{
+			prd.indirect += 1.0 * prd.weight * f / p * pc.lightIntensity;
+		}
 	}
 
 	/*
@@ -152,7 +157,7 @@ void main() {
 	*/
 	rayDirection = sampleBRDF(normal, rnd(prd.seed), rnd(prd.seed)); // = wi
 
-	vec3 f = textureColor * evalScattering(normal, rayDirection, vec3(1.f)); // = NL * kd / PI
+	vec3 f = textureColor * evalScattering(normal, rayDirection, vec3(1.f)/*material.baseColorFactor.xyz*/); // = NL * kd / PI
 	p = pdfBRDF(normal, rayDirection) * russianRoulette;
 	prd.p = p;
 	if(p < EPSILON)
@@ -160,8 +165,13 @@ void main() {
 
 	prd.weight *= f/p;
 
-	if(length(emittance) > 0){
-		prd.hitValue += 0.5f * prd.weight * emittance;
+	if(length(emittance) > 0 && prd.depth != 0){
+		if(prd.depth == 0){
+			prd.direct += 0.5f * prd.weight * emittance;
+		}
+		else{
+			prd.indirect += 0.5f * prd.weight * emittance;
+		}
 	}
 	
 	prd.rayOrigin = rayOrigin + rayDirection * EPSILON;
