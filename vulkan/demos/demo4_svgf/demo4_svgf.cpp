@@ -19,11 +19,16 @@ public:
 		ImGui::NewFrame();
 		ImGui::Begin("Settings", 0, flags);
 
-		ImGui::Text("Edge stopping function parameters");
-		ImGui::SliderFloat("wl", &userInput.edgeStoppingFunctionParams.x, 0.1f, 16.0f);
-		ImGui::SliderFloat("wn", &userInput.edgeStoppingFunctionParams.y, 0.1f, 128.0f);
-		ImGui::SliderFloat("wp", &userInput.edgeStoppingFunctionParams.z, 0.001f, 100.f);
+		ImGui::Checkbox("Denoise", &userInput.denoise);
 		ImGui::NewLine();
+
+		if (userInput.denoise) {
+			ImGui::Text("Edge stopping function parameters");
+			ImGui::SliderFloat("wl", &userInput.edgeStoppingFunctionParams.x, 0.1f, 16.0f);
+			ImGui::SliderFloat("wn", &userInput.edgeStoppingFunctionParams.y, 0.1f, 128.0f);
+			ImGui::SliderFloat("wp", &userInput.edgeStoppingFunctionParams.z, 0.001f, 100.f);
+			ImGui::NewLine();
+		}
 
 		ImGui::Text("Shadow");
 		static int shadow = 0;
@@ -81,6 +86,7 @@ public:
 		int shadow = 0;
 		glm::vec3 lightPos{ 24.382f, 30.f, 0.1f };
 		glm::vec3 edgeStoppingFunctionParams{ 4, 128, 1 };
+		bool denoise = false;
 	}userInput;
 
 	bool frameReset = false;
@@ -491,172 +497,174 @@ public:
 			raytrace(commandBuffers[i]);
 			vkdebug::marker::endLabel(commandBuffers[i]);
 
-			/*
-			* #3 reprojection
-			*/
-			vkdebug::marker::beginLabel(commandBuffers[i], "reproject");
-			vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_COMPUTE, reprojectionComputePipeline);
-			vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_COMPUTE, reprojectionComputePipelineLayout, 0, 1, &reprojectionDescSet, 0, nullptr);
-			vkCmdPushConstants(commandBuffers[i], reprojectionComputePipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(glm::mat4) * 2, &cam);
-			vkCmdDispatch(commandBuffers[i], swapchain.extent.width / 32, swapchain.extent.height / 32, 1);
+			if (imgui->userInput.denoise) {
+				/*
+				* #3 reprojection
+				*/
+				vkdebug::marker::beginLabel(commandBuffers[i], "reproject");
+				vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_COMPUTE, reprojectionComputePipeline);
+				vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_COMPUTE, reprojectionComputePipelineLayout, 0, 1, &reprojectionDescSet, 0, nullptr);
+				vkCmdPushConstants(commandBuffers[i], reprojectionComputePipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(glm::mat4) * 2, &cam);
+				vkCmdDispatch(commandBuffers[i], swapchain.extent.width / 32, swapchain.extent.height / 32, 1);
 
-			std::array<VkImageMemoryBarrier, 5> barriers5{};
-			barriers5[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-			barriers5[0].pNext = nullptr;
-			barriers5[0].oldLayout = VK_IMAGE_LAYOUT_GENERAL;
-			barriers5[0].newLayout = VK_IMAGE_LAYOUT_GENERAL;
-			barriers5[0].subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
-			barriers5[0].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-			barriers5[0].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-			barriers5[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-			barriers5[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-			barriers5[0].image = directIntegratedColorImage;
-			barriers5[1] = barriers5[0];
-			barriers5[1].image = indirectIntegratedColorImage;
-			barriers5[2] = barriers5[0];
-			barriers5[2].image = integratedMomentsImage;
-			barriers5[3] = barriers5[0];
-			barriers5[3].image = updatedHistoryLengthImage;
-			barriers5[4] = barriers5[0];
-			barriers5[4].image = varianceImages[0];
+				std::array<VkImageMemoryBarrier, 5> barriers5{};
+				barriers5[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+				barriers5[0].pNext = nullptr;
+				barriers5[0].oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+				barriers5[0].newLayout = VK_IMAGE_LAYOUT_GENERAL;
+				barriers5[0].subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
+				barriers5[0].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+				barriers5[0].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+				barriers5[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+				barriers5[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+				barriers5[0].image = directIntegratedColorImage;
+				barriers5[1] = barriers5[0];
+				barriers5[1].image = indirectIntegratedColorImage;
+				barriers5[2] = barriers5[0];
+				barriers5[2].image = integratedMomentsImage;
+				barriers5[3] = barriers5[0];
+				barriers5[3].image = updatedHistoryLengthImage;
+				barriers5[4] = barriers5[0];
+				barriers5[4].image = varianceImages[0];
 
-			vkCmdPipelineBarrier(commandBuffers[i],
-				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-				0,
-				0, nullptr,
-				0, nullptr,
-				static_cast<uint32_t>(barriers5.size()), barriers5.data()
-			);
-			vkdebug::marker::endLabel(commandBuffers[i]);
+				vkCmdPipelineBarrier(commandBuffers[i],
+					VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+					VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+					0,
+					0, nullptr,
+					0, nullptr,
+					static_cast<uint32_t>(barriers5.size()), barriers5.data()
+				);
+				vkdebug::marker::endLabel(commandBuffers[i]);
 
-			/*
-			* #4 update history
-			*/
-			vkdebug::marker::beginLabel(commandBuffers[i], "update history");
-			vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_COMPUTE, updateHistoryComputePipeline);
-			vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_COMPUTE, updateHistoryComputePipelineLayout, 0, 1, &updateHistoryDescSet, 0, nullptr);
-			vkCmdDispatch(commandBuffers[i], swapchain.extent.width / 32, swapchain.extent.height / 32, 1);
+				/*
+				* #4 update history
+				*/
+				vkdebug::marker::beginLabel(commandBuffers[i], "update history");
+				vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_COMPUTE, updateHistoryComputePipeline);
+				vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_COMPUTE, updateHistoryComputePipelineLayout, 0, 1, &updateHistoryDescSet, 0, nullptr);
+				vkCmdDispatch(commandBuffers[i], swapchain.extent.width / 32, swapchain.extent.height / 32, 1);
 
-			std::vector<VkImageMemoryBarrier> barriers = { barriers5[0], barriers5[3] };
-			barriers5[0].image = integratedMomentsImage;
-			vkCmdPipelineBarrier(commandBuffers[i],
-				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-				0,
-				0, nullptr,
-				0, nullptr,
-				2, barriers.data()
-			);
-			vkdebug::marker::endLabel(commandBuffers[i]);
+				std::vector<VkImageMemoryBarrier> barriers = { barriers5[0], barriers5[3] };
+				barriers5[0].image = integratedMomentsImage;
+				vkCmdPipelineBarrier(commandBuffers[i],
+					VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+					VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+					0,
+					0, nullptr,
+					0, nullptr,
+					2, barriers.data()
+				);
+				vkdebug::marker::endLabel(commandBuffers[i]);
 
-			/*
-			* #5 atrous filtering
-			*/
-			vkdebug::marker::beginLabel(commandBuffers[i], "atrous filtering #1");
-			vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_COMPUTE, atrousComputePipeline);
-			vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_COMPUTE, atrousComputePipelineLayout, 0, 1, &atrousDescSet[0], 0, nullptr);
-			atrousPushConstant.iteration = 0;
-			vkCmdPushConstants(commandBuffers[i], atrousComputePipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(AtrousPushConstant), &atrousPushConstant);
-			vkCmdDispatch(commandBuffers[i], swapchain.extent.width / 32, swapchain.extent.height / 32, 1);
+				/*
+				* #5 atrous filtering
+				*/
+				vkdebug::marker::beginLabel(commandBuffers[i], "atrous filtering #1");
+				vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_COMPUTE, atrousComputePipeline);
+				vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_COMPUTE, atrousComputePipelineLayout, 0, 1, &atrousDescSet[0], 0, nullptr);
+				atrousPushConstant.iteration = 0;
+				vkCmdPushConstants(commandBuffers[i], atrousComputePipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(AtrousPushConstant), &atrousPushConstant);
+				vkCmdDispatch(commandBuffers[i], swapchain.extent.width / 32, swapchain.extent.height / 32, 1);
 
-			barriers = { barriers5[0], barriers5[0], barriers5[0] };
-			barriers[0].image = directFilteredImages[0];
-			barriers[1].image = indirectFilteredImages[0];
-			barriers[2].image = varianceImages[1];
+				barriers = { barriers5[0], barriers5[0], barriers5[0] };
+				barriers[0].image = directFilteredImages[0];
+				barriers[1].image = indirectFilteredImages[0];
+				barriers[2].image = varianceImages[1];
 
-			vkCmdPipelineBarrier(commandBuffers[i],
-				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-				0,
-				0, nullptr,
-				0, nullptr,
-				3, barriers.data()
-			);
+				vkCmdPipelineBarrier(commandBuffers[i],
+					VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+					VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+					0,
+					0, nullptr,
+					0, nullptr,
+					3, barriers.data()
+				);
 
-			vkdebug::marker::endLabel(commandBuffers[i]);
+				vkdebug::marker::endLabel(commandBuffers[i]);
 
-			vkdebug::marker::beginLabel(commandBuffers[i], "atrous filtering #2");
-			vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_COMPUTE, atrousComputePipelineLayout, 0, 1, &atrousDescSet[1], 0, nullptr);
-			atrousPushConstant.iteration = 1;
-			vkCmdPushConstants(commandBuffers[i], atrousComputePipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(AtrousPushConstant), &atrousPushConstant);
-			vkCmdDispatch(commandBuffers[i], swapchain.extent.width / 32, swapchain.extent.height / 32, 1);
+				vkdebug::marker::beginLabel(commandBuffers[i], "atrous filtering #2");
+				vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_COMPUTE, atrousComputePipelineLayout, 0, 1, &atrousDescSet[1], 0, nullptr);
+				atrousPushConstant.iteration = 1;
+				vkCmdPushConstants(commandBuffers[i], atrousComputePipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(AtrousPushConstant), &atrousPushConstant);
+				vkCmdDispatch(commandBuffers[i], swapchain.extent.width / 32, swapchain.extent.height / 32, 1);
 
-			barriers[0].image = directFilteredImages[1];
-			barriers[1].image = indirectFilteredImages[1];
-			barriers[2].image = varianceImages[0];
+				barriers[0].image = directFilteredImages[1];
+				barriers[1].image = indirectFilteredImages[1];
+				barriers[2].image = varianceImages[0];
 
-			vkCmdPipelineBarrier(commandBuffers[i],
-				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-				0,
-				0, nullptr,
-				0, nullptr,
-				3, barriers.data()
-			);
+				vkCmdPipelineBarrier(commandBuffers[i],
+					VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+					VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+					0,
+					0, nullptr,
+					0, nullptr,
+					3, barriers.data()
+				);
 
-			vkdebug::marker::endLabel(commandBuffers[i]);
+				vkdebug::marker::endLabel(commandBuffers[i]);
 
-			vkdebug::marker::beginLabel(commandBuffers[i], "atrous filtering #3");
-			vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_COMPUTE, atrousComputePipelineLayout, 0, 1, &atrousDescSet[2], 0, nullptr);
-			atrousPushConstant.iteration = 2;
-			vkCmdPushConstants(commandBuffers[i], atrousComputePipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(AtrousPushConstant), &atrousPushConstant);
-			vkCmdDispatch(commandBuffers[i], swapchain.extent.width / 32, swapchain.extent.height / 32, 1);
+				vkdebug::marker::beginLabel(commandBuffers[i], "atrous filtering #3");
+				vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_COMPUTE, atrousComputePipelineLayout, 0, 1, &atrousDescSet[2], 0, nullptr);
+				atrousPushConstant.iteration = 2;
+				vkCmdPushConstants(commandBuffers[i], atrousComputePipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(AtrousPushConstant), &atrousPushConstant);
+				vkCmdDispatch(commandBuffers[i], swapchain.extent.width / 32, swapchain.extent.height / 32, 1);
 
-			barriers[0].image = directFilteredImages[0];
-			barriers[1].image = indirectFilteredImages[0];
-			barriers[2].image = varianceImages[1];
+				barriers[0].image = directFilteredImages[0];
+				barriers[1].image = indirectFilteredImages[0];
+				barriers[2].image = varianceImages[1];
 
-			vkCmdPipelineBarrier(commandBuffers[i],
-				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-				0,
-				0, nullptr,
-				0, nullptr,
-				3, barriers.data()
-			);
+				vkCmdPipelineBarrier(commandBuffers[i],
+					VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+					VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+					0,
+					0, nullptr,
+					0, nullptr,
+					3, barriers.data()
+				);
 
-			vkdebug::marker::endLabel(commandBuffers[i]);
+				vkdebug::marker::endLabel(commandBuffers[i]);
 
-			vkdebug::marker::beginLabel(commandBuffers[i], "atrous filtering #4");
-			vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_COMPUTE, atrousComputePipelineLayout, 0, 1, &atrousDescSet[1], 0, nullptr);
-			atrousPushConstant.iteration = 3;
-			vkCmdPushConstants(commandBuffers[i], atrousComputePipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(AtrousPushConstant), &atrousPushConstant);
-			vkCmdDispatch(commandBuffers[i], swapchain.extent.width / 32, swapchain.extent.height / 32, 1);
+				vkdebug::marker::beginLabel(commandBuffers[i], "atrous filtering #4");
+				vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_COMPUTE, atrousComputePipelineLayout, 0, 1, &atrousDescSet[1], 0, nullptr);
+				atrousPushConstant.iteration = 3;
+				vkCmdPushConstants(commandBuffers[i], atrousComputePipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(AtrousPushConstant), &atrousPushConstant);
+				vkCmdDispatch(commandBuffers[i], swapchain.extent.width / 32, swapchain.extent.height / 32, 1);
 
-			barriers[0].image = directFilteredImages[1];
-			barriers[1].image = indirectFilteredImages[1];
-			barriers[2].image = varianceImages[0];
+				barriers[0].image = directFilteredImages[1];
+				barriers[1].image = indirectFilteredImages[1];
+				barriers[2].image = varianceImages[0];
 
-			vkCmdPipelineBarrier(commandBuffers[i],
-				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-				0,
-				0, nullptr,
-				0, nullptr,
-				3, barriers.data()
-			);
+				vkCmdPipelineBarrier(commandBuffers[i],
+					VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+					VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+					0,
+					0, nullptr,
+					0, nullptr,
+					3, barriers.data()
+				);
 
-			vkdebug::marker::endLabel(commandBuffers[i]);
+				vkdebug::marker::endLabel(commandBuffers[i]);
 
-			vkdebug::marker::beginLabel(commandBuffers[i], "atrous filtering #5");
-			vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_COMPUTE, atrousComputePipelineLayout, 0, 1, &atrousDescSet[2], 0, nullptr);
-			atrousPushConstant.iteration = 4;
-			vkCmdPushConstants(commandBuffers[i], atrousComputePipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(AtrousPushConstant), &atrousPushConstant);
-			vkCmdDispatch(commandBuffers[i], swapchain.extent.width / 32, swapchain.extent.height / 32, 1);
+				vkdebug::marker::beginLabel(commandBuffers[i], "atrous filtering #5");
+				vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_COMPUTE, atrousComputePipelineLayout, 0, 1, &atrousDescSet[2], 0, nullptr);
+				atrousPushConstant.iteration = 4;
+				vkCmdPushConstants(commandBuffers[i], atrousComputePipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(AtrousPushConstant), &atrousPushConstant);
+				vkCmdDispatch(commandBuffers[i], swapchain.extent.width / 32, swapchain.extent.height / 32, 1);
 
-			barriers[0].image = directFilteredImages[0];
+				barriers[0].image = directFilteredImages[0];
 
-			vkCmdPipelineBarrier(commandBuffers[i],
-				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-				VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-				0,
-				0, nullptr,
-				0, nullptr,
-				1, barriers.data()
-			);
+				vkCmdPipelineBarrier(commandBuffers[i],
+					VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+					VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+					0,
+					0, nullptr,
+					0, nullptr,
+					1, barriers.data()
+				);
 
-			vkdebug::marker::endLabel(commandBuffers[i]);
+				vkdebug::marker::endLabel(commandBuffers[i]);
+			}
 
 			/*
 			* #6 full screen quad
@@ -670,6 +678,7 @@ public:
 			vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, postPipeline);
 			vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, postPipelineLayout, 0, 1,
 				&postDescriptorSet, 0, nullptr);
+			vkCmdPushConstants(commandBuffers[i], postPipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(uint32_t), &imgui->userInput.denoise);
 			vkCmdDraw(commandBuffers[i], 3, 1, 0, 0); //full screen triangle
 
 			imguiBase->drawFrame(commandBuffers[i], currentFrame);
@@ -1812,6 +1821,7 @@ private:
 		//fixed functions
 		PipelineGenerator gen(devices.device);
 		gen.setRasterizerInfo(VK_POLYGON_MODE_FILL, VK_CULL_MODE_FRONT_BIT);
+		gen.addPushConstantRange({ {VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(uint32_t)} });
 		gen.addDescriptorSetLayout({ postDescriptorSetLayout });
 		gen.addShader(vktools::createShaderModule(devices.device, vktools::readFile("shaders/full_quad_vert.spv")),
 			VK_SHADER_STAGE_VERTEX_BIT);
@@ -1826,6 +1836,12 @@ private:
 	*/
 	void createPostDescriptorSet() {
 		postDescriptorSetBindings.addBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			1, VK_SHADER_STAGE_FRAGMENT_BIT);
+		postDescriptorSetBindings.addBinding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			1, VK_SHADER_STAGE_FRAGMENT_BIT);
+		postDescriptorSetBindings.addBinding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			1, VK_SHADER_STAGE_FRAGMENT_BIT);
+		postDescriptorSetBindings.addBinding(3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 			1, VK_SHADER_STAGE_FRAGMENT_BIT);
 
 		uint32_t nbDescriptorSet = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
@@ -1844,11 +1860,29 @@ private:
 			directFilteredImageViews[0],
 			VK_IMAGE_LAYOUT_GENERAL
 		};
-		VkWriteDescriptorSet wd = postDescriptorSetBindings.makeWrite(
-			postDescriptorSet,
-			0,
-			&colorInfo);
-		vkUpdateDescriptorSets(devices.device, 1, &wd, 0, nullptr);
+		VkDescriptorImageInfo rawDirectImageInfo{
+			imageSampler,
+			rtDirectDestinationImageView,
+			VK_IMAGE_LAYOUT_GENERAL
+		};
+		VkDescriptorImageInfo rawIndirectImageInfo{
+			imageSampler,
+			rtIndirectDestinationImageView,
+			VK_IMAGE_LAYOUT_GENERAL
+		};
+		VkDescriptorImageInfo albedoInfo{ 
+			imageSampler,
+			gbuffers[currentGBufferIndex].attachments[2].imageView,
+			VK_IMAGE_LAYOUT_GENERAL 
+		};
+
+		std::array<VkWriteDescriptorSet, 4> wd = { 
+			postDescriptorSetBindings.makeWrite(postDescriptorSet, 0, &colorInfo),
+			postDescriptorSetBindings.makeWrite(postDescriptorSet, 1, &rawDirectImageInfo),
+			postDescriptorSetBindings.makeWrite(postDescriptorSet, 2, &rawIndirectImageInfo),
+			postDescriptorSetBindings.makeWrite(postDescriptorSet, 3, &albedoInfo)
+		};
+		vkUpdateDescriptorSets(devices.device, static_cast<uint32_t>(wd.size()), wd.data(), 0, nullptr);
 	}
 
 	/*

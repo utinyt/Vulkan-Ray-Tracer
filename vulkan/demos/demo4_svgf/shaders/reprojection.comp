@@ -49,7 +49,7 @@ bool isReprojectionValid(ivec2 res, ivec2 currLoc, ivec2 prevLoc, vec4 currNorma
 	}
 
 	//check if both normals are identical
-	if(distance(currNormalPrimID.xyz, prevNormalPrimId.xyz) > 0.0001f){
+	if(distance(currNormalPrimID.xyz, prevNormalPrimId.xyz) > 0.1f){
 		return false;
 	}
 
@@ -172,9 +172,9 @@ void main(){
 		}
 
 		if(valid){
-			const float colAlpha = max(1.f / (historyLength + 1), 0.5);
+			const float colAlpha = max(1.f / (historyLength + 1), 0.15);
 			//const float colAlpha = 1.f / (historyLength + 1);
-			const float momentAlpha = max(1.f / (historyLength + 1), 0.5);
+			const float momentAlpha = max(1.f / (historyLength + 1), 0.2);
 			//const float momentAlpha = 1.f / (historyLength + 1);
 
 			//increment history length
