@@ -25,7 +25,7 @@ public:
 		if (userInput.denoise) {
 			ImGui::Text("Edge stopping function parameters");
 			ImGui::SliderFloat("wl", &userInput.edgeStoppingFunctionParams.x, 0.1f, 16.0f);
-			ImGui::SliderFloat("wn", &userInput.edgeStoppingFunctionParams.y, 0.1f, 4.f);
+			ImGui::SliderFloat("wn", &userInput.edgeStoppingFunctionParams.y, 0.1f, 128.f);
 			ImGui::SliderFloat("wp", &userInput.edgeStoppingFunctionParams.z, 0.001f, 100.f);
 			ImGui::NewLine();
 		}
@@ -111,6 +111,7 @@ public:
 		enabledDeviceExtensions.push_back(VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME);
 		enabledDeviceExtensions.push_back(VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME);
 		enabledDeviceExtensions.push_back(VK_KHR_SHADER_CLOCK_EXTENSION_NAME);
+		enabledDeviceExtensions.push_back(VK_NV_COMPUTE_SHADER_DERIVATIVES_EXTENSION_NAME);
 
 		//imgui
 		imguiBase = new Imgui;
@@ -1991,4 +1992,4 @@ private:
 };
 
 //entry point
-RUN_APPLICATION_MAIN(VulkanApp, 1024, 768, "svgf");
+RUN_APPLICATION_MAIN(VulkanApp, 1280, 768, "svgf");

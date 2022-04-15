@@ -1,4 +1,4 @@
-#version 460
+#version 450
 #extension GL_NV_compute_shader_derivatives : enable
 
 layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
@@ -99,42 +99,38 @@ void main(){
 		for(int i = -2; i <= 2; ++i){
 			ivec2 neighborLoc = sampleLoc + step * ivec2(i, j);
 			if(neighborLoc.x >= 0 && neighborLoc.x < res.x && neighborLoc.y >= 0 && neighborLoc.y < res.y){
-				/*
-				* luminance
-				*/
+				//get neighbot info
 				vec3 neighborDirectCol = imageLoad(srcDirectColor, neighborLoc).xyz;
 				vec3 neighborIndirectCol = imageLoad(srcIndirectColor, neighborLoc).xyz;
 				float neighborDirectLuminance = 0.2126 * neighborDirectCol.x + 0.7152 * neighborDirectCol.y + 0.0722 * neighborDirectCol.z;
 				float neighborIndirectLuminance = 0.2126 * neighborIndirectCol.x + 0.7152 * neighborIndirectCol.y + 0.0722 * neighborIndirectCol.z;
-				/*
-				* depth (or position)
-				*/
+
 				vec3 neighborPos = imageLoad(currGBufferPosition, neighborLoc).xyz;
 				vec4 clipNeighborPos = proj * currViewMat * vec4(neighborPos, 1.f);
 				clipNeighborPos /= clipNeighborPos.w;
-				/*
-				* normal
-				*/
+
+				//float neighborLinearZ = clipNeighborPos.z * clipNeighborPos.w;
+				//neighborLinearZ = max(abs(dFdx(neighborLinearZ )), abs(dFdy(neighborLinearZ)));
+
 				vec3 neighborNormal = imageLoad(currGBufferNormal, neighborLoc).xyz;
 
-				/*
-				* edge stopping functions
-				*/
-
-				/* luminance */
+				//edge stopping functions
 				float wdl = exp(-abs(srcDirectLuminance - neighborDirectLuminance) / (sqrt(varDirect) * sigmal + 0.00001f));
 				float widl = exp(-abs(srcIndirectLuminance - neighborIndirectLuminance) / (sqrt(varIndirect) * sigmal + 0.00001f));
-
-				/* normal */
+				//float wn = min(1.f, exp(-distance(srcNormal, neighborNormal) / (sigman + 0.00001f)));
 				float wn = pow(max(0.f, dot(neighborNormal, srcNormal)), sigman);
 
-				/* depth */
-				vec2 sspd = vec2(dFdx(clipPos.z), dFdy(clipPos.z)); //fwidth(clipPos.z);
+				//vec3 dist = neighborPos - srcPos;
+				//float wp = min(1.f, exp(-distance(neighborPos, srcPos) / (sigmap)));
+				//float wp = max(exp(-abs(neighborLinearZ - linearZ) / (sigmap  + 0.000001f)), 0);
+
+				float sspd = max(abs(dFdx(clipPos.z)), abs(dFdy(clipPos.z))); //fwidth(clipPos.z);
 				float wz = exp(
-					-abs(clipPos.z - clipNeighborPos.z) / (abs(dot(sspd,vec2(i, j)) ) * sigmap + 0.00001f)
+					-abs(clipPos.z - clipNeighborPos.z) / (abs(sspd * length(vec2(i, j)) ) * sigmap + 0.00001f)
 				);
 
 				int k = (2 + i) + (2 + j) * 5;
+
 				//direct
 				float directWeight = a[k] * wdl * wn * wz;
 				directWeightSum += directWeight;
