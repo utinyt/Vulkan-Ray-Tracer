@@ -10,6 +10,8 @@
 #include "core/vulkan_gltf.h"
 #include "core/vulkan_debug.h"
 
+#define SHADER_INVOCATION_LOCAL_SIZE 16
+
 /*
 * derived imgui class - define newFrame();
 */
@@ -24,9 +26,9 @@ public:
 
 		if (userInput.denoise) {
 			ImGui::Text("Edge stopping function parameters");
-			ImGui::SliderFloat("wl", &userInput.edgeStoppingFunctionParams.x, 0.1f, 16.0f);
-			ImGui::SliderFloat("wn", &userInput.edgeStoppingFunctionParams.y, 0.1f, 128.f);
-			ImGui::SliderFloat("wp", &userInput.edgeStoppingFunctionParams.z, 0.001f, 100.f);
+			ImGui::SliderFloat("wl", &userInput.edgeStoppingFunctionParams.x, 0.1f, 8.0f);
+			ImGui::SliderFloat("wn", &userInput.edgeStoppingFunctionParams.y, 0.1f, 16.f);
+			ImGui::SliderFloat("wp", &userInput.edgeStoppingFunctionParams.z, 0.1f, 4.f);
 			ImGui::NewLine();
 		}
 
@@ -92,7 +94,7 @@ public:
 		float lightInternsity = 100;
 		int shadow = 0;
 		glm::vec3 lightPos{ 24.382f, 30.f, 0.1f };
-		glm::vec3 edgeStoppingFunctionParams{ 4, 2, 100 };
+		glm::vec3 edgeStoppingFunctionParams{ 4, 8, 4 };
 		bool denoise = false;
 	}userInput;
 
@@ -576,7 +578,7 @@ public:
 				vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_COMPUTE, atrousComputePipelineLayout, 0, 1, &atrousDescSet[0], 0, nullptr);
 				atrousPushConstant.iteration = 0;
 				vkCmdPushConstants(commandBuffers[i], atrousComputePipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(AtrousPushConstant), &atrousPushConstant);
-				vkCmdDispatch(commandBuffers[i], swapchain.extent.width / 32, swapchain.extent.height / 32, 1);
+				vkCmdDispatch(commandBuffers[i], swapchain.extent.width / SHADER_INVOCATION_LOCAL_SIZE, swapchain.extent.height / SHADER_INVOCATION_LOCAL_SIZE, 1);
 
 				barriers = { barriers5[0], barriers5[0], barriers5[0] };
 				barriers[0].image = directFilteredImages[0];
@@ -598,7 +600,7 @@ public:
 				vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_COMPUTE, atrousComputePipelineLayout, 0, 1, &atrousDescSet[1], 0, nullptr);
 				atrousPushConstant.iteration = 1;
 				vkCmdPushConstants(commandBuffers[i], atrousComputePipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(AtrousPushConstant), &atrousPushConstant);
-				vkCmdDispatch(commandBuffers[i], swapchain.extent.width / 32, swapchain.extent.height / 32, 1);
+				vkCmdDispatch(commandBuffers[i], swapchain.extent.width / SHADER_INVOCATION_LOCAL_SIZE, swapchain.extent.height / SHADER_INVOCATION_LOCAL_SIZE, 1);
 
 				barriers[0].image = directFilteredImages[1];
 				barriers[1].image = indirectFilteredImages[1];
@@ -619,7 +621,7 @@ public:
 				vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_COMPUTE, atrousComputePipelineLayout, 0, 1, &atrousDescSet[2], 0, nullptr);
 				atrousPushConstant.iteration = 2;
 				vkCmdPushConstants(commandBuffers[i], atrousComputePipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(AtrousPushConstant), &atrousPushConstant);
-				vkCmdDispatch(commandBuffers[i], swapchain.extent.width / 32, swapchain.extent.height / 32, 1);
+				vkCmdDispatch(commandBuffers[i], swapchain.extent.width / SHADER_INVOCATION_LOCAL_SIZE, swapchain.extent.height / SHADER_INVOCATION_LOCAL_SIZE, 1);
 
 				barriers[0].image = directFilteredImages[0];
 				barriers[1].image = indirectFilteredImages[0];
@@ -640,7 +642,7 @@ public:
 				vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_COMPUTE, atrousComputePipelineLayout, 0, 1, &atrousDescSet[1], 0, nullptr);
 				atrousPushConstant.iteration = 3;
 				vkCmdPushConstants(commandBuffers[i], atrousComputePipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(AtrousPushConstant), &atrousPushConstant);
-				vkCmdDispatch(commandBuffers[i], swapchain.extent.width / 32, swapchain.extent.height / 32, 1);
+				vkCmdDispatch(commandBuffers[i], swapchain.extent.width / SHADER_INVOCATION_LOCAL_SIZE, swapchain.extent.height / SHADER_INVOCATION_LOCAL_SIZE, 1);
 
 				barriers[0].image = directFilteredImages[1];
 				barriers[1].image = indirectFilteredImages[1];
@@ -661,7 +663,7 @@ public:
 				vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_COMPUTE, atrousComputePipelineLayout, 0, 1, &atrousDescSet[2], 0, nullptr);
 				atrousPushConstant.iteration = 4;
 				vkCmdPushConstants(commandBuffers[i], atrousComputePipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(AtrousPushConstant), &atrousPushConstant);
-				vkCmdDispatch(commandBuffers[i], swapchain.extent.width / 32, swapchain.extent.height / 32, 1);
+				vkCmdDispatch(commandBuffers[i], swapchain.extent.width / SHADER_INVOCATION_LOCAL_SIZE, swapchain.extent.height / SHADER_INVOCATION_LOCAL_SIZE, 1);
 
 				barriers[0].image = directFilteredImages[0];
 

@@ -462,6 +462,8 @@ void VulkanAppBase::createInstance() {
 	//debug utils also can be used in release mode - perf makers
 	requiredInstanceExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 
+	requiredInstanceExtensions.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
+
 	uint32_t availableInstanceExtensionCount = 0;
 	vkEnumerateInstanceExtensionProperties(nullptr, &availableInstanceExtensionCount, nullptr);
 	std::vector<VkExtensionProperties> availableInstanceExtensions(availableInstanceExtensionCount);

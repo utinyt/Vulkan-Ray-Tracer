@@ -79,8 +79,6 @@ struct VulkanDevice {
 	VkPhysicalDeviceAccelerationStructureFeaturesKHR asFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR };
 	/** shader clock features */
 	VkPhysicalDeviceShaderClockFeaturesKHR shaderClockFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_CLOCK_FEATURES_KHR };
-	/** compute shader derivative support */
-	VkPhysicalDeviceComputeShaderDerivativesFeaturesNV computeDerivativeFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COMPUTE_SHADER_DERIVATIVES_FEATURES_NV };
 
 	/** swapchain support details - used for swapchain creation*/
 	struct SwapchainSupportDetails {

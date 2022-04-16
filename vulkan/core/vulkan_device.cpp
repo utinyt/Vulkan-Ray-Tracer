@@ -43,7 +43,6 @@ void VulkanDevice::pickPhysicalDevice(VkInstance instance, VkSurfaceKHR surface,
 	//properties & features
 	vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memProperties);
 	vkGetPhysicalDeviceProperties(physicalDevice, &properties);
-	shaderClockFeatures.pNext = &computeDerivativeFeatures;
 	asFeatures.pNext = &shaderClockFeatures;
 	rtFeatures.pNext = &asFeatures;
 	vk12Features.pNext = &rtFeatures;
@@ -128,21 +127,7 @@ void VulkanDevice::createLogicalDevice() {
 	if (availableFeatures.features.sampleRateShading == VK_TRUE) {
 		deviceFeatures.features.sampleRateShading = VK_TRUE;
 	}
-
-	VkPhysicalDeviceComputeShaderDerivativesFeaturesNV enableComputeDerivativeFeatures{ 
-		VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COMPUTE_SHADER_DERIVATIVES_FEATURES_NV,
-		nullptr,
-		VK_FALSE,
-		VK_FALSE
-	};
-
-	if (computeDerivativeFeatures.computeDerivativeGroupLinear == VK_TRUE &&
-		computeDerivativeFeatures.computeDerivativeGroupQuads == VK_TRUE) {
-		enableComputeDerivativeFeatures.computeDerivativeGroupLinear = VK_TRUE;
-		//enableComputeDerivativeFeatures.computeDerivativeGroupQuads = VK_TRUE;
-	}
-	deviceInfo.pNext = &enableComputeDerivativeFeatures;
-	enableComputeDerivativeFeatures.pNext = &deviceFeatures;
+	deviceInfo.pNext = &deviceFeatures;
 
 		//add device features
 	VkPhysicalDeviceVulkan12Features device12Features{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES };

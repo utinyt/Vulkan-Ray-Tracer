@@ -1,7 +1,6 @@
 #version 460
-#extension GL_NV_compute_shader_derivatives : enable
 
-layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
 /** src */
 layout(binding = 0, rgba32f) uniform readonly image2D srcDirectColor;
@@ -27,6 +26,8 @@ layout(push_constant) uniform PushConstant{
 	float sigman;
 	float sigmap;
 };
+
+shared float z[16][16];
 
 void main(){
 	ivec2 sampleLoc = ivec2(gl_GlobalInvocationID.xy);
@@ -82,6 +83,17 @@ void main(){
 	vec4 clipPos = proj * currViewMat * vec4(srcPos, 1.f);
 	//float linearZ = clipPos.z * clipPos.w;
 	clipPos /= clipPos.w;
+
+	//store clipPos.z to shared variables for later dfdx / dfdy calls
+	z[gl_LocalInvocationID.x][gl_LocalInvocationID.y] = clipPos.z;
+	memoryBarrierShared();
+	barrier();
+
+	uvec2 quadIndex = gl_LocalInvocationID.xy - gl_LocalInvocationID.xy % 2;
+	float dx = z[quadIndex.x + 1][quadIndex.y] - z[quadIndex.x][quadIndex.y];
+	float dy = z[quadIndex.x ][quadIndex.y + 1] - z[quadIndex.x][quadIndex.y];
+	vec2 sspd = vec2(dx, dy);
+
 	//linearZ = max(abs(dFdx(linearZ )), abs(dFdy(linearZ)));
 
 	vec3 srcNormal = imageLoad(currGBufferNormal, sampleLoc).xyz;
@@ -129,7 +141,7 @@ void main(){
 				float wn = pow(max(0.f, dot(neighborNormal, srcNormal)), sigman);
 
 				/* depth */
-				vec2 sspd = vec2(dFdx(clipPos.z), dFdy(clipPos.z)); //fwidth(clipPos.z);
+				
 				float wz = exp(
 					-abs(clipPos.z - clipNeighborPos.z) / (abs(dot(sspd,vec2(i, j)) ) * sigmap + 0.00001f)
 				);
@@ -152,10 +164,13 @@ void main(){
 		}
 	}
 
+	memoryBarrierShared();
+	barrier();
+
 	if(directWeightSum > 0.001f && indirectWeightSum > 0.001f){
 		vec4 directCol = vec4(directColSum / directWeightSum, 1.f);
 		vec4 indirectCol = vec4(indirectColSum / indirectWeightSum, 1.f);
-
+		
 		if(iteration == 4){
 			vec3 albedo = imageLoad(currGBufferAlbedo, sampleLoc).xyz;
 			directCol.xyz *= albedo;
